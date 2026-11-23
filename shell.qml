@@ -4,6 +4,7 @@
 import Quickshell
 import qs.modules.bar
 import qs.modules.island
+import qs.modules.lock
 import qs.modules.notifications
 
 ShellRoot {
@@ -15,4 +16,5 @@ ShellRoot {
     History {}
     Bar {}
     Island {}
+    LockScreen {}
 }

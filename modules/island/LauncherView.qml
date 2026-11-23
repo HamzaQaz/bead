@@ -117,7 +117,7 @@ Item {
         case "island": islandToggle.running = true; break;
         case "stopwatch": Countdown.startStopwatch(); break;
         case "timer": Countdown.startTimer(a.ms); break;
-        default: Quickshell.execDetached(a.cmd);
+        default: Session.run(a);
         }
     }
     Process { id: islandToggle; command: ["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "island", "toggle"] }

@@ -553,7 +553,7 @@ Scope {
                     }
                 }
 
-                // clock: hours, a dot that blinks with the seconds, minutes
+                // clock: hours, a sideways colon that fades with the seconds, minutes
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 1
@@ -564,17 +564,17 @@ Scope {
                         font.features: { "tnum": 1 }
                     }
                     ClockText { font.weight: Font.Bold; color: Theme.text; text: Qt.formatTime(clock.date, "hh") }
-                    Rectangle {
+                    // a sideways colon, fading with the seconds
+                    Row {
                         id: tick
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 3; height: 3; radius: 1.5
-                        color: Theme.tone("action")
-                        SequentialAnimation on opacity {
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 1; duration: 120 }
-                            PauseAnimation { duration: 380 }
-                            NumberAnimation { to: 0.15; duration: 220; easing.type: Easing.InOutSine }
-                            PauseAnimation { duration: 280 }
+                        spacing: 3
+                        opacity: secs.date.getSeconds() % 2 ? 0.25 : 0.7
+                        Behavior on opacity { NumberAnimation { duration: 450; easing.type: Easing.InOutSine } }
+                        SystemClock { id: secs; precision: SystemClock.Seconds }
+                        Repeater {
+                            model: 2
+                            Rectangle { width: 2.5; height: 2.5; radius: 1.25; color: Theme.text }
                         }
                     }
                     ClockText { font.weight: Font.Medium; color: Theme.subtext; text: Qt.formatTime(clock.date, "mm") }

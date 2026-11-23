@@ -11,13 +11,16 @@ Singleton {
 
     readonly property string sessionId: Quickshell.env("XDG_SESSION_ID") || ""
     readonly property list<var> actions: [
-        { id: "lock", title: "Lock", sub: "Lock the screen", glyph: "lock", cmd: ["caelestia", "shell", "lock", "lock"] },
+        { id: "lock", title: "Lock", sub: "Lock the screen", glyph: "lock" },
         { id: "suspend", title: "Suspend", sub: "Sleep, keeping your session", glyph: "bedtime", cmd: ["systemctl", "suspend"] },
         { id: "logout", title: "Log out", sub: "End this session", glyph: "logout", confirm: true, cmd: ["loginctl", "terminate-session", sessionId] },
         { id: "reboot", title: "Reboot", sub: "Restart the computer", glyph: "restart_alt", confirm: true, cmd: ["systemctl", "reboot"] },
         { id: "shutdown", title: "Shut down", sub: "Power off the computer", glyph: "power_settings_new", confirm: true, cmd: ["systemctl", "poweroff"] }
     ]
-    function run(a: var): void { Quickshell.execDetached(a.cmd); }
+    function run(a: var): void {
+        if (a.id === "lock") Lock.lock(); // bead's own lock screen
+        else Quickshell.execDetached(a.cmd);
+    }
 
     readonly property string user: Quickshell.env("USER") || ""
     property string host: ""
