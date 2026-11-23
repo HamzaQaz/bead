@@ -23,6 +23,8 @@ import qs.services
 //             (click: pause / stop)
 //   passkey   keyhold asks to approve a passkey: the island becomes the prompt
 //             (services/Passkey.qml)
+//   launcher  tap Super (global shortcut bead:launcher) or IPC "launcher":
+//             apps, maths, > actions (LauncherView.qml); click outside closes
 //   open      hover it (or the top edge) a moment: it grows into the dashboard
 // It lives on one monitor ($BEAD_ISLAND_SCREEN, default DP-1). Hidden (IPC
 // "island", saved across restarts), when a window on that monitor reaches up
@@ -113,6 +115,36 @@ Scope {
     }
     Timer { id: settleTimer; interval: 120; onTriggered: root.checkCovered() }
     Timer { interval: 1500; repeat: true; running: true; onTriggered: geometryTimer.restart() }
+
+    // ── launcher ──
+    property bool launcherOpen: false
+    onLauncherOpenChanged: if (!launcherOpen) Ask.clear() // closing stops a question in flight
+    IpcHandler {
+        target: "launcher"
+        function toggle(): void { root.launcherOpen = !root.launcherOpen; }
+        function open(): void { root.launcherOpen = true; }
+        function close(): void { root.launcherOpen = false; }
+        // open asking Claude straight away
+        function ask(question: string): void {
+            search("?" + question);
+            Ask.ask(question);
+        }
+        // open with text already typed
+        function search(text: string): void {
+            root.launcherSeed = text;
+            if (root.launcherOpen) root.launcherSeedChanged();
+            root.launcherOpen = true;
+        }
+    }
+    property string launcherSeed: ""
+    // bound in Hyprland as hl.dsp.global("bead:launcher") on a Super tap
+    GlobalShortcut {
+        appid: "bead"
+        name: "launcher"
+        description: "Toggle the launcher"
+        // the bind fires on Super release already; dispatching it sends only "pressed"
+        onPressed: root.launcherOpen = !root.launcherOpen
+    }
 
     // ── dashboard ──
     readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
@@ -235,10 +267,34 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered
-            readonly property string state: Passkey.active ? "passkey" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
-            onStateChanged: if (state === "passkey") focusTimer.restart()
+            readonly property string state: Passkey.active ? "passkey" : root.launcherOpen ? "launcher" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            onStateChanged: {
+                if (state === "launcher") { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; grabTimer.restart(); }
+                else { grabTimer.stop(); grabbing = false; }
+                if (state === "passkey" || state === "launcher") focusTimer.restart();
+            }
             // the layer gets keyboard focus a moment after it asks for it
-            Timer { id: focusTimer; interval: 120; onTriggered: passkeyView.focusField() }
+            Timer {
+                id: focusTimer
+                interval: 120
+                onTriggered: win.state === "passkey" ? passkeyView.focusField() : launcherView.focusField()
+            }
+            Connections {
+                target: root
+                function onLauncherSeedChanged() {
+                    if (win.state === "launcher" && root.launcherSeed) { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; }
+                }
+            }
+            // a click anywhere else closes the launcher. The grab starts once the
+            // launcher has grown: started while the island is tucked (no input
+            // region yet) Hyprland clears it at once
+            property bool grabbing: false
+            Timer { id: grabTimer; interval: 250; onTriggered: win.grabbing = win.state === "launcher" }
+            HyprlandFocusGrab {
+                windows: [win]
+                active: win.grabbing
+                onCleared: if (win.grabbing) { win.grabbing = false; root.launcherOpen = false; }
+            }
             readonly property bool showMedia: root.playing && (root.peek || hovered)
             onOpenChanged: root.openCount += open ? 1 : -1
 
@@ -278,7 +334,7 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "bead-island"
-            WlrLayershell.keyboardFocus: Passkey.asking ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: Passkey.asking || root.launcherOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             // input: the island itself, plus the top frame strip (hover opens it)
             mask: Region {
                 item: win.state === "tucked" ? null : hit
@@ -293,13 +349,13 @@ Scope {
                 : 330
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "passkey" ? passkeyView.wantH : win.state === "open" ? win.openH
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH
                     : win.state === "activity" ? (root.activity === "notif" ? 58 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
@@ -712,6 +768,18 @@ Scope {
                         color: Theme.text
                         text: eventRow.done ? "Timer done · " + Countdown.fmtTotal(root.doneTotal) : "Recording"
                     }
+                }
+
+                // ── launcher ──
+                LauncherView {
+                    id: launcherView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    opacity: win.state === "launcher" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: win.state === "launcher" ? 240 : 110 } }
+                    onClose: root.launcherOpen = false
                 }
 
                 // ── passkey ──

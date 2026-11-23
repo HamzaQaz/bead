@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|timer|log]: run the shell in the background.
+# bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|ask|timer|log]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
 share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
@@ -24,6 +24,11 @@ dashboard) # bead dashboard [toggle|open|close|tab N]
 	exec qs -p "$share" ipc call dashboard "${2:-toggle}" ${3:+"$3"} ;;
 island) # bead island [toggle|show|hide]
 	exec qs -p "$share" ipc call island "${2:-toggle}" ;;
+launcher) # bead launcher [toggle|open|close|search TEXT]
+	if [ "${2:-}" = search ]; then exec qs -p "$share" ipc call launcher search "${3:-}"; fi
+	exec qs -p "$share" ipc call launcher "${2:-toggle}" ;;
+ask) # bead ask QUESTION: the launcher asks Claude
+	shift; exec qs -p "$share" ipc call launcher ask "$*" ;;
 timer) # bead timer <25m|90s|1h30m> | stopwatch | toggle | stop
 	case ${2:-} in
 	stopwatch|toggle|stop) exec qs -p "$share" ipc call timer "$2" ;;
@@ -31,5 +36,5 @@ timer) # bead timer <25m|90s|1h30m> | stopwatch | toggle | stop
 	*) exec qs -p "$share" ipc call timer start "$2" ;;
 	esac ;;
 log) exec qs -p "$share" log -f ;;
-*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|timer|log]" >&2; exit 2 ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|ask|timer|log]" >&2; exit 2 ;;
 esac
