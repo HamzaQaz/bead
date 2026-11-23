@@ -12,9 +12,11 @@ import qs.config
 import qs.services
 
 // Notification history: a panel that slides out of the top-right corner of the
-// screen frame, merged into it like the popup stack. Header with Do Not Disturb
-// and clear-all; one row per notification (click: open it, ×: dismiss it,
-// action chips while the app still has it open). Esc or the toggle closes it.
+// primary monitor's frame, merged into it like the popup stack. Header with Do
+// Not Disturb and clear-all; Today / Yesterday / Earlier sections; an app with
+// several notifications is one group (newest shown, the rest on expand, × clears
+// the group); per notification: click opens it, × dismisses it, action chips
+// while the app still has it open. Esc or the toggle closes it.
 // IPC target "notifs": toggle | open | close | clear | dnd.
 Scope {
     id: root
@@ -42,11 +44,52 @@ Scope {
         return Math.floor(s / 86400) + "d";
     }
 
+    // ── rows: sections, app groups, notifications ──
+    // a group's key ("Today:Discord") -> expanded
+    property var expanded: ({})
+    function toggleGroup(gk: string): void {
+        expanded = Object.assign({}, expanded, { [gk]: !expanded[gk] });
+    }
+    readonly property list<var> rows: {
+        const d = new Date(now);
+        const today = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const section = t => t >= today ? "Today" : t >= today - 86400000 ? "Yesterday" : "Earlier";
+        const sections = [];
+        for (const e of Notifs.entries) { // newest first
+            const title = section(e.time);
+            let sec = sections.find(x => x.title === title);
+            if (!sec) { sec = { title, order: [], by: {} }; sections.push(sec); }
+            const app = e.appName || "Notification";
+            if (!sec.by[app]) { sec.by[app] = []; sec.order.push(app); }
+            sec.by[app].push(e);
+        }
+        // headings only once there's more than today
+        const headings = sections.length > 1 || (sections.length === 1 && sections[0].title !== "Today");
+        const out = [];
+        for (const sec of sections) {
+            if (headings) out.push({ key: "s:" + sec.title, type: "section", title: sec.title });
+            for (const app of sec.order) {
+                const list = sec.by[app];
+                if (list.length === 1) { out.push({ key: list[0].key, type: "notif", e: list[0], grouped: false }); continue; }
+                const gk = sec.title + ":" + app;
+                const open = !!expanded[gk];
+                out.push({ key: "g:" + gk, type: "group", gk, app, open, count: list.length, keys: list.map(x => x.key), first: list[0] });
+                for (const e of open ? list : list.slice(0, 1))
+                    out.push({ key: e.key, type: "notif", e, grouped: true, more: open ? 0 : list.length - 1 });
+            }
+        }
+        return out;
+    }
+    function iconOf(e: var): url {
+        return e?.image ? e.image : e?.appIcon ? Quickshell.iconPath(e.appIcon, true) : "";
+    }
+
     // Lucide
     readonly property string bellIcon: "M10.268 21a2 2 0 0 0 3.464 0 M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
     readonly property string bellOffIcon: "M10.268 21a2 2 0 0 0 3.464 0 M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742 M2 2l20 20 M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05"
     readonly property string trashIcon: "M3 6h18 M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6 M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"
     readonly property string xIcon: "M18 6 6 18 M6 6l12 12"
+    readonly property string chevronIcon: "M6 9l6 6 6-6"
 
     component Glyph: Shape {
         id: g
@@ -81,7 +124,8 @@ Scope {
     PanelWindow {
         id: win
 
-        readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
+        // the primary monitor, like the pop-ups (Settings.home)
+        readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
         property ShellScreen held: focused
         screen: held
         Connections {
@@ -231,7 +275,7 @@ Scope {
                     height: panel.maxH - panel.headerH - 8
                     spacing: 4
                     boundsBehavior: Flickable.StopAtBounds
-                    model: ScriptModel { values: Notifs.entries; objectProp: "key" }
+                    model: ScriptModel { values: root.rows; objectProp: "key" }
 
                     add: Transition {
                         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 260; easing.type: Easing.OutCubic }
@@ -245,14 +289,151 @@ Scope {
                         NumberAnimation { property: "y"; duration: 320; easing.type: Easing.InOutCubic }
                     }
 
-                    delegate: Rectangle {
-                        id: row
+                    delegate: Item {
+                        id: item
                         required property var modelData
+                        readonly property string type: modelData.type
+                        width: list.width
+                        height: type === "section" ? 30 : type === "group" ? 36 : row.height + (row.stacked ? 6 : 0)
+
+                    // ── a section heading: Today / Yesterday / Earlier ──
+                    Text {
+                        visible: item.type === "section"
+                        x: 12
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 6
+                        font.family: Theme.font
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 0.8
+                        color: Theme.subtext
+                        text: item.modelData.title ?? ""
+                    }
+
+                    // ── an app's group: icon, name, count; click expands, × clears it ──
+                    Item {
+                        visible: item.type === "group"
+                        anchors.fill: parent
+                        MouseArea {
+                            id: groupArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.toggleGroup(item.modelData.gk)
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Qt.alpha(Theme.text, groupArea.containsMouse ? 0.05 : 0)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+                        Image {
+                            id: gIcon
+                            x: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 18; height: 18
+                            sourceSize: Qt.size(36, 36)
+                            source: item.type === "group" ? root.iconOf(item.modelData.first) : ""
+                            visible: status === Image.Ready
+                            fillMode: Image.PreserveAspectFit
+                            mipmap: true
+                        }
+                        Glyph {
+                            x: 15
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: gIcon.status !== Image.Ready
+                            size: 15
+                            path: root.bellIcon
+                            tone: Theme.subtext
+                        }
+                        Row {
+                            x: 42
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 8
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                color: Theme.text
+                                text: item.modelData.app ?? ""
+                            }
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: countText.implicitWidth + 12
+                                height: 18
+                                radius: 9
+                                color: Qt.alpha(Theme.tone("action"), 0.15)
+                                Text {
+                                    id: countText
+                                    anchors.centerIn: parent
+                                    font.family: Theme.font
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                    font.features: { "tnum": 1 }
+                                    color: Theme.tone("action")
+                                    text: item.modelData.count ?? ""
+                                }
+                            }
+                        }
+                        Row {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 6
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                font.family: Theme.font
+                                font.pixelSize: 11
+                                color: Theme.subtext
+                                text: item.modelData.open ? "Show less" : "Show all"
+                            }
+                            Glyph {
+                                anchors.verticalCenter: parent.verticalCenter
+                                size: 14
+                                path: root.chevronIcon
+                                tone: Theme.subtext
+                                rotation: item.modelData.open ? 180 : 0
+                                Behavior on rotation { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                            }
+                            Rectangle { // clear the group
+                                width: 24; height: 24; radius: 12
+                                color: Qt.alpha(Theme.text, gxArea.containsMouse ? 0.14 : 0.07)
+                                Glyph { anchors.centerIn: parent; size: 12; path: root.xIcon; tone: Theme.subtext }
+                                MouseArea {
+                                    id: gxArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: { for (const k of item.modelData.keys) Notifs.remove(k); }
+                                }
+                            }
+                        }
+                    }
+
+                    // a collapsed group's hidden ones, peeking out under the newest
+                    Rectangle {
+                        visible: row.stacked
+                        x: 14
+                        width: parent.width - 28
+                        y: row.height - 8
+                        height: 14
+                        radius: 10
+                        color: Qt.alpha(Theme.text, 0.05)
+                    }
+
+                    Rectangle {
+                        id: row
+                        visible: item.type === "notif"
+                        readonly property var modelData: item.modelData.e ?? ({})
+                        readonly property bool grouped: !!item.modelData.grouped
+                        readonly property bool stacked: visible && (item.modelData.more ?? 0) > 0
                         readonly property var actions: (Notifs.live[modelData.key] ? modelData.actions ?? [] : []).filter(a => a.id !== "default" && a.label)
                         width: list.width
                         height: body.implicitHeight + 20
                         radius: 14
-                        color: Qt.alpha(Theme.text, rowArea.containsMouse ? 0.06 : 0)
+                        color: rowArea.containsMouse ? Qt.tint(Theme.frame, Qt.alpha(Theme.text, 0.06)) : row.stacked ? Qt.tint(Theme.frame, Qt.alpha(Theme.text, 0.03)) : "transparent"
                         Behavior on color { ColorAnimation { duration: 150 } }
 
                         MouseArea {
@@ -270,8 +451,7 @@ Scope {
                             x: 10; y: 12
                             width: 30; height: 30; radius: 15
                             color: Qt.alpha(row.modelData.urgency === NotificationUrgency.Critical ? Theme.tone("error") : Theme.tone("action"), 0.15)
-                            readonly property url src: row.modelData.image ? row.modelData.image
-                                : row.modelData.appIcon ? Quickshell.iconPath(row.modelData.appIcon, true) : ""
+                            readonly property url src: row.visible ? root.iconOf(row.modelData) : ""
                             Image {
                                 id: img
                                 anchors.centerIn: parent
@@ -304,7 +484,7 @@ Scope {
                                 font.family: Theme.font
                                 font.pixelSize: 11
                                 color: Theme.subtext
-                                text: (row.modelData.appName || "Notification") + "  ·  " + root.ago(row.modelData.time)
+                                text: row.grouped ? root.ago(row.modelData.time) : (row.modelData.appName || "Notification") + "  ·  " + root.ago(row.modelData.time)
                             }
                             Text {
                                 width: parent.width
@@ -385,6 +565,7 @@ Scope {
                                 onClicked: Notifs.remove(row.modelData.key)
                             }
                         }
+                    }
                     }
                 }
             }
