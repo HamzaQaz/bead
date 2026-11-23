@@ -2,12 +2,13 @@ import QtQuick
 import qs.services
 
 // What's running right now, as chips: a recording (click stops), a Discord call
-// (click mutes, right-click deafens) and a timer (click pauses, right-click
-// stops). Hidden when nothing runs. On the dashboard and the lock screen.
+// (click mutes; its own chip deafens), unread Discord DMs (a count only, no
+// names: this shows on the lock screen too) and a timer (click pauses,
+// right-click stops). Hidden when nothing runs. On the dashboard and lock screen.
 Flow {
     id: root
     spacing: 6
-    visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall
+    visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Discord.dmCount > 0
     LiveChip {
         visible: Discord.inCall
         icon: Discord.deaf ? "headset_off" : Discord.mute ? "mic_off" : "headset_mic"
@@ -17,6 +18,22 @@ Flow {
         hint: "Click to mute, right-click to deafen"
         onClicked: Discord.toggleMute()
         onRightClicked: Discord.toggleDeaf()
+    }
+    LiveChip {
+        visible: Discord.inCall
+        icon: Discord.deaf ? "headset_off" : "headphones"
+        tone: Discord.deaf ? "error" : "action"
+        text: Discord.deaf ? "Deafened" : "Deafen"
+        hint: "Click to " + (Discord.deaf ? "undeafen" : "deafen")
+        onClicked: Discord.toggleDeaf()
+    }
+    LiveChip {
+        visible: Discord.dmCount > 0
+        icon: "chat_bubble"
+        tone: "action"
+        text: Discord.dmCount + (Discord.dmCount === 1 ? " DM" : " DMs")
+        hint: "Click to open Discord"
+        onClicked: Discord.openDms()
     }
     LiveChip {
         visible: Recorder.recording

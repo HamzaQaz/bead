@@ -728,17 +728,38 @@ Scope {
                         }
                         TapHandler { onTapped: voiceChip.cmd ? (Voice.state === "listening" ? Voice.stop() : Voice.cancel()) : Dictation.state === "listening" ? Dictation.stop() : Dictation.cancel() }
                     }
-                    // live: Discord call (click mutes, right-click deafens); who's talking
+                    // live: Discord. In a call: mute and deafen buttons, then who's
+                    // there (talking lights them up). Unread DMs (never servers): the
+                    // latest sender and a count; tap to go read them
                     Row {
-                        visible: Discord.inCall
+                        visible: Discord.inCall || Discord.dmCount > 0
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 6
-                        Icon {
-                            anchors.verticalCenter: parent.verticalCenter
-                            name: Discord.deaf ? "headset_off" : Discord.mute ? "mic_off" : "headset_mic"
-                            size: 17
-                            fill: 1
-                            color: Discord.mute || Discord.deaf ? Theme.tone("error") : Theme.tone("action")
+                        Repeater { // mute, deafen
+                            model: Discord.inCall ? [
+                                { on: Discord.mute || Discord.deaf, g: Discord.mute || Discord.deaf ? "mic_off" : "mic", act: () => Discord.toggleMute() },
+                                { on: Discord.deaf, g: Discord.deaf ? "headset_off" : "headphones", act: () => Discord.toggleDeaf() }
+                            ] : []
+                            Rectangle {
+                                id: dBtn
+                                required property var modelData
+                                anchors.verticalCenter: parent?.verticalCenter
+                                width: 24; height: 24; radius: 12
+                                color: dBtn.modelData.on ? Qt.alpha(Theme.tone("error"), 0.22) : dHover.hovered ? Qt.alpha(Theme.text, 0.12) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                scale: dTap.pressed ? 0.85 : 1
+                                Behavior on scale { SpringAnimation { spring: 6; damping: 0.3; epsilon: 0.002 } }
+                                Icon {
+                                    anchors.centerIn: parent
+                                    name: dBtn.modelData.g
+                                    size: 16
+                                    fill: 1
+                                    color: dBtn.modelData.on ? Theme.tone("error") : Theme.tone("action")
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                }
+                                HoverHandler { id: dHover; cursorShape: Qt.PointingHandCursor }
+                                TapHandler { id: dTap; onTapped: dBtn.modelData.act() }
+                            }
                         }
                         // who's in the call: the first three as a small overlapping stack,
                         // "+N" for the rest. Talking lights a face's ring and pulses it in
@@ -797,8 +818,62 @@ Scope {
                             Behavior on color { ColorAnimation { duration: 180 } }
                             text: "+" + (Discord.members.length - 3)
                         }
-                        TapHandler { acceptedButtons: Qt.LeftButton; onTapped: Discord.toggleMute() }
-                        TapHandler { acceptedButtons: Qt.RightButton; onTapped: Discord.toggleDeaf() }
+                        // unread DMs: the latest sender's face with the count on it
+                        Item {
+                            id: dmChip
+                            visible: Discord.dmCount > 0
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: dmRow.width
+                            height: 24
+                            Row {
+                                id: dmRow
+                                spacing: 5
+                                anchors.verticalCenter: parent.verticalCenter
+                                Item {
+                                    width: 22; height: 22
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Image {
+                                        id: dmImg
+                                        anchors.fill: parent
+                                        source: Discord.dms[0]?.avatar ?? ""
+                                        sourceSize: Qt.size(40, 40)
+                                        visible: false
+                                    }
+                                    Rectangle { id: dmMask; anchors.fill: parent; radius: 11; visible: false; layer.enabled: true }
+                                    MultiEffect { anchors.fill: parent; source: dmImg; maskEnabled: true; maskSource: dmMask; visible: dmImg.status === Image.Ready }
+                                    Icon { anchors.centerIn: parent; visible: dmImg.status !== Image.Ready; name: "chat_bubble"; size: 15; fill: 1; color: Theme.tone("action") }
+                                }
+                                Rectangle { // the count: pops when it goes up
+                                    id: dmBadge
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: Math.max(18, dmNum.implicitWidth + 10)
+                                    height: 18
+                                    radius: 9
+                                    color: Theme.tone("error")
+                                    Text {
+                                        id: dmNum
+                                        anchors.centerIn: parent
+                                        font.family: Theme.font
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                        font.features: { "tnum": 1 }
+                                        color: "white"
+                                        text: Discord.dmCount > 99 ? "99+" : Discord.dmCount
+                                    }
+                                    Connections {
+                                        target: Discord
+                                        function onDmArrived(): void { dmPop.restart(); }
+                                    }
+                                    SequentialAnimation {
+                                        id: dmPop
+                                        NumberAnimation { target: dmBadge; property: "scale"; to: 1.35; duration: 120; easing.type: Easing.OutQuad }
+                                        NumberAnimation { target: dmBadge; property: "scale"; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 2.5 }
+                                    }
+                                }
+                            }
+                            HoverHandler { cursorShape: Qt.PointingHandCursor }
+                            TapHandler { onTapped: Discord.openDms() }
+                        }
                     }
                     // live: screen recording (click stops it)
                     Row {
@@ -871,7 +946,7 @@ Scope {
                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
                     }
                     Rectangle { // between live chips and the rest
-                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Dictation.active || Voice.active
+                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Discord.dmCount > 0 || Dictation.active || Voice.active
                         anchors.verticalCenter: parent.verticalCenter
                         width: 1; height: 14
                         color: Qt.alpha(Theme.text, 0.15)
