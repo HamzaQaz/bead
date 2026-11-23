@@ -123,6 +123,9 @@ Scope {
 
     // ── launcher ──
     property bool launcherOpen: false
+    // workspace overview (Super+Tab); opening one closes the other
+    property bool overviewOpen: false
+    onOverviewOpenChanged: if (overviewOpen) launcherOpen = false
     property string launcherMode: ""
     onLauncherOpenChanged: if (!launcherOpen) { Ask.clear(); launcherMode = ""; } // closing stops a question in flight
     IpcHandler {
@@ -165,6 +168,20 @@ Scope {
         // dispatched one as "pressed" only: either toggles, a pair counts once
         onPressed: root.launcherTap()
         onReleased: root.launcherTap()
+    }
+
+    // bound in Hyprland as hl.dsp.global("bead:overview") on Super+Tab
+    GlobalShortcut {
+        appid: "bead"
+        name: "overview"
+        description: "Workspace overview"
+        onPressed: root.overviewOpen = !root.overviewOpen
+    }
+    IpcHandler {
+        target: "overview"
+        function toggle(): void { root.overviewOpen = !root.overviewOpen; }
+        function open(): void { root.overviewOpen = true; }
+        function close(): void { root.overviewOpen = false; }
     }
 
     // ── dashboard ──
@@ -366,18 +383,19 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : root.launcherOpen ? "launcher" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
             onStateChanged: {
                 if (state === "tucked") tuckW = sw.value; // see tuckW
                 if (state === "launcher") { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; grabTimer.restart(); }
+                else if (state === "overview") { overviewView.reset(); grabTimer.restart(); }
                 else { grabTimer.stop(); grabbing = false; }
-                if (state === "passkey" || state === "launcher") focusTimer.restart();
+                if (state === "passkey" || state === "launcher" || state === "overview") focusTimer.restart();
             }
             // the layer gets keyboard focus a moment after it asks for it
             Timer {
                 id: focusTimer
                 interval: 120
-                onTriggered: win.state === "passkey" ? passkeyView.focusField() : launcherView.focusField()
+                onTriggered: win.state === "passkey" ? passkeyView.focusField() : win.state === "overview" ? overviewView.focusField() : launcherView.focusField()
             }
             Connections {
                 target: root
@@ -389,11 +407,11 @@ Scope {
             // launcher has grown: started while the island is tucked (no input
             // region yet) Hyprland clears it at once
             property bool grabbing: false
-            Timer { id: grabTimer; interval: 250; onTriggered: win.grabbing = win.state === "launcher" }
+            Timer { id: grabTimer; interval: 250; onTriggered: win.grabbing = win.state === "launcher" || win.state === "overview" }
             HyprlandFocusGrab {
                 windows: [win]
                 active: win.grabbing
-                onCleared: if (win.grabbing) { win.grabbing = false; root.launcherOpen = false; }
+                onCleared: if (win.grabbing) { win.grabbing = false; root.launcherOpen = false; root.overviewOpen = false; }
             }
             readonly property bool showMedia: root.playing && (root.peek || hovered)
             // clock ↔ track: fade the old one out, swap at the low point, let the
@@ -452,7 +470,7 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "bead-island"
-            WlrLayershell.keyboardFocus: Passkey.asking || root.launcherOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: Passkey.asking || root.launcherOpen || root.overviewOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             // input: the island itself, plus the top frame strip (hover opens it)
             mask: Region {
                 item: win.state === "tucked" ? null : hit
@@ -470,13 +488,13 @@ Scope {
             property real tuckW: restW
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "passkey" ? passkeyView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH
                     : win.state === "activity" ? (root.activity === "notif" ? 58 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
@@ -989,6 +1007,18 @@ Scope {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: win.state === "launcher" ? 240 : 110 } }
                     onClose: root.launcherOpen = false
+                }
+
+                // ── workspace overview ──
+                OverviewView {
+                    id: overviewView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    opacity: win.state === "overview" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: win.state === "overview" ? 240 : 110 } }
+                    onClose: root.overviewOpen = false
                 }
 
                 // ── passkey ──
