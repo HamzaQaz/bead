@@ -143,11 +143,25 @@ Scope {
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "bead-history"
-        // clicking into it gives it the keyboard (for Esc); it never grabs it
+        // the keyboard while open (Esc closes; typing a reply)
         WlrLayershell.keyboardFocus: Notifs.panelOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         mask: Region { item: Notifs.panelOpen ? hit : null }
 
         Spring { id: enter; to: Notifs.panelOpen ? 1 : 0; duration: Motion.dur * 0.8 }
+
+        // a click anywhere else closes it. The grab starts once the panel is in
+        // (started at once, before its input region exists, Hyprland drops it)
+        property bool grabbing: false
+        Timer { id: grabDelay; interval: 250; onTriggered: win.grabbing = Notifs.panelOpen }
+        Connections {
+            target: Notifs
+            function onPanelOpenChanged() { if (Notifs.panelOpen) grabDelay.restart(); else { grabDelay.stop(); win.grabbing = false; } }
+        }
+        HyprlandFocusGrab {
+            windows: [win]
+            active: win.grabbing
+            onCleared: if (win.grabbing) { win.grabbing = false; Notifs.panelOpen = false; }
+        }
 
         // the panel and the frame's corner as one shape (same shader as the stack)
         ShaderEffect {
