@@ -28,4 +28,6 @@ ShellRoot {
     // the launcher's ; and : modes open instantly: their data is loaded up front
     readonly property int clipWarm: Clipboard.entries.length
     readonly property int emojiWarm: Emoji.all.length
+    // the lock screen shows the weather straight away, even right after a restart
+    readonly property bool weatherWarm: Weather.ready
 }

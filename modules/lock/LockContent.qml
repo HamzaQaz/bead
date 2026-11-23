@@ -138,6 +138,18 @@ Item {
                 color: Qt.alpha(Theme.text, 0.85)
                 text: Qt.formatDate(clock.date, "dddd, d MMMM")
             }
+            // what's running: a call (mute from here), a recording, a timer
+            Item { width: 1; height: 16; visible: lockLive.visible }
+            LiveActivities {
+                id: lockLive
+                anchors.horizontalCenter: parent.horizontalCenter
+                // one centred line: as wide as the chips that show
+                width: {
+                    let w = -spacing;
+                    for (const c of children) if (c.visible) w += c.implicitWidth + spacing;
+                    return Math.max(1, w);
+                }
+            }
         }
 
         // ── password ──
@@ -295,8 +307,8 @@ Item {
             y: 36 - 14 * (1 - opacity)
             opacity: root.stage(0.38, 1)
             visible: Notifs.entries.length > 0
-            width: notifRow.implicitWidth + 24
-            height: 36
+            width: notifRow.implicitWidth + 28
+            height: notifRow.implicitHeight + 16
             radius: 18
             color: Qt.alpha(Theme.frame, 0.7)
             Row {
@@ -304,13 +316,24 @@ Item {
                 anchors.centerIn: parent
                 spacing: 8
                 Icon { anchors.verticalCenter: parent.verticalCenter; name: "notifications"; size: 17; fill: 1 }
-                Text {
+                Column {
                     anchors.verticalCenter: parent.verticalCenter
-                    font.family: Theme.font
-                    font.pixelSize: 13
-                    font.weight: Font.DemiBold
-                    color: Theme.text
-                    text: Notifs.entries.length + (Notifs.entries.length === 1 ? " notification" : " notifications")
+                    Text {
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        color: Theme.text
+                        text: Notifs.entries.length + (Notifs.entries.length === 1 ? " notification" : " notifications")
+                    }
+                    Label { // which apps, never what they said
+                        font.pixelSize: 11
+                        text: {
+                            const by = {};
+                            for (const e of Notifs.entries) { const a = e.appName || "Other"; by[a] = (by[a] ?? 0) + 1; }
+                            const apps = Object.keys(by).sort((x, y) => by[y] - by[x]);
+                            return apps.slice(0, 3).map(a => a + " " + by[a]).join("  ·  ") + (apps.length > 3 ? "  ·  +" + (apps.length - 3) : "");
+                        }
+                    }
                 }
             }
         }
@@ -354,6 +377,31 @@ Item {
                     text: root.player?.trackTitle ?? ""
                 }
                 Label { width: parent.width; elide: Text.ElideRight; text: root.player?.trackArtist ?? "" }
+            }
+            // how far into the track
+            Rectangle {
+                visible: (root.player?.length ?? 0) > 0
+                x: 76
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 9
+                width: parent.width - 76 - 18
+                height: 3
+                radius: 1.5
+                color: Qt.alpha(Theme.text, 0.12)
+                Rectangle {
+                    height: parent.height
+                    radius: parent.radius
+                    color: Theme.text
+                    width: parent.width * Math.max(0, Math.min(1, (root.player?.position ?? 0) / Math.max(1, root.player?.length ?? 1)))
+                    Behavior on width { NumberAnimation { duration: 900 } }
+                }
+                // MPRIS doesn't push the position: ask for it while playing
+                Timer {
+                    interval: 1000
+                    repeat: true
+                    running: parent.visible && Lock.shown && !!root.player?.isPlaying
+                    onTriggered: root.player?.positionChanged()
+                }
             }
             Row {
                 id: controls

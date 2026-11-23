@@ -71,6 +71,8 @@ Singleton {
         function lock(): void { root.lock(); }
         function preview(): void { if (!root.locked) { root.reset(); root.preview = true; previewEnd.restart(); } }
         function isLocked(): bool { return root.locked; }
+        // close a preview (never unlocks a real lock)
+        function endPreview(): void { if (root.preview && !root.locked) root.leave(); }
     }
     GlobalShortcut {
         appid: "bead"
