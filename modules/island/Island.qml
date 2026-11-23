@@ -137,13 +137,22 @@ Scope {
         }
     }
     property string launcherSeed: ""
+    property real lastTap: 0
+    function launcherTap(): void {
+        const now = Date.now();
+        if (now - lastTap < 300) return;
+        lastTap = now;
+        launcherOpen = !launcherOpen;
+    }
     // bound in Hyprland as hl.dsp.global("bead:launcher") on a Super tap
     GlobalShortcut {
         appid: "bead"
         name: "launcher"
         description: "Toggle the launcher"
-        // the bind fires on Super release already; dispatching it sends only "pressed"
-        onPressed: root.launcherOpen = !root.launcherOpen
+        // a real Super tap (a release bind) arrives as "released" only, a
+        // dispatched one as "pressed" only: either toggles, a pair counts once
+        onPressed: root.launcherTap()
+        onReleased: root.launcherTap()
     }
 
     // ── dashboard ──
