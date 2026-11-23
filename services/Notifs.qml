@@ -21,6 +21,9 @@ Singleton {
     property bool panelOpen: false
     property int serial: 0
 
+    // a new notification popped up (not held by DND or the open panel)
+    signal posted(var entry)
+
     // live notification objects by entry key (not saved)
     property var live: ({})
 

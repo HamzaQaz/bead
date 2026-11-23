@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -16,7 +17,12 @@ import qs.services
 //   rest      a slim pill: the time and weather, or what is playing
 //   activity  volume / mute / mic / brightness changed: icon, level, value
 //             (scroll on it or drag the bar to adjust); workspace switched:
-//             a dot per workspace, the current one long
+//             a dot per workspace, the current one long; a new notification;
+//             a timer finishing; a screen recording starting
+//   live      a running timer / stopwatch or screen recording rides on the pill
+//             (click: pause / stop)
+//   passkey   keyhold asks to approve a passkey: the island becomes the prompt
+//             (services/Passkey.qml)
 //   open      hover it (or the top edge) a moment: it grows into the dashboard
 // It lives on one monitor ($BEAD_ISLAND_SCREEN, default DP-1). Hidden (IPC
 // "island", saved across restarts), when a window on that monitor reaches up
@@ -153,11 +159,32 @@ Scope {
     // ── activity (volume / mic / brightness) ──
     property string activity: ""       // "" | volume | mic | brightness | workspace
     property string activityOn: ""     // the screen it is about (brightness)
-    function flash(what: string, screenName: string): void {
+    // what (volume|mic|brightness|workspace|notif|timerdone|recstart),
+    // the screen it is about (brightness), how long to show it (ms)
+    function flash(what, screenName, ms) {
         if (openCount > 0 && what !== "workspace") return; // the dashboard shows it already
         activityOn = screenName || focused.name;
         activity = what;
+        activityTimer.interval = ms || 1600;
         activityTimer.restart();
+    }
+    property var peekEntry: null
+    Connections {
+        target: Notifs
+        function onPosted(e: var) {
+            if (root.activity === "timerdone") return; // its own alarm is showing
+            root.peekEntry = e;
+            root.flash("notif", "", 3500);
+        }
+    }
+    property real doneTotal: 0
+    Connections {
+        target: Countdown
+        function onFinished(t: real) { root.doneTotal = t; root.flash("timerdone", "", 5000); }
+    }
+    Connections {
+        target: Recorder
+        function onRecordingChanged() { if (Recorder.recording && root.ready) root.flash("recstart", "", 2200); }
     }
     Timer { id: activityTimer; interval: 1600; onTriggered: root.activity = "" }
 
@@ -208,7 +235,10 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered
-            readonly property string state: open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            onStateChanged: if (state === "passkey") focusTimer.restart()
+            // the layer gets keyboard focus a moment after it asks for it
+            Timer { id: focusTimer; interval: 120; onTriggered: passkeyView.focusField() }
             readonly property bool showMedia: root.playing && (root.peek || hovered)
             onOpenChanged: root.openCount += open ? 1 : -1
 
@@ -248,7 +278,7 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "bead-island"
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: Passkey.asking ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             // input: the island itself, plus the top frame strip (hover opens it)
             mask: Region {
                 item: win.state === "tucked" ? null : hit
@@ -257,16 +287,20 @@ Scope {
 
             // ── size, springing between the states ──
             readonly property real restW: Math.max(132, restRow.implicitWidth + 36)
-            readonly property real activityW: root.activity === "workspace" ? Math.max(120, wsRow.implicitWidth + 44) : 330
+            readonly property real activityW: root.activity === "workspace" ? Math.max(120, wsRow.implicitWidth + 44)
+                : root.activity === "notif" ? 400
+                : root.activity === "timerdone" || root.activity === "recstart" ? eventRow.implicitWidth + 48
+                : 330
             Spring {
                 id: sw
-                to: win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "open" ? win.openH : win.state === "activity" ? 46 : win.state === "tucked" ? 0 : 34
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "open" ? win.openH
+                    : win.state === "activity" ? (root.activity === "notif" ? 58 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
@@ -329,6 +363,83 @@ Scope {
                     opacity: win.state === "rest" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                    // live: screen recording (click stops it)
+                    Row {
+                        visible: Recorder.recording
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10; height: 10; radius: 5
+                            color: Theme.tone("error")
+                            SequentialAnimation on opacity {
+                                running: Recorder.recording && win.state === "rest"
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
+                                NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
+                            }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                            color: Theme.tone("error")
+                            text: Recorder.label
+                        }
+                        TapHandler { onTapped: Recorder.stop() }
+                    }
+                    // live: timer / stopwatch (click pauses, right-click stops)
+                    Row {
+                        id: timerChip
+                        visible: Countdown.mode !== ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        opacity: Countdown.running ? 1 : 0.55
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                        Item {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 18; height: 18
+                            Shape {
+                                anchors.fill: parent
+                                visible: Countdown.mode === "timer"
+                                preferredRendererType: Shape.CurveRenderer
+                                ShapePath {
+                                    strokeColor: Qt.alpha(Theme.tone("action"), 0.25)
+                                    strokeWidth: 3
+                                    fillColor: "transparent"
+                                    PathAngleArc { centerX: 9; centerY: 9; radiusX: 7; radiusY: 7; startAngle: 0; sweepAngle: 360 }
+                                }
+                                ShapePath {
+                                    strokeColor: Theme.tone("action")
+                                    strokeWidth: 3
+                                    fillColor: "transparent"
+                                    capStyle: ShapePath.RoundCap
+                                    PathAngleArc { centerX: 9; centerY: 9; radiusX: 7; radiusY: 7; startAngle: -90; sweepAngle: 360 * (1 - Countdown.progress) }
+                                }
+                            }
+                            Icon { anchors.centerIn: parent; visible: Countdown.mode === "stopwatch"; name: "timer"; size: 17; fill: 1; color: Theme.tone("action") }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                            color: Theme.text
+                            text: Countdown.label
+                        }
+                        TapHandler { acceptedButtons: Qt.LeftButton; onTapped: Countdown.toggle() }
+                        TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
+                    }
+                    Rectangle { // between live chips and the rest
+                        visible: Recorder.recording || Countdown.mode !== ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 1; height: 14
+                        color: Qt.alpha(Theme.text, 0.15)
+                    }
 
                     // playing: art, title, a little equaliser
                     Art {
@@ -449,7 +560,7 @@ Scope {
                 Row {
                     anchors.centerIn: parent
                     spacing: 12
-                    opacity: win.state === "activity" && root.activity !== "workspace" ? 1 : 0
+                    opacity: win.state === "activity" && ["volume", "mic", "brightness"].includes(root.activity) ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: 200 } }
                     readonly property color tone: root.activityDim ? Theme.neutral : Theme.tone("action")
@@ -511,6 +622,107 @@ Scope {
                         text: root.activity === "mic" ? (Audio.micMuted ? "off" : "on")
                             : root.activityDim ? "off" : Math.round(root.activityLevel * 100)
                     }
+                }
+
+                // ── activity: a new notification ──
+                Item {
+                    anchors.fill: parent
+                    opacity: win.state === "activity" && root.activity === "notif" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    readonly property var e: root.peekEntry
+                    Row {
+                        x: 16
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 12
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 34; height: 34; radius: 17
+                            color: Qt.alpha(Theme.tone("action"), 0.15)
+                            readonly property url src: parent.parent.e?.image ? parent.parent.e.image
+                                : parent.parent.e?.appIcon ? Quickshell.iconPath(parent.parent.e.appIcon, true) : ""
+                            Image {
+                                id: nimg
+                                anchors.centerIn: parent
+                                width: 22; height: 22
+                                sourceSize: Qt.size(48, 48)
+                                source: parent.src
+                                fillMode: Image.PreserveAspectFit
+                                visible: status === Image.Ready
+                            }
+                            Icon { anchors.centerIn: parent; visible: nimg.status !== Image.Ready; name: "notifications"; size: 18; fill: 1; color: Theme.tone("action") }
+                        }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 300
+                            Label {
+                                width: parent.width
+                                elide: Text.ElideRight
+                                font.pixelSize: 11
+                                text: parent.parent.parent.e?.appName ?? ""
+                            }
+                            Text {
+                                width: parent.width
+                                elide: Text.ElideRight
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                                font.weight: Font.Medium
+                                color: Theme.text
+                                text: parent.parent.parent.e?.summary ?? ""
+                            }
+                        }
+                    }
+                    TapHandler {
+                        onTapped: {
+                            const e = root.peekEntry;
+                            if (e && Notifs.invoke(e.key, "default")) Notifs.remove(e.key);
+                            root.activity = "";
+                        }
+                    }
+                }
+
+                // ── activity: timer done / recording started ──
+                Row {
+                    id: eventRow
+                    anchors.centerIn: parent
+                    spacing: 10
+                    opacity: win.state === "activity" && (root.activity === "timerdone" || root.activity === "recstart") ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    readonly property bool done: root.activity === "timerdone"
+                    Icon {
+                        id: eventIcon
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: eventRow.done ? "alarm" : "radio_button_checked"
+                        size: 20
+                        fill: 1
+                        color: eventRow.done ? Theme.tone("action") : Theme.tone("error")
+                        SequentialAnimation on scale {
+                            running: eventRow.visible && eventRow.done
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 1.25; duration: 260; easing.type: Easing.OutBack }
+                            NumberAnimation { to: 1; duration: 340; easing.type: Easing.InOutSine }
+                        }
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                        color: Theme.text
+                        text: eventRow.done ? "Timer done · " + Countdown.fmtTotal(root.doneTotal) : "Recording"
+                    }
+                }
+
+                // ── passkey ──
+                PasskeyView {
+                    id: passkeyView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    opacity: win.state === "passkey" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: win.state === "passkey" ? 260 : 120 } }
                 }
 
                 // ── open: the dashboard ──

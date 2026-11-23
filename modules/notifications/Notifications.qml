@@ -109,6 +109,7 @@ Scope {
             if (Notifs.panelOpen) return;
             if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical) return;
             root.add(root.popupFor(n, e));
+            Notifs.posted(e);
         }
     }
 

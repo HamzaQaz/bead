@@ -1,0 +1,6 @@
+#%PAM-1.0
+# Password check for keyhold approvals. Deliberately no pam_faillock: wrong
+# guesses here must not lock you out of logging in. The prompt itself gives up
+# after 3 failures, and pam_unix's helper adds a delay after each one.
+auth     required   pam_unix.so
+account  required   pam_unix.so
