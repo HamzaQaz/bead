@@ -1,0 +1,55 @@
+#version 440
+// Gooey merge of two rounded rectangles (pill + body) via signed distance
+// fields and a smooth minimum, with a soft drop shadow. Coordinates are in
+// item pixels; rects are (x, y, w, h).
+
+layout(location = 0) in vec2 qt_TexCoord0;
+layout(location = 0) out vec4 fragColor;
+
+layout(std140, binding = 0) uniform buf {
+    mat4 qt_Matrix;
+    float qt_Opacity;
+    vec2 size;
+    vec4 pill;
+    vec4 body;
+    float radius;
+    float goo;
+    vec4 fill;
+    vec4 shadow;
+};
+
+float sdRoundBox(vec2 p, vec4 r, float rad) {
+    vec2 c = r.xy + r.zw * 0.5;
+    vec2 h = r.zw * 0.5;
+    rad = min(rad, min(h.x, h.y));
+    vec2 q = abs(p - c) - h + rad;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rad;
+}
+
+float smin(float a, float b, float k) {
+    float h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+}
+
+float shape(vec2 p) {
+    float d = sdRoundBox(p, pill, radius);
+    // Like sileo's blur+threshold, a thin body must melt away gradually rather
+    // than stay solid and vanish in one frame: push its field outward as it
+    // gets thinner, so at height 0 it is beyond the goo range (no pop).
+    float fadeH = goo * 0.6;
+    float db = sdRoundBox(p, body, radius) + max(fadeH - body.w, 0.0) * 2.0;
+    return smin(d, db, goo);
+}
+
+void main() {
+    vec2 p = qt_TexCoord0 * size;
+    float d = shape(p);
+    float a = clamp(0.5 - d, 0.0, 1.0); // 1px antialiased edge
+
+    float sd = shape(p - vec2(0.0, 4.0));
+    float s = shadow.a * (1.0 - smoothstep(-6.0, 14.0, sd));
+
+    vec4 col = fill * a;                    // premultiplied
+    col += vec4(shadow.rgb, 1.0) * s * (1.0 - a);
+    fragColor = col * qt_Opacity;
+}
