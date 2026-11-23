@@ -18,6 +18,9 @@ Singleton {
 
     readonly property string font: "Noto Sans"
     readonly property color fill: c("surfaceContainer", "#1a1a1a")
+    // Caelestia's screen frame: its colour and thickness (physical px)
+    readonly property color frame: c("surface", "#0e0e0e")
+    readonly property int frameThickness: 10
     readonly property color text: c("onSurface", "#e6e6e6")
     readonly property color subtext: themed && scheme.onSurfaceVariant ? Qt.alpha(c("onSurfaceVariant", "#ffffff"), 0.8) : Qt.rgba(1, 1, 1, 0.5)
     readonly property color neutral: c("outline", "#a3a3a3")

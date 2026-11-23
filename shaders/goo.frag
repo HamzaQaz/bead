@@ -2,6 +2,8 @@
 // Gooey merge of two rounded rectangles (pill + body) via signed distance
 // fields and a smooth minimum, with a soft drop shadow. Coordinates are in
 // item pixels; rects are (x, y, w, h).
+// Optional `wall` (w > 0): a square-edged strip (the screen frame) the shape
+// melts into, so it looks like it grows out of the edge of the screen.
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -12,6 +14,7 @@ layout(std140, binding = 0) uniform buf {
     vec2 size;
     vec4 pill;
     vec4 body;
+    vec4 wall;
     float radius;
     float goo;
     vec4 fill;
@@ -38,7 +41,9 @@ float shape(vec2 p) {
     // gets thinner, so at height 0 it is beyond the goo range (no pop).
     float fadeH = goo * 0.6;
     float db = sdRoundBox(p, body, radius) + max(fadeH - body.w, 0.0) * 2.0;
-    return smin(d, db, goo);
+    d = smin(d, db, goo);
+    if (wall.z > 0.0) d = smin(d, sdRoundBox(p, wall, 0.0), goo);
+    return d;
 }
 
 void main() {

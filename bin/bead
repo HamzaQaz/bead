@@ -1,12 +1,19 @@
 #!/bin/sh
-# bead [start|stop|restart|log]: run the shell in the background.
+# bead [start|stop|restart|claim|log]: run the shell in the background.
+# claim: take the notification service back from Caelestia by restarting it
+# (its server then waits behind ours).
 share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
 case ${1:-start} in
 start)
 	qs -p "$share" kill >/dev/null 2>&1
-	QT_SCALE_FACTOR=${BEAD_SCALE:-1.15} exec qs -p "$share" -n -d ;;
+	QT_SCALE_FACTOR=${BEAD_SCALE:-1.35} exec qs -p "$share" -n -d ;;
 stop) exec qs -p "$share" kill ;;
-restart) "$0" stop; exec "$0" start ;;
+restart) "$0" stop; "$0" start; sleep 1; exec "$0" claim ;;
+claim)
+	owner=$(busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^CommandLine=//p')
+	case $owner in
+	*caelestia*) qs -c caelestia kill >/dev/null 2>&1; sleep 0.5; setsid -f caelestia shell -d >/dev/null 2>&1 ;;
+	esac ;;
 log) exec qs -p "$share" log -f ;;
-*) echo "usage: bead [start|stop|restart|log]" >&2; exit 2 ;;
+*) echo "usage: bead [start|stop|restart|claim|log]" >&2; exit 2 ;;
 esac

@@ -25,9 +25,25 @@ Item {
     property bool sticky: false           // stay expanded until answered
     property bool autopilot: true
     property int expandDelay: 700
+    property bool autoExpand: true        // open the body by itself (else only on hover)
+    property bool compact: false          // just the badge (until hovered)
+    // calm: nothing that changes our height bounces, so neighbours in a stack
+    // glide instead of wobbling. The pill itself keeps its spring.
+    property bool calm: false
 
     // ── layout ──
     property string align: "right"       // left | center | right
+    // Edge mode: the pill grows out of a wall (the screen frame) on its right,
+    // `wallW` px wide, instead of fading in. It slides out of the wall and melts
+    // into it on the way back. Our width then includes the wall.
+    property bool edge: false
+    property real wallW: 0
+    property color fill: Theme.fill
+    // false: don't draw the shape; a parent draws it from pillRect/bodyRect
+    // (so a whole stack can be one merged blob)
+    property bool drawShape: true
+    readonly property rect pillRect: Qt.rect(toast.pillX + toast.slide, 0, pillW.value + toast.tuck, pillHt.value)
+    readonly property rect bodyRect: Qt.rect(toast.slide, pillH, toastW + toast.tuck, Math.max(0, bodyHt.value))
     property real gap: 10                 // space below it when stacked
     readonly property int pillH: 40
     readonly property int toastW: 350
@@ -50,8 +66,11 @@ Item {
     readonly property bool open: expanded && hasBody && kind !== "loading" && !leaving && !reacting
     readonly property Item hitItem: hit
 
-    width: toastW
-    height: (pillH + Math.max(0, bodyHt.value) + gap) * Math.max(0, Math.min(1, enter.value))
+    width: toastW + (edge ? wallW : 0)
+    height: (pillH + Math.max(0, bodyHt.value) + gap) * (calm ? presence : Math.max(0, Math.min(1, enter.value)))
+    // how much room we take in a stack: eases in/out without overshoot
+    property real presence: 0
+    Behavior on presence { NumberAnimation { duration: 420; easing.type: Easing.InOutCubic } }
     // keep painting beyond our (shrinking) height while leaving
     clip: false
 
@@ -70,11 +89,24 @@ Item {
     })
 
     // ── lifecycle ──
-    Component.onCompleted: { enter.to = 1; schedule(); }
+    Component.onCompleted: { enter.to = 1; presence = 1; schedule(); }
+
+    onAutoExpandChanged: {
+        if (autoExpand || leaving || reacting) return;
+        expandTimer.stop();
+        if (!hovered && !sticky) expanded = false;
+    }
+
+    function retract(): void { enter.to = 0; presence = 0; }
+    function maybeFinish(): void {
+        if (leaving && enter.t >= 1 && enter.target === 0 && (!calm || presence <= 0.001))
+            finished(result);
+    }
+    onPresenceChanged: maybeFinish()
 
     function schedule(): void {
         expandTimer.stop(); collapseTimer.stop(); dismissTimer.stop();
-        if (hasBody && (autopilot || sticky) && kind !== "loading") expandTimer.start();
+        if (hasBody && autoExpand && (autopilot || sticky) && kind !== "loading") expandTimer.start();
         if (duration > 0 && !hovered) {
             dismissTimer.interval = duration;
             dismissTimer.start();
@@ -99,7 +131,7 @@ Item {
         leaving = true;
         expandTimer.stop(); collapseTimer.stop(); dismissTimer.stop();
         if (wasOpen) exitDelay.start(); // fold the body into the pill first
-        else enter.to = 0;
+        else retract();
     }
 
     // A clicked button: report it at once, then (with a reaction like
@@ -125,12 +157,12 @@ Item {
             reactHold.start();
         }
     }
-    Timer { id: reactHold; interval: 1300; onTriggered: { root.leaving = true; enter.to = 0; } }
+    Timer { id: reactHold; interval: 1300; onTriggered: { root.leaving = true; root.retract(); } }
 
     Timer { id: expandTimer; interval: root.expandDelay; onTriggered: root.expanded = true }
     Timer { id: collapseTimer; onTriggered: root.expanded = false }
     Timer { id: dismissTimer; onTriggered: root.dismiss("timeout") }
-    Timer { id: exitDelay; interval: 480; onTriggered: enter.to = 0 }
+    Timer { id: exitDelay; interval: 480; onTriggered: root.retract() }
 
     onHoveredChanged: {
         if (leaving || reacting) return;
@@ -147,7 +179,7 @@ Item {
     Connections {
         target: enter
         function onTChanged() {
-            if (root.leaving && enter.t >= 1 && enter.target === 0) root.finished(root.result);
+            root.maybeFinish();
         }
     }
 
@@ -156,16 +188,22 @@ Item {
         id: toast
         width: root.toastW
         height: root.pillH + Math.max(0, bodyHt.value)
-        y: -6 * (1 - Math.min(enter.value, 1))
-        opacity: Math.max(0, Math.min(1, enter.value))
-        scale: 0.95 + 0.05 * enter.value
+        y: root.edge ? 0 : -6 * (1 - Math.min(enter.value, 1))
+        opacity: root.edge ? 1 : Math.max(0, Math.min(1, enter.value))
+        scale: root.edge ? 1 : 0.95 + 0.05 * enter.value
         transformOrigin: Item.Top
+
+        // edge mode: how far the shape is pushed back into the wall
+        readonly property real slide: root.edge ? (1 - enter.value) * (root.toastW + root.roundness) + Math.max(-12, swipeX) : 0
+        readonly property real textIn: Math.max(0, Math.min(1, enter.value * 1.6 - 0.6))
+        // under the wall the pill's right side is hidden, so it extends into it
+        readonly property real tuck: root.edge ? root.roundness + root.wallW : 0
 
         readonly property real contentH: content.implicitHeight
         readonly property real expandedH: Math.max(root.pillH * 2.25, root.pillH + contentH)
-        Spring { id: pillW; to: Math.min(root.toastW, Math.max(root.pillH, headerCurrent.implicitWidth + 16 + root.pillPadding)) }
+        Spring { id: pillW; to: root.compact && !root.hovered ? root.pillH : Math.min(root.toastW, Math.max(root.pillH, headerCurrent.implicitWidth + 16 + root.pillPadding)) }
         Spring { id: pillHt; to: root.open ? root.pillH + root.blur * 3 : root.pillH }
-        Spring { id: bodyHt; to: root.open ? toast.expandedH - root.pillH : 0; settleWhenShrinking: true }
+        Spring { id: bodyHt; to: root.open ? toast.expandedH - root.pillH : 0; settleWhenShrinking: true; bounce: !root.calm }
         Spring { id: headerLift; to: root.open ? 1 : 0 }
         readonly property real pillX: root.align === "left" ? 0
             : root.align === "right" ? root.toastW - pillW.value
@@ -174,24 +212,26 @@ Item {
         // the gooey shape: pill and body melted together (SDF smooth-min)
         readonly property real pad: root.blur * 2
         ShaderEffect {
+            visible: root.drawShape
             x: -toast.pad; y: -toast.pad
-            width: toast.width + toast.pad * 2
+            width: toast.width + (root.edge ? root.wallW : 0) + toast.pad * 2
             height: toast.expandedH + root.blur * 4 + toast.pad * 2
             fragmentShader: Qt.resolvedUrl("../shaders/goo.frag.qsb")
             property size size: Qt.size(width, height)
-            property vector4d pill: Qt.vector4d(toast.pad + toast.pillX, toast.pad, pillW.value, pillHt.value)
-            property vector4d body: Qt.vector4d(toast.pad, toast.pad + root.pillH, root.toastW, Math.max(0, bodyHt.value))
+            property vector4d pill: Qt.vector4d(toast.pad + toast.pillX + toast.slide, toast.pad, pillW.value + toast.tuck, pillHt.value)
+            property vector4d body: Qt.vector4d(toast.pad + toast.slide, toast.pad + root.pillH, root.toastW + toast.tuck, Math.max(0, bodyHt.value))
+            property vector4d wall: root.edge ? Qt.vector4d(toast.pad + root.toastW, 0, root.wallW, height) : Qt.vector4d(0, 0, 0, 0)
             property real radius: root.roundness
             property real goo: root.blur * 2.5
-            property color fill: Theme.fill
+            property color fill: root.fill
             property color shadow: "transparent"
         }
 
         // input region, hover, click and swipe
         Item {
             id: hit
-            x: root.open ? 0 : toast.pillX
-            width: root.open ? root.toastW : pillW.value
+            x: (root.open ? 0 : toast.pillX) + toast.slide
+            width: (root.open ? root.toastW : pillW.value) + (root.edge ? root.wallW : 0)
             height: root.pillH + Math.max(0, bodyHt.value)
             HoverHandler { onHoveredChanged: root.hovered = hovered }
             TapHandler { onTapped: root.clicked() }
@@ -199,9 +239,9 @@ Item {
                 id: drag
                 target: null
                 property real dx: 0
-                onActiveTranslationChanged: { dx = activeTranslation.x; toast.swipeX = Math.max(-24, Math.min(24, dx)); }
+                onActiveTranslationChanged: { dx = activeTranslation.x; toast.swipeX = root.edge ? Math.max(-12, dx) : Math.max(-24, Math.min(24, dx)); }
                 onActiveChanged: if (!active) {
-                    if (Math.abs(dx) > 30) root.dismiss("dismissed");
+                    if (root.edge ? dx > 40 : Math.abs(dx) > 30) root.dismiss("dismissed");
                     toast.swipeX = 0;
                     dx = 0;
                 }
@@ -209,7 +249,7 @@ Item {
         }
         property real swipeX: 0
         Behavior on swipeX { enabled: !drag.active; NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-        transform: Translate { x: toast.swipeX }
+        transform: Translate { x: root.edge ? 0 : toast.swipeX }
 
         // header: badge + title, cross-fading with blur on change
         component HeaderInner: Row {
@@ -255,7 +295,7 @@ Item {
                     sourceSize: Qt.size(48, 48)
                     source: root.iconSource
                     fillMode: Image.PreserveAspectFit
-                    asynchronous: true
+                    asynchronous: false
                     smooth: true
                     mipmap: true
                 }
@@ -281,7 +321,8 @@ Item {
 
         Item {
             id: header
-            x: toast.pillX + 8
+            x: toast.pillX + 8 + toast.slide
+            opacity: root.edge ? toast.textIn : 1
             y: 8 + 3 * headerLift.value
             width: Math.max(0, pillW.value - 16)
             height: root.pillH - 16
@@ -336,6 +377,7 @@ Item {
         // body: description + buttons
         Column {
             id: content
+            x: toast.slide
             y: root.pillH
             width: root.toastW
             padding: 16

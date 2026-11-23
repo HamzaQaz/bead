@@ -9,6 +9,7 @@ QtObject {
     property real to: 0
     property int duration: Motion.dur
     property bool settleWhenShrinking: false
+    property bool bounce: true            // false: always the bounce-free settle
 
     property real start: 0
     property real target: 0
@@ -19,7 +20,7 @@ QtObject {
     Component.onCompleted: { start = to; target = to; }
     onToChanged: {
         const v = value;
-        bouncy = !(settleWhenShrinking && to < v);
+        bouncy = bounce && !(settleWhenShrinking && to < v);
         start = v;
         target = to;
         anim.restart();
