@@ -69,8 +69,16 @@ Column {
                 function onConnectedChanged() { if (item.n.connected && root.failed === item.n.name) root.failed = ""; }
             }
 
+            // connecting: the bars fill up
+            Sweep {
+                id: sweep
+                frames: ["signal_wifi_0_bar", "network_wifi_1_bar", "network_wifi_2_bar", "network_wifi_3_bar", "signal_wifi_4_bar"]
+                running: item.busy
+                interval: 200
+            }
             PanelRow {
-                icon: root.strengthIcon(item.n.signalStrength)
+                iconRef: "signal_wifi_4_bar"
+                icon: item.busy ? sweep.current : root.strengthIcon(item.n.signalStrength)
                 title: item.n.name
                 lit: item.n.connected
                 busy: item.busy

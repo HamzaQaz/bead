@@ -22,8 +22,8 @@ import qs.services
 // side; top to bottom: logo (opens the launcher),
 // workspaces (a glyph per window, like Caelestia's, a springy highlight on the active
 // one; click or scroll to switch), the focused window's title, the tray,
-// the clock, Wi-Fi and Bluetooth (click toggles Bluetooth), power (opens the
-// launcher's > actions). The frame steps aside for fullscreen windows.
+// the clock, Wi-Fi and Bluetooth (each opens its panel), power (the session
+// panel). The frame steps aside for fullscreen windows.
 Scope {
     id: root
 
@@ -99,9 +99,13 @@ Scope {
         MaterialShape.Cookie7Sided, MaterialShape.Cookie9Sided, MaterialShape.Cookie12Sided, MaterialShape.Clover4Leaf,
         MaterialShape.SoftBurst, MaterialShape.Ghostish]
 
+    function mix(a: color, b: color, t: real): color {
+        return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t);
+    }
+
     SystemClock { id: clock; precision: SystemClock.Minutes }
 
-    // `qs ipc call bar panel wifi|bt|tray|close` on the focused monitor
+    // `qs ipc call bar panel wifi|bt|tray|power|close` on the focused monitor
     signal panelRequested(string name, string screen)
     IpcHandler {
         target: "bar"
@@ -186,7 +190,7 @@ Scope {
                 target: root
                 function onPanelRequested(name, screen) {
                     if (screen !== scope.modelData.name) return;
-                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn }[name];
+                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn }[name];
                     if (from) win.toggle(name, from); else win.panel = "";
                 }
             }
@@ -205,13 +209,14 @@ Scope {
                 anchorY: win.panelY
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
-                readonly property Item cur: win.shownPanel === "wifi" ? wifiPanel : win.shownPanel === "bt" ? btPanel : trayPanel
+                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel })[win.shownPanel] ?? trayPanel
                 contentW: cur.width
                 contentH: cur.implicitHeight
                 Keys.onEscapePressed: win.panel = ""
 
                 WifiPanel { id: wifiPanel; visible: win.shownPanel === "wifi"; active: win.panel === "wifi" }
                 BluetoothPanel { id: btPanel; visible: win.shownPanel === "bt"; active: win.panel === "bt" }
+                PowerPanel { id: powerPanel; visible: win.shownPanel === "power"; active: win.panel === "power"; onDone: win.panel = "" }
                 TrayPanel {
                     id: trayPanel
                     visible: win.shownPanel === "tray"
@@ -259,12 +264,29 @@ Scope {
                 property color tone: Theme.text
                 property real iconFill: 0
                 property bool lit: false
+                property string iconRef: ""     // see Icon.ref
+                property bool pulsing: false    // something's happening: breathe
                 signal clicked()
                 anchors.horizontalCenter: parent?.horizontalCenter
                 width: 28; height: 28; radius: 14
                 color: btn.lit ? Theme.tone("action") : Qt.alpha(Theme.text, ma.containsMouse ? 0.1 : 0)
                 Behavior on color { ColorAnimation { duration: 150 } }
-                Icon { anchors.fill: parent; name: btn.icon; size: 17; fill: btn.lit ? 1 : btn.iconFill; color: btn.lit ? Theme.frame : btn.tone }
+                Icon {
+                    id: btnIcon
+                    anchors.fill: parent
+                    name: btn.icon
+                    ref: btn.iconRef
+                    size: 17
+                    fill: btn.lit ? 1 : btn.iconFill
+                    color: btn.lit ? Theme.frame : btn.tone
+                    SequentialAnimation on opacity {
+                        running: btn.pulsing
+                        loops: Animation.Infinite
+                        onRunningChanged: if (!running) btnIcon.opacity = 1
+                        NumberAnimation { to: 0.35; duration: 650; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1; duration: 650; easing.type: Easing.InOutSine }
+                    }
+                }
                 MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: btn.clicked() }
             }
 
@@ -320,8 +342,10 @@ Scope {
                         return out;
                     }
 
-                    // the highlight springs to the active workspace
+                    // the highlight glides to the active workspace; retargeting
+                    // mid-move carries on from where it is, so spamming stays smooth
                     Rectangle {
+                        id: hl
                         x: 2
                         y: 3 + (wsBox.offsets[wsBox.activeIndex] ?? 0)
                         width: 24
@@ -329,8 +353,8 @@ Scope {
                         radius: 12
                         visible: wsBox.activeIndex >= 0
                         color: Theme.tone("action")
-                        Behavior on y { SpringAnimation { spring: 4.5; damping: 0.32; epsilon: 0.2 } }
-                        Behavior on height { SpringAnimation { spring: 4.5; damping: 0.32; epsilon: 0.2 } }
+                        Behavior on y { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+                        Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
                     }
 
                     Column {
@@ -348,7 +372,15 @@ Scope {
                                 readonly property var wins: wsBox.winsOf(num)
                                 width: wsBox.width
                                 height: wsBox.heightOf(num)
-                                Behavior on height { SpringAnimation { spring: 4.5; damping: 0.32; epsilon: 0.2 } }
+                                Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+                                // how much of this workspace the highlight covers right now
+                                // (0-1): colours and size follow the highlight itself, not
+                                // the focus, so they never run ahead of it
+                                readonly property real cover: {
+                                    if (!hl.visible) return 0;
+                                    const top = wsCol.y + ws.y, bot = top + ws.height;
+                                    return Math.max(0, Math.min(hl.y + hl.height, bot) - Math.max(hl.y, top)) / ws.height;
+                                }
                                 // Caelestia's marker: dot when empty, square when occupied,
                                 // a random shape (morphing in) when focused
                                 MaterialShape {
@@ -357,11 +389,10 @@ Scope {
                                     y: 2
                                     implicitSize: 20
                                     shape: MaterialShape.Circle
-                                    color: ws.active ? Theme.frame : ws.wins.length ? Theme.text : Qt.alpha(Theme.text, 0.35)
-                                    scale: ws.active ? 2 / 3 : ws.wins.length ? 1 / 3 : 1 / 4
-                                    animationDuration: 500
-                                    Behavior on scale { SpringAnimation { spring: 4; damping: 0.3; epsilon: 0.005 } }
-                                    Behavior on color { ColorAnimation { duration: 200 } }
+                                    readonly property real base: ws.wins.length ? 1 / 3 : 1 / 4
+                                    color: root.mix(ws.wins.length ? Theme.text : Qt.alpha(Theme.text, 0.35), Theme.frame, ws.cover)
+                                    scale: base + (2 / 3 - base) * ws.cover
+                                    animationDuration: 400
                                     function reshape(): void {
                                         if (ws.active) shape = root.focusShapes[Math.floor(Math.random() * root.focusShapes.length)];
                                         else shape = Qt.binding(() => ws.wins.length ? MaterialShape.Square : MaterialShape.Circle);
@@ -380,17 +411,10 @@ Scope {
                                             height: wsBox.glyphH
                                             name: root.glyph(modelData)
                                             size: 15
-                                            fill: ws.active ? 1 : 0
-                                            color: ws.active ? Theme.frame : Qt.alpha(Theme.text, 0.8)
-                                            Behavior on color { ColorAnimation { duration: 200 } }
+                                            fill: ws.cover > 0.5 ? 1 : 0
+                                            color: root.mix(Qt.alpha(Theme.text, 0.8), Theme.frame, ws.cover)
                                         }
                                     }
-                                }
-                                Rectangle { // empty
-                                    anchors.centerIn: parent
-                                    visible: ws.wins.length === 0
-                                    width: 6; height: 6; radius: 3
-                                    color: ws.active ? Theme.frame : Qt.alpha(Theme.text, 0.3)
                                 }
                                 MouseArea {
                                     anchors.fill: parent
@@ -529,24 +553,31 @@ Scope {
                     }
                 }
 
-                // clock: hours over minutes
+                // clock: hours, a dot that blinks with the seconds, minutes
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: -3
-                    Repeater {
-                        model: [Qt.formatTime(clock.date, "hh"), Qt.formatTime(clock.date, "mm")]
-                        Text {
-                            required property string modelData
-                            required property int index
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            font.family: Theme.font
-                            font.pixelSize: 13
-                            font.weight: index === 0 ? Font.Bold : Font.Medium
-                            font.features: { "tnum": 1 }
-                            color: index === 0 ? Theme.text : Theme.subtext
-                            text: modelData
+                    spacing: 1
+                    component ClockText: Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        font.family: Theme.font
+                        font.pixelSize: 13
+                        font.features: { "tnum": 1 }
+                    }
+                    ClockText { font.weight: Font.Bold; color: Theme.text; text: Qt.formatTime(clock.date, "hh") }
+                    Rectangle {
+                        id: tick
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 3; height: 3; radius: 1.5
+                        color: Theme.tone("action")
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 1; duration: 120 }
+                            PauseAnimation { duration: 380 }
+                            NumberAnimation { to: 0.15; duration: 220; easing.type: Easing.InOutSine }
+                            PauseAnimation { duration: 280 }
                         }
                     }
+                    ClockText { font.weight: Font.Medium; color: Theme.subtext; text: Qt.formatTime(clock.date, "mm") }
                 }
 
                 // status
@@ -564,12 +595,25 @@ Scope {
                         readonly property bool wired: Networking.devices.values.some(d => d.type === DeviceType.Wired && d.connected)
                         readonly property BluetoothAdapter bt: Bluetooth.defaultAdapter
                         readonly property bool btConnected: (bt?.devices?.values ?? []).some(d => d.connected)
+                        readonly property bool btBusy: !!bt?.enabled && (bt.discovering || (bt.devices?.values ?? []).some(d =>
+                            d.pairing || d.state === BluetoothDeviceState.Connecting || d.state === BluetoothDeviceState.Disconnecting))
+                        readonly property bool wifiConnecting: (wifi?.networks?.values ?? []).some(n => n.stateChanging || n.state === ConnectionState.Connecting)
+                        readonly property bool wifiSearching: Networking.wifiEnabled && !!wifi && !net && !wired
+                        // the bars fill up while connecting (slower while just looking)
+                        Sweep {
+                            id: wifiSweep
+                            frames: ["wifi_1_bar", "wifi_2_bar", "wifi"]
+                            running: statusCol.wifiConnecting || statusCol.wifiSearching
+                            interval: statusCol.wifiConnecting ? 220 : 450
+                        }
                         BarButton {
                             id: wifiBtn
                             iconFill: 1
                             lit: win.panel === "wifi"
                             onClicked: win.toggle("wifi", wifiBtn)
-                            icon: statusCol.wired ? "lan"
+                            iconRef: "wifi"
+                            icon: wifiSweep.running && !statusCol.wired ? wifiSweep.current
+                                : statusCol.wired ? "lan"
                                 : !statusCol.net ? "wifi_off"
                                 : statusCol.net.signalStrength > 0.66 ? "wifi"
                                 : statusCol.net.signalStrength > 0.33 ? "wifi_2_bar" : "wifi_1_bar"
@@ -579,7 +623,9 @@ Scope {
                             id: btBtn
                             lit: win.panel === "bt"
                             visible: !!statusCol.bt
-                            icon: !statusCol.bt?.enabled ? "bluetooth_disabled" : statusCol.btConnected ? "bluetooth_connected" : "bluetooth"
+                            icon: !statusCol.bt?.enabled ? "bluetooth_disabled" : statusCol.btBusy ? "bluetooth_searching"
+                                : statusCol.btConnected ? "bluetooth_connected" : "bluetooth"
+                            pulsing: statusCol.btBusy
                             tone: statusCol.bt?.enabled ? Theme.text : Theme.subtext
                             onClicked: win.toggle("bt", btBtn)
                         }
@@ -587,9 +633,11 @@ Scope {
                 }
 
                 BarButton {
+                    id: powerBtn
                     icon: "power_settings_new"
                     tone: Theme.tone("error")
-                    onClicked: root.ipc("launcher", "search", ">")
+                    lit: win.panel === "power"
+                    onClicked: win.toggle("power", powerBtn)
                 }
             }
         }

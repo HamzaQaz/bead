@@ -103,13 +103,8 @@ Item {
     }
 
     // ── actions ──
-    readonly property string sessionId: Quickshell.env("XDG_SESSION_ID") || ""
     readonly property list<var> actions: [
-        { id: "lock", title: "Lock", sub: "Lock the screen", glyph: "lock", cmd: ["caelestia", "shell", "lock", "lock"] },
-        { id: "suspend", title: "Suspend", sub: "Sleep, keeping your session", glyph: "bedtime", cmd: ["systemctl", "suspend"] },
-        { id: "logout", title: "Log out", sub: "End this session", glyph: "logout", confirm: true, cmd: ["loginctl", "terminate-session", sessionId] },
-        { id: "reboot", title: "Reboot", sub: "Restart the computer", glyph: "restart_alt", confirm: true, cmd: ["systemctl", "reboot"] },
-        { id: "shutdown", title: "Shut down", sub: "Power off the computer", glyph: "power_settings_new", confirm: true, cmd: ["systemctl", "poweroff"] },
+        ...Session.actions,
         { id: "dnd", title: Notifs.dnd ? "Turn off Do Not Disturb" : "Do Not Disturb", sub: "Hold notification popups", glyph: Notifs.dnd ? "notifications_active" : "notifications_off" },
         { id: "clear", title: "Clear notifications", sub: Notifs.entries.length + " in history", glyph: "clear_all" },
         { id: "island", title: "Hide / show the island", sub: "Same as Super+I", glyph: "visibility" },

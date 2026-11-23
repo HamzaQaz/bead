@@ -8,6 +8,7 @@ import qs.config
 Rectangle {
     id: row
     property string icon: ""
+    property string iconRef: ""
     property string image: ""
     property string title: ""
     property string sub: ""
@@ -43,6 +44,7 @@ Rectangle {
             anchors.centerIn: parent
             visible: !row.image
             name: row.icon
+            ref: row.iconRef
             size: 16
             fill: row.lit ? 1 : 0
             color: row.lit ? Theme.tone("action") : row.dim ? Theme.subtext : Theme.text
@@ -53,12 +55,22 @@ Rectangle {
             implicitSize: 16
             source: row.image
         }
-        SequentialAnimation on opacity {
-            running: row.busy
-            loops: Animation.Infinite
-            onRunningChanged: if (!running) badge.opacity = 1
-            NumberAnimation { to: 0.35; duration: 500; easing.type: Easing.InOutSine }
-            NumberAnimation { to: 1; duration: 500; easing.type: Easing.InOutSine }
+        // busy: a ring ripples out of the badge
+        Rectangle {
+            id: ring
+            anchors.centerIn: parent
+            width: parent.width; height: parent.height; radius: width / 2
+            color: "transparent"
+            border.width: 1.5
+            border.color: Theme.tone("action")
+            opacity: 0
+            visible: row.busy
+            ParallelAnimation {
+                running: row.busy
+                loops: Animation.Infinite
+                NumberAnimation { target: ring; property: "scale"; from: 0.9; to: 1.55; duration: 1100; easing.type: Easing.OutCubic }
+                NumberAnimation { target: ring; property: "opacity"; from: 0.8; to: 0; duration: 1100; easing.type: Easing.OutCubic }
+            }
         }
     }
 
