@@ -15,7 +15,19 @@ Singleton {
     property list<string> aur: []
     readonly property int count: repo.length + aur.length
     property bool checking: false
-    property string notified: "" // the set we last told you about
+    // the set we last told you about, kept across restarts so a restart
+    // doesn't tell you again
+    property string notified: seen.loaded ? seen.text().trim() : ""
+    FileView {
+        id: seen
+        path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/bead/updates-notified"
+        blockLoading: true
+        printErrors: false
+    }
+    function remember(key: string): void {
+        notified = key;
+        Quickshell.execDetached(["sh", "-c", 'mkdir -p "$(dirname "$1")" && printf %s "$2" > "$1"', "sh", seen.path, key]);
+    }
 
     function check(): void { if (!probe.running) { checking = true; probe.running = true; } }
     function update(): void {
@@ -48,9 +60,9 @@ Singleton {
 
     function maybeNotify(): void {
         const key = [...repo, ...aur].map(l => l.split(" ")[0]).sort().join(",");
-        if (count === 0) { notified = ""; return; }
+        if (count === 0) { if (notified) remember(""); return; }
         if (key === notified) return; // nothing new since we last said
-        notified = key;
+        remember(key);
         const names = [...repo, ...aur].map(l => l.split(" ")[0]);
         const kernel = names.some(n => /^linux(-cachyos)?(-lts|-zen)?$/.test(n));
         const body = (kernel ? "Includes a new kernel (reboot after). " : "")
