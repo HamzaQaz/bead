@@ -86,7 +86,11 @@ Scope {
             return s.id;
         }
         function ping(): string { return "pong"; }
+        // withdraw `toast` CLI toasts whose id starts with PREFIX (a toast's id is
+        // "<pid of the toast process>-<time>"), e.g. a question answered elsewhere
+        function close(prefix: string): void { if (prefix) root.withdraw(prefix); }
     }
+    signal withdraw(string prefix)
 
     function remove(key: real): void { // real: keys (ms × 1000) overflow a 32-bit int
         popups = popups.filter(p => p.key !== key);
@@ -227,6 +231,10 @@ Scope {
                         function onBodyChanged() { pill.resync(); }
                         function onImageChanged() { pill.resync(); }
                         function onClosed() { pill.dismiss("closed"); }
+                    }
+                    Connections {
+                        target: root
+                        function onWithdraw(prefix) { if (pill.spec && String(pill.spec.id).startsWith(prefix)) pill.dismiss("dismissed"); }
                     }
                     function resync(): void {
                         if (!notif) return;
