@@ -526,7 +526,7 @@ Scope {
                     spacing: 10
                     opacity: win.state === "rest" ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    SwapFade on opacity {}
 
                     // live: Discord call (click mutes, right-click deafens); who's talking
                     Row {
@@ -748,7 +748,7 @@ Scope {
                     spacing: 6
                     opacity: win.state === "activity" && root.activity === "workspace" ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    SwapFade on opacity {}
 
                     // special workspace: its name
                     Row {
@@ -797,7 +797,7 @@ Scope {
                     spacing: 12
                     opacity: win.state === "activity" && ["volume", "mic", "brightness"].includes(root.activity) ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    SwapFade on opacity {}
                     readonly property color tone: root.activityDim ? Theme.neutral : Theme.tone("action")
 
                     Icon {
@@ -864,7 +864,7 @@ Scope {
                     anchors.fill: parent
                     opacity: win.state === "activity" && root.activity === "notif" ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    SwapFade on opacity {}
                     readonly property var e: root.peekEntry
                     Row {
                         x: 16
@@ -923,7 +923,7 @@ Scope {
                     spacing: 10
                     opacity: win.state === "activity" && ["timerdone", "recstart", "toast"].includes(root.activity) ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    SwapFade on opacity {}
                     // the kind being shown, kept while the row fades out (activity is "" by then)
                     property string kind: ""
                     readonly property bool done: kind === "timerdone"
