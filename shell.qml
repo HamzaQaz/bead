@@ -30,4 +30,5 @@ ShellRoot {
     readonly property int emojiWarm: Emoji.all.length
     // the lock screen shows the weather straight away, even right after a restart
     readonly property bool weatherWarm: Weather.ready
+    readonly property int updatesWarm: Updates.count // starts the update checks
 }
