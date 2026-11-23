@@ -368,6 +368,7 @@ Scope {
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
             readonly property string state: Passkey.active ? "passkey" : root.launcherOpen ? "launcher" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
             onStateChanged: {
+                if (state === "tucked") tuckW = sw.value; // see tuckW
                 if (state === "launcher") { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; grabTimer.restart(); }
                 else { grabTimer.stop(); grabbing = false; }
                 if (state === "passkey" || state === "launcher") focusTimer.restart();
@@ -451,9 +452,12 @@ Scope {
                 : root.activity === "notif" ? 400
                 : root.activity === "timerdone" || root.activity === "recstart" || root.activity === "toast" ? eventRow.implicitWidth + 48
                 : 330
+            // tucking keeps the width it had, so it only retracts upwards (it used to
+            // take the resting width and spread out on its way up)
+            property real tuckW: restW
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
