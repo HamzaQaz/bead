@@ -24,4 +24,5 @@ ShellRoot {
 
     // services that must run without anything showing them
     readonly property bool idleOn: Idle.active
+    readonly property var specialApps: Specials.apps  // registers the special-workspace shortcuts
 }

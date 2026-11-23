@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Shapes
 import M3Shapes
 import Quickshell
@@ -72,7 +73,7 @@ Scope {
         return "web_asset";
     }
 
-    // ── special workspaces (scratchpads toggled with `caelestia toggle`) ──
+    // ── special workspaces (scratchpads, services/Specials.qml) ──
     readonly property var specials: [
         { name: "music", toggle: "music", glyph: "music_note", always: true },
         { name: "communication", toggle: "communication", glyph: "forum", always: true },
@@ -331,6 +332,16 @@ Scope {
                     height: wsCol.height + 8
                     radius: 16
                     color: Qt.alpha(Theme.text, 0.05)
+                    // blurred and dimmed behind the specials pill
+                    property real veil: spBox.open ? 1 : 0
+                    Behavior on veil { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+                    opacity: 1 - veil * 0.45
+                    layer.enabled: veil > 0
+                    layer.effect: MultiEffect {
+                        blurEnabled: true
+                        blur: wsBox.veil * 0.6
+                        blurMax: 20
+                    }
 
                     // 1-5 always, plus any other workspace in use or active
                     readonly property list<int> ids: {
@@ -439,47 +450,60 @@ Scope {
                     }
                 }
 
-                // special workspaces: click toggles, the one open here is lit
-                Rectangle {
-                    id: spBox
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 32
-                    height: spCol.height + 8
-                    radius: 16
-                    color: Qt.alpha(Theme.text, 0.05)
-                    readonly property string open: root.specialOn[win.monitor?.name ?? ""] ?? ""
-                    readonly property var shown: root.specials.filter(sp => sp.always
-                        || Hyprland.workspaces.values.some(w => w.name === "special:" + sp.name))
-                    Column {
-                        id: spCol
-                        spacing: 3
-                        y: 4
-                        width: parent.width
-                        Repeater {
-                            model: spBox.shown
-                            Rectangle {
-                                id: sp
-                                required property var modelData
-                                readonly property bool open: spBox.open === modelData.name
-                                readonly property bool used: Hyprland.toplevels.values.some(t => t.workspace?.name === "special:" + sp.modelData.name)
-                                x: 2
-                                width: 28; height: 28; radius: 14
-                                color: open ? Theme.tone("action") : Qt.alpha(Theme.text, spMa.containsMouse ? 0.1 : 0)
-                                Behavior on color { ColorAnimation { duration: 180 } }
-                                Icon {
-                                    anchors.centerIn: parent
-                                    name: sp.modelData.glyph
-                                    size: 16
-                                    fill: sp.open ? 1 : 0
-                                    color: sp.open ? Theme.frame : sp.used ? Theme.text : Qt.alpha(Theme.text, 0.4)
-                                }
-                                MouseArea {
-                                    id: spMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Quickshell.execDetached(["caelestia", "toggle", sp.modelData.toggle])
-                                }
+            }
+
+            // special workspaces: while one is open here, this pill floats over
+            // the top of the workspaces (which blur behind it), as in Caelestia.
+            // Click switches or hides; the open one is lit.
+            Rectangle {
+                id: spBox
+                anchors.horizontalCenter: body.horizontalCenter
+                y: top.y + wsBox.y
+                z: 2
+                width: 32
+                height: spCol.height + 8
+                visible: opacity > 0.01
+                opacity: open ? 1 : 0
+                scale: open ? 1 : 0.85
+                transformOrigin: Item.Top
+                radius: 16
+                color: Qt.alpha(Theme.frame, 0.9)
+                border.width: 1
+                border.color: Qt.alpha(Theme.text, 0.08)
+                Behavior on opacity { NumberAnimation { duration: 220 } }
+                Behavior on scale { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+                readonly property string open: root.specialOn[win.monitor?.name ?? ""] ?? ""
+                readonly property var shown: root.specials.filter(sp => sp.always
+                    || Hyprland.workspaces.values.some(w => w.name === "special:" + sp.name))
+                Column {
+                    id: spCol
+                    spacing: 3
+                    y: 4
+                    width: parent.width
+                    Repeater {
+                        model: spBox.shown
+                        Rectangle {
+                            id: sp
+                            required property var modelData
+                            readonly property bool open: spBox.open === modelData.name
+                            readonly property bool used: Hyprland.toplevels.values.some(t => t.workspace?.name === "special:" + sp.modelData.name)
+                            x: 2
+                            width: 28; height: 28; radius: 14
+                            color: open ? Theme.tone("action") : Qt.alpha(Theme.text, spMa.containsMouse ? 0.1 : 0)
+                            Behavior on color { ColorAnimation { duration: 180 } }
+                            Icon {
+                                anchors.centerIn: parent
+                                name: sp.modelData.glyph
+                                size: 16
+                                fill: sp.open ? 1 : 0
+                                color: sp.open ? Theme.frame : sp.used ? Theme.text : Qt.alpha(Theme.text, 0.4)
+                            }
+                            MouseArea {
+                                id: spMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Specials.toggle(sp.modelData.toggle)
                             }
                         }
                     }
