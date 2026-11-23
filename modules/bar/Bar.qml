@@ -38,8 +38,7 @@ Scope {
     function appIcon(t: HyprlandToplevel): string {
         const id = t?.wayland?.appId || t?.lastIpcObject?.class || "";
         if (!id) return "";
-        const e = DesktopEntries.heuristicLookup(id);
-        return Quickshell.iconPath(e?.icon || id.toLowerCase(), true);
+        return Apps.iconFor(id);
     }
 
     // ── window glyphs: a Material Symbol from the app's category, like

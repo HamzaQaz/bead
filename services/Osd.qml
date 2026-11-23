@@ -157,7 +157,11 @@ Singleton {
         target: Hyprland
         function onRawEvent(event) {
             if (event.name !== "activelayout") return;
+            const kb = event.data.slice(0, event.data.indexOf(","));
             const name = event.data.slice(event.data.indexOf(",") + 1);
+            // virtual keyboards (wtype, e.g. a toast answering Claude in the
+            // terminal) come and go with no named layout: Hyprland says "error"
+            if (/virtual|wtype|ydotool/i.test(kb) || name === "error") return;
             if (!name || name === root.layout) return;
             const first = root.layout === "";
             root.layout = name;

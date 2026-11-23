@@ -16,6 +16,26 @@ Singleton {
     property var counts: ({})
 
     // fuzzy score of query q against text t (both lower case); 0 = no match
+    // The desktop entry for a window's app id / class. An app's own
+    // StartupWMClass wins: a heuristic match by name can pick a different app
+    // (class "orca" is the Orca IDE, not the Orca screen reader's icon).
+    function entryFor(id: string): var {
+        if (!id) return null;
+        const l = id.toLowerCase();
+        return DesktopEntries.applications.values.find(e => (e.startupClass ?? "").toLowerCase() === l)
+            ?? DesktopEntries.heuristicLookup(id);
+    }
+    function iconFor(id: string): string {
+        if (!id) return "";
+        return iconPath(entryFor(id)?.icon || id.toLowerCase());
+    }
+    // an entry's Icon= value: a theme name, or (allowed by the spec) a file path
+    function iconPath(icon: string): string {
+        if (!icon) return "";
+        if (icon.startsWith("/")) return "file://" + icon.split("/").map(encodeURIComponent).join("/");
+        return Quickshell.iconPath(icon, true);
+    }
+
     function score(q: string, t: string): real {
         if (!t) return 0;
         if (t === q) return 120;

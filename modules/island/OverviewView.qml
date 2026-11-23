@@ -8,6 +8,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import qs.components
 import qs.config
+import qs.services
 
 // Workspace overview (Super+Tab): a card per workspace with live thumbnails of
 // its windows where they really sit. Click a card to go there, a thumbnail to
@@ -75,6 +76,29 @@ Item {
         enterAnim.restart();
     }
     function focusField(): void { keys.forceActiveFocus(); }
+
+    // ── drag a window onto another card to move it there (you stay put) ──
+    property var dragging: null     // the HyprlandToplevel being dragged
+    property real dragW: 0
+    property real dragH: 0
+    property point dragPos: Qt.point(0, 0)
+    property int dropIndex: -1
+    function cardAt(p: point): int {
+        if (p.y < strip.y || p.y > strip.y + strip.height) return -1;
+        const x = p.x - strip.x + strip.contentX;
+        const i = Math.floor(x / (cardW + gap));
+        return i >= 0 && i < spaces.length && x - i * (cardW + gap) <= cardW ? i : -1;
+    }
+    function moveWindow(t: var, w: var): void {
+        const a = String(t.address);
+        Quickshell.execDetached(["hyprctl", "dispatch",
+            `hl.dsp.window.move({ workspace = "${w.id}", window = "address:${a.startsWith("0x") ? a : "0x" + a}", follow = false })`]);
+        current = spaces.indexOf(w);
+        caption = "Moved to workspace " + (w.name || w.id);
+        refreshTimer.restart();
+    }
+    // positions come from Hyprland's IPC snapshot: take a fresh one after a move
+    Timer { id: refreshTimer; interval: 180; onTriggered: { Hyprland.refreshWorkspaces(); Hyprland.refreshToplevels(); } }
 
     Item {
         id: keys
@@ -167,9 +191,10 @@ Item {
                         height: root.cardH
                         radius: 14
                         color: Qt.alpha(Theme.text, cardMa.containsMouse ? 0.09 : 0.05)
-                        border.width: card.sel ? 2 : 1
-                        border.color: card.sel ? Theme.tone("action") : Qt.alpha(Theme.text, 0.08)
-                        scale: card.sel ? 1 : 0.97
+                        readonly property bool dropTarget: !!root.dragging && root.dropIndex === card.index
+                        border.width: card.sel || dropTarget ? 2 : 1
+                        border.color: dropTarget ? Theme.tone("success") : card.sel ? Theme.tone("action") : Qt.alpha(Theme.text, 0.08)
+                        scale: dropTarget ? 1.03 : card.sel ? 1 : 0.97
                         Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on border.color { ColorAnimation { duration: 150 } }
                         readonly property real k: card.m.w > 0 ? Math.min(width / card.m.w, height / card.m.h) : 0
@@ -239,17 +264,60 @@ Item {
                                             anchors.margins: 2
                                             sourceSize: Qt.size(48, 48)
                                             asynchronous: true
-                                            source: thumb.app ? Quickshell.iconPath(DesktopEntries.heuristicLookup(thumb.app)?.icon ?? thumb.app, true) : ""
+                                            source: Apps.iconFor(thumb.app)
                                         }
+                                    }
+                                    property real dragOp: root.dragging === modelData ? 0.3 : 1
+                                    Behavior on dragOp { NumberAnimation { duration: 160 } }
+                                    // a window arriving (dropped here, or opened) eases in
+                                    property real arriveOp: 1
+                                    property real arriveScale: 1
+                                    opacity: dragOp * arriveOp
+                                    scale: arriveScale
+                                    Component.onCompleted: if (root.visible && root.enter >= 1) arrive.restart()
+                                    ParallelAnimation {
+                                        id: arrive
+                                        NumberAnimation { target: thumb; property: "arriveScale"; from: 0.6; to: 1; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+                                        NumberAnimation { target: thumb; property: "arriveOp"; from: 0; to: 1; duration: 220 }
                                     }
                                     MouseArea {
                                         id: winMa
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onEntered: { root.current = card.index; root.caption = thumb.modelData.title || thumb.app; }
-                                        onExited: root.caption = ""
-                                        onClicked: root.focusWindow(thumb.modelData)
+                                        preventStealing: true
+                                        cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                        property point start
+                                        onEntered: if (!root.dragging) { root.current = card.index; root.caption = thumb.modelData.title || thumb.app; }
+                                        onExited: if (!root.dragging) root.caption = ""
+                                        onPressed: e => start = Qt.point(e.x, e.y)
+                                        onPositionChanged: e => {
+                                            if (!pressed) return;
+                                            if (!root.dragging && Math.hypot(e.x - start.x, e.y - start.y) < 6) return;
+                                            if (!root.dragging) {
+                                                root.dragging = thumb.modelData;
+                                                root.dragW = Math.min(120, thumb.width);
+                                                root.dragH = root.dragW * thumb.height / Math.max(1, thumb.width);
+                                                root.dragPos = mapToItem(root, e.x, e.y);
+                                                ghost.src = thumb.modelData;
+                                                landing.stop();
+                                                lift.restart();
+                                                ghost.follow = true;
+                                            }
+                                            root.dragPos = mapToItem(root, e.x, e.y);
+                                            root.dropIndex = root.cardAt(root.dragPos);
+                                            const w = root.spaces[root.dropIndex];
+                                            root.caption = w && w !== card.modelData ? "Move to workspace " + (w.name || w.id) : "Drop on another workspace";
+                                        }
+                                        onReleased: {
+                                            const t = root.dragging;
+                                            if (!t) { root.focusWindow(thumb.modelData); return; }
+                                            const i = root.dropIndex;
+                                            const w = root.spaces[i];
+                                            root.dragging = null;
+                                            root.dropIndex = -1;
+                                            if (w && w !== card.modelData) { ghost.land(root.cardCentre(i), true); root.moveWindow(t, w); }
+                                            else { ghost.land(thumb.mapToItem(root, thumb.width / 2, thumb.height / 2), false); root.caption = ""; }
+                                        }
                                     }
                                 }
                             }
@@ -263,5 +331,60 @@ Item {
                 }
             }
         }
+    }
+
+    // the window being dragged: lifts out of its thumbnail, trails the pointer
+    // on a spring, then flies into the card it's dropped on (or back home)
+    Item {
+        id: ghost
+        property var src: null
+        property bool follow: false   // springs after the pointer while dragging
+        visible: !!src
+        z: 10
+        width: root.dragW
+        height: root.dragH
+        x: root.dragPos.x - width / 2
+        y: root.dragPos.y - height / 2
+        Behavior on x { enabled: ghost.follow; SpringAnimation { spring: 7; damping: 0.55; epsilon: 0.3 } }
+        Behavior on y { enabled: ghost.follow; SpringAnimation { spring: 7; damping: 0.55; epsilon: 0.3 } }
+        Rectangle {
+            id: ghostCard
+            anchors.fill: parent
+            radius: 6
+            color: Theme.frame
+            border.width: 2
+            border.color: Theme.tone(root.dropIndex >= 0 ? "success" : "action")
+            Behavior on border.color { ColorAnimation { duration: 150 } }
+            ScreencopyView {
+                anchors.fill: parent
+                anchors.margins: 2
+                captureSource: ghost.src?.wayland ?? null
+                live: false
+            }
+        }
+        ParallelAnimation {
+            id: lift
+            NumberAnimation { target: ghostCard; property: "scale"; from: 0.7; to: 1.06; duration: 200; easing.type: Easing.OutBack; easing.overshoot: 2 }
+            NumberAnimation { target: ghostCard; property: "opacity"; from: 0.4; to: 0.92; duration: 160 }
+        }
+        // fly to a point (in root), shrink and fade, then hide
+        function land(p: point, into: bool): void {
+            follow = false;
+            landX.to = p.x - width / 2; landY.to = p.y - height / 2;
+            landScale.to = into ? 0.25 : 1; landOp.to = into ? 0 : 0;
+            landing.restart();
+        }
+        ParallelAnimation {
+            id: landing
+            NumberAnimation { id: landX; target: ghost; property: "x"; duration: 260; easing.type: Easing.InOutCubic }
+            NumberAnimation { id: landY; target: ghost; property: "y"; duration: 260; easing.type: Easing.InOutCubic }
+            NumberAnimation { id: landScale; target: ghostCard; property: "scale"; duration: 260; easing.type: Easing.InCubic }
+            NumberAnimation { id: landOp; target: ghostCard; property: "opacity"; duration: 260; easing.type: Easing.InCubic }
+            onFinished: { ghost.src = null; ghost.x = Qt.binding(() => root.dragPos.x - ghost.width / 2); ghost.y = Qt.binding(() => root.dragPos.y - ghost.height / 2); }
+        }
+    }
+    // where a card's centre is, in root
+    function cardCentre(i: int): point {
+        return Qt.point(strip.x - strip.contentX + i * (cardW + gap) + cardW / 2, strip.y + 30 + cardH / 2);
     }
 }

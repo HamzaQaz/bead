@@ -97,7 +97,7 @@ Item {
         const out = [];
         for (const t of Hyprland.toplevels.values) {
             const app = t.wayland?.appId ?? t.lastIpcObject?.class ?? "";
-            const entry = app ? DesktopEntries.heuristicLookup(app) : null;
+            const entry = Apps.entryFor(app);
             const name = entry?.name ?? app;
             const title = t.title ?? "";
             const s = Math.max(Apps.score(ql, title.toLowerCase()), Apps.score(ql, name.toLowerCase()) * 1.1);
@@ -385,8 +385,8 @@ Item {
                 x: 10
                 anchors.verticalCenter: parent.verticalCenter
                 width: 30; height: 30
-                readonly property string path: row.modelData.kind === "app" ? Quickshell.iconPath(row.modelData.e.icon, true)
-                    : row.modelData.kind === "win" ? Quickshell.iconPath(row.modelData.w.icon, true) : ""
+                readonly property string path: row.modelData.kind === "app" ? Apps.iconPath(row.modelData.e.icon)
+                    : row.modelData.kind === "win" ? Apps.iconPath(row.modelData.w.icon) : ""
                 Image {
                     id: appImg
                     anchors.fill: parent
