@@ -171,6 +171,12 @@ Scope {
     SystemClock { id: clock; precision: SystemClock.Seconds }
 
     property MprisPlayer picked: null
+    // media keys (bead:mediaToggle/Next/Prev/Stop): the player the island shows
+    GlobalShortcut { appid: "bead"; name: "mediaToggle"; description: "Play / pause"; onPressed: if (root.player?.canTogglePlaying) root.player.togglePlaying() }
+    GlobalShortcut { appid: "bead"; name: "mediaNext"; description: "Next track"; onPressed: if (root.player?.canGoNext) root.player.next() }
+    GlobalShortcut { appid: "bead"; name: "mediaPrev"; description: "Previous track"; onPressed: if (root.player?.canGoPrevious) root.player.previous() }
+    GlobalShortcut { appid: "bead"; name: "mediaStop"; description: "Stop playback"; onPressed: if (root.player?.canControl) root.player.stop() }
+
     readonly property MprisPlayer player: (picked && Mpris.players.values.includes(picked) ? picked : null)
         ?? Mpris.players.values.find(p => p.isPlaying) ?? Mpris.players.values[0] ?? null
     readonly property bool playing: player?.isPlaying ?? false

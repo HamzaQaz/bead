@@ -13,6 +13,8 @@ install: build
 	cp -r shell.qml config components modules services pam.d $(SHARE)/
 	install -Dm644 -t $(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb
 	install -Dm755 bin/bead $(PREFIX)/bin/bead
+	install -Dm755 bin/bead-resume $(PREFIX)/bin/bead-resume
+	install -Dm644 systemd/bead-resume.service $(HOME)/.config/systemd/user/bead-resume.service
 	@if pgrep -f "qs -p $(SHARE)" >/dev/null; then $(PREFIX)/bin/bead restart >/dev/null 2>&1; echo "bead restarted"; fi
 
 # run from the source tree (for development)

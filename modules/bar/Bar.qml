@@ -108,6 +108,13 @@ Scope {
 
     // `qs ipc call bar panel wifi|bt|tray|sound|utils|power|close` on the focused monitor
     signal panelRequested(string name, string screen)
+    // Ctrl+Alt+Delete (bead:session): the power panel on the focused monitor
+    GlobalShortcut {
+        appid: "bead"
+        name: "session"
+        description: "Session menu"
+        onPressed: root.panelRequested("power", Hyprland.focusedMonitor?.name ?? "")
+    }
     IpcHandler {
         target: "bar"
         function panel(name: string): void { root.panelRequested(name, Hyprland.focusedMonitor?.name ?? ""); }

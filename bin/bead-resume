@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# After the machine resumes, check bead for Quickshell's resume bug (it loses
+# its screens and every module throws "Cannot read property ... of null") and
+# restart it only if that happened, so timers and the like survive a normal
+# resume. If the screen was locked, lock it again straight away: Hyprland's
+# allow_session_lock_restore keeps the session locked in between.
+# Run by systemd/bead-resume.service.
+
+set -uo pipefail
+share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+bead=$HOME/.local/bin/bead
+before=0
+
+dbus-monitor --system \
+    "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" 2>/dev/null |
+while read -r line; do
+    case $line in
+    *"boolean true"*) # going down: note how far the log goes
+        before=$(qs -p "$share" log 2>/dev/null | wc -l) ;;
+    *"boolean false"*) # back: let the outputs settle, then look
+        sleep 3
+        pgrep -f "qs -p $share" >/dev/null || continue
+        if qs -p "$share" log 2>/dev/null | tail -n +"$((before + 1))" | grep -q -E 'of null|TypeError'; then
+            locked=$(qs -p "$share" ipc call lock isLocked 2>/dev/null)
+            "$bead" restart >/dev/null 2>&1
+            if [ "$locked" = true ]; then sleep 2; "$bead" lock; fi
+        fi ;;
+    esac
+done

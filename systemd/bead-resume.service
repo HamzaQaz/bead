@@ -1,0 +1,12 @@
+[Unit]
+Description=Restart bead if it broke while the machine slept
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/bead-resume
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
