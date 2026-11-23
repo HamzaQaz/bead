@@ -11,7 +11,9 @@ import qs.services
 // most float up), do maths (qalc: "2^10", "5 usd to eur"; Enter copies the
 // answer), or start with ">" for actions (lock, suspend, log out, reboot,
 // shut down, do not disturb, hide island, clear notifications, "timer 10m",
-// stopwatch), or "?" to ask Claude (services/Ask.qml): the answer streams in
+// stopwatch), ";" for clipboard history (Enter pastes it where you were,
+// Shift+Enter only copies, Shift+Delete forgets it), ":" for emoji and
+// symbols (Enter types it, Shift+Enter copies), or "?" to ask Claude (services/Ask.qml): the answer streams in
 // below; Enter on an edited question asks a follow-up. Log out / reboot /
 // shut down need a second Enter.
 // Keys: Up/Down (Tab, Ctrl+J/K/N/P), Enter, Esc.
@@ -159,8 +161,17 @@ Item {
     Process { id: islandToggle; command: ["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "island", "toggle"] }
 
     // ── results ──
+    readonly property bool clipping: query.startsWith(";")
+    readonly property bool emojiing: query.startsWith(":")
+    onClippingChanged: if (clipping) Clipboard.load()
     readonly property list<var> results: {
         const q = query.trim();
+        if (clipping) {
+            const words = q.slice(1).trim().toLowerCase().split(/\s+/).filter(w => w);
+            const hit = e => !words.length || words.every(w => e.image ? ("image " + e.image.fmt).includes(w) : e.text.toLowerCase().includes(w));
+            return Clipboard.entries.filter(hit).slice(0, 80).map(e => ({ kind: "clip", c: e }));
+        }
+        if (emojiing) return Emoji.search(q.slice(1)).map(e => ({ kind: "emoji", m: e }));
         if (q.startsWith("?")) return askText ? [{ kind: "ask", q: askText }] : [];
         if (q.startsWith(">")) {
             const a = q.slice(1).trim().toLowerCase();
@@ -195,10 +206,12 @@ Item {
         confirming = "";
         list.positionViewAtIndex(current, ListView.Contain);
     }
-    function activate(i: int): void {
+    function activate(i: int, copyOnly: bool): void {
         const r = results[i];
         if (!r) return;
-        if (r.kind === "ask") Ask.ask(r.q);
+        if (r.kind === "clip") { close(); Clipboard.pick(r.c, copyOnly); }
+        else if (r.kind === "emoji") { close(); Emoji.type(r.m, copyOnly); }
+        else if (r.kind === "ask") Ask.ask(r.q);
         else if (r.kind === "app") { Apps.launch(r.e); close(); }
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
         else {
@@ -224,7 +237,7 @@ Item {
         Icon {
             x: 14
             anchors.verticalCenter: parent.verticalCenter
-            name: root.asking ? "auto_awesome" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
+            name: root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
             color: root.asking ? Theme.tone("action") : Theme.subtext
             size: 20
         }
@@ -253,14 +266,17 @@ Item {
                 else if (e.key === Qt.Key_Up || e.key === Qt.Key_Backtab || ctrl && (e.key === Qt.Key_K || e.key === Qt.Key_P)) { root.move(-1); e.accepted = true; }
                 else if (e.key === Qt.Key_PageDown) { root.move(Math.min(root.maxRows, root.results.length - 1 - root.current)); e.accepted = true; }
                 else if (e.key === Qt.Key_PageUp) { root.move(-Math.min(root.maxRows, root.current)); e.accepted = true; }
-                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.activate(root.current); e.accepted = true; }
+                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.activate(root.current, !!(e.modifiers & Qt.ShiftModifier)); e.accepted = true; }
+                else if (e.key === Qt.Key_Delete && (e.modifiers & Qt.ShiftModifier) && root.results[root.current]?.kind === "clip") {
+                    Clipboard.remove(root.results[root.current].c); e.accepted = true;
+                }
                 else if (e.key === Qt.Key_Escape) { root.close(); e.accepted = true; }
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !field.text && !field.preeditText
                 font.pixelSize: 15
-                text: "Search apps, = maths, > actions, ? ask Claude"
+                text: "Search apps, = maths, > actions, ; clipboard, : emoji, ? ask Claude"
             }
         }
     }
@@ -315,10 +331,35 @@ Item {
                     visible: status === Image.Ready
                     asynchronous: true
                 }
+                Text { // emoji / symbol
+                    anchors.centerIn: parent
+                    visible: row.modelData.kind === "emoji"
+                    font.pixelSize: 21
+                    color: Theme.text
+                    text: row.modelData.m?.c ?? ""
+                }
+                Rectangle { // clipboard image
+                    id: clipThumb
+                    readonly property var img: row.modelData.c?.image ?? null
+                    property string src: ""
+                    anchors.fill: parent
+                    radius: 7
+                    clip: true
+                    visible: !!img
+                    color: Qt.alpha(Theme.text, 0.08)
+                    Component.onCompleted: if (img) { const e = row.modelData.c; Clipboard.ensureThumb(e, () => clipThumb.src = "file://" + Clipboard.thumbPath(e)); }
+                    Image {
+                        anchors.fill: parent
+                        source: clipThumb.src
+                        sourceSize: Qt.size(96, 96)
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                    }
+                }
                 Rectangle {
                     anchors.fill: parent
                     radius: 15
-                    visible: appImg.status !== Image.Ready
+                    visible: appImg.status !== Image.Ready && row.modelData.kind !== "emoji" && !clipThumb.img
                     color: row.confirm ? Qt.alpha(Theme.tone("error"), 0.2) : Qt.alpha(Theme.tone("action"), 0.14)
                     Icon {
                         anchors.centerIn: parent
@@ -326,7 +367,7 @@ Item {
                         fill: 1
                         color: row.confirm ? Theme.tone("error") : Theme.tone("action")
                         name: row.modelData.kind === "calc" ? "calculate" : row.modelData.kind === "action" ? row.a.glyph
-                            : row.modelData.kind === "ask" ? "auto_awesome" : "apps"
+                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? "content_paste" : "apps"
                     }
                 }
             }
@@ -345,6 +386,8 @@ Item {
                     text: row.modelData.kind === "app" ? row.modelData.e.name
                         : row.modelData.kind === "calc" ? calc.result
                         : row.modelData.kind === "ask" ? row.modelData.q
+                        : row.modelData.kind === "clip" ? (row.modelData.c.image ? "Image · " + row.modelData.c.image.w + "×" + row.modelData.c.image.h : row.modelData.c.text.replace(/\s+/g, " ").trim())
+                        : row.modelData.kind === "emoji" ? row.modelData.m.name
                         : row.confirm ? "Press Enter again to " + row.a.title.toLowerCase() : row.a.title
                 }
                 Label {
@@ -355,6 +398,8 @@ Item {
                     text: row.modelData.kind === "app" ? (row.modelData.e.comment || row.modelData.e.genericName || "")
                         : row.modelData.kind === "calc" ? "= " + root.expr + "  ·  Enter copies"
                         : row.modelData.kind === "ask" ? "Ask Claude  ·  Enter"
+                        : row.modelData.kind === "clip" ? (row.sel ? "Enter pastes  ·  Shift+Enter copies  ·  Shift+Del forgets" : "")
+                        : row.modelData.kind === "emoji" ? (row.sel ? "Enter types it  ·  Shift+Enter copies" : "")
                         : row.a.sub
                 }
             }
@@ -363,7 +408,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onPositionChanged: if (root.current !== row.index) { root.current = row.index; root.confirming = ""; }
-                onClicked: root.activate(row.index)
+                onClicked: root.activate(row.index, false)
             }
         }
     }
@@ -372,7 +417,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 66
         visible: root.results.length === 0 && !root.answering
-        Label { text: root.asking ? "Type a question for Claude" : root.mathy ? "Working it out…" : "Nothing found" }
+        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.mathy ? "Working it out…" : "Nothing found" }
     }
 
     // ── Claude's answer ──

@@ -118,7 +118,8 @@ Scope {
 
     // ── launcher ──
     property bool launcherOpen: false
-    onLauncherOpenChanged: if (!launcherOpen) Ask.clear() // closing stops a question in flight
+    property string launcherMode: ""
+    onLauncherOpenChanged: if (!launcherOpen) { Ask.clear(); launcherMode = ""; } // closing stops a question in flight
     IpcHandler {
         target: "launcher"
         function toggle(): void { root.launcherOpen = !root.launcherOpen; }
@@ -128,6 +129,12 @@ Scope {
         function ask(question: string): void {
             search("?" + question);
             Ask.ask(question);
+        }
+        // open in a mode (";" clipboard, ":" emoji); again closes it
+        function mode(prefix: string): void {
+            if (root.launcherOpen && root.launcherMode === prefix) { root.launcherOpen = false; return; }
+            search(prefix);
+            root.launcherMode = prefix;
         }
         // open with text already typed
         function search(text: string): void {

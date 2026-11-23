@@ -165,7 +165,7 @@ Scope {
             readonly property int activeWs: monitor?.activeWorkspace?.id ?? 1
 
             readonly property real wallW: Theme.frameThickness / devicePixelRatio
-            readonly property real barW: 34
+            readonly property real barW: 40
             readonly property real fullW: wallW + barW
             readonly property real radius: 25 / devicePixelRatio // inner corners, 25 device px like Caelestia's
 
@@ -278,7 +278,7 @@ Scope {
                 property bool pulsing: false    // something's happening: breathe
                 signal clicked()
                 anchors.horizontalCenter: parent?.horizontalCenter
-                width: 28; height: 28; radius: 14
+                width: 32; height: 32; radius: 16
                 color: btn.lit ? Theme.tone("action") : Qt.alpha(Theme.text, ma.containsMouse ? 0.1 : 0)
                 Behavior on color { ColorAnimation { duration: 150 } }
                 Icon {
@@ -286,7 +286,7 @@ Scope {
                     anchors.fill: parent
                     name: btn.icon
                     ref: btn.iconRef
-                    size: 17
+                    size: 18
                     fill: btn.lit ? 1 : btn.iconFill
                     color: btn.lit ? Theme.frame : btn.tone
                     SequentialAnimation on opacity {
@@ -305,11 +305,11 @@ Scope {
                 id: top
                 anchors.horizontalCenter: body.horizontalCenter
                 y: win.wallW + 6
-                spacing: 8
+                spacing: 9
 
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 28; height: 28; radius: 14
+                    width: 32; height: 32; radius: 16
                     color: Qt.alpha(Theme.text, logoMa.containsMouse ? 0.1 : 0)
                     Behavior on color { ColorAnimation { duration: 150 } }
                     IconImage {
@@ -327,9 +327,9 @@ Scope {
                 Rectangle {
                     id: wsBox
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 28
-                    height: wsCol.height + 6
-                    radius: 14
+                    width: 32
+                    height: wsCol.height + 8
+                    radius: 16
                     color: Qt.alpha(Theme.text, 0.05)
 
                     // 1-5 always, plus any other workspace in use or active
@@ -341,10 +341,10 @@ Scope {
                     }
                     readonly property int activeIndex: ids.indexOf(win.activeWs)
                     // each workspace grows with its windows (up to three glyphs)
-                    readonly property int glyphH: 18
+                    readonly property int glyphH: 20
                     function winsOf(id: int): list<var> { return Hyprland.toplevels.values.filter(t => t.workspace?.id === id); }
                     // the shape on top, then a glyph per window
-                    function heightOf(id: int): real { const n = Math.min(3, winsOf(id).length); return 24 + (n ? n * glyphH + 2 : 0); }
+                    function heightOf(id: int): real { const n = Math.min(3, winsOf(id).length); return 28 + (n ? n * glyphH + 1 : 0); }
                     readonly property var offsets: {
                         const out = [];
                         let y = 0;
@@ -357,10 +357,10 @@ Scope {
                     Rectangle {
                         id: hl
                         x: 2
-                        y: 3 + (wsBox.offsets[wsBox.activeIndex] ?? 0)
-                        width: 24
-                        height: wsBox.activeIndex >= 0 ? wsBox.heightOf(win.activeWs) : 24
-                        radius: 12
+                        y: 4 + (wsBox.offsets[wsBox.activeIndex] ?? 0)
+                        width: 28
+                        height: wsBox.activeIndex >= 0 ? wsBox.heightOf(win.activeWs) : 28
+                        radius: 14
                         visible: wsBox.activeIndex >= 0
                         color: Theme.tone("action")
                         Behavior on y { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
@@ -369,7 +369,7 @@ Scope {
 
                     Column {
                         id: wsCol
-                        y: 3
+                        y: 4
                         width: parent.width
                         Repeater {
                             id: wsRep
@@ -396,7 +396,7 @@ Scope {
                                 MaterialShape {
                                     id: marker
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    y: 2
+                                    y: 4
                                     implicitSize: 20
                                     shape: MaterialShape.Circle
                                     readonly property real base: ws.wins.length ? 1 / 3 : 1 / 4
@@ -411,7 +411,7 @@ Scope {
                                     Connections { target: ws; function onActiveChanged() { marker.reshape(); } }
                                 }
                                 Column {
-                                    y: 24
+                                    y: 30
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     Repeater {
                                         model: ws.wins.slice(0, 3)
@@ -420,7 +420,7 @@ Scope {
                                             width: wsBox.width
                                             height: wsBox.glyphH
                                             name: root.glyph(modelData)
-                                            size: 15
+                                            size: 16
                                             fill: ws.cover > 0.5 ? 1 : 0
                                             color: root.mix(Qt.alpha(Theme.text, 0.8), Theme.frame, ws.cover)
                                         }
@@ -443,16 +443,17 @@ Scope {
                 Rectangle {
                     id: spBox
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 28
-                    height: spCol.height + 6
-                    radius: 14
+                    width: 32
+                    height: spCol.height + 8
+                    radius: 16
                     color: Qt.alpha(Theme.text, 0.05)
                     readonly property string open: root.specialOn[win.monitor?.name ?? ""] ?? ""
                     readonly property var shown: root.specials.filter(sp => sp.always
                         || Hyprland.workspaces.values.some(w => w.name === "special:" + sp.name))
                     Column {
                         id: spCol
-                        y: 3
+                        spacing: 3
+                        y: 4
                         width: parent.width
                         Repeater {
                             model: spBox.shown
@@ -462,13 +463,13 @@ Scope {
                                 readonly property bool open: spBox.open === modelData.name
                                 readonly property bool used: Hyprland.toplevels.values.some(t => t.workspace?.name === "special:" + sp.modelData.name)
                                 x: 2
-                                width: 24; height: 24; radius: 12
+                                width: 28; height: 28; radius: 14
                                 color: open ? Theme.tone("action") : Qt.alpha(Theme.text, spMa.containsMouse ? 0.1 : 0)
                                 Behavior on color { ColorAnimation { duration: 180 } }
                                 Icon {
                                     anchors.centerIn: parent
                                     name: sp.modelData.glyph
-                                    size: 15
+                                    size: 16
                                     fill: sp.open ? 1 : 0
                                     color: sp.open ? Theme.frame : sp.used ? Theme.text : Qt.alpha(Theme.text, 0.4)
                                 }
@@ -518,11 +519,11 @@ Scope {
                 anchors.horizontalCenter: body.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: win.wallW + 6
-                spacing: 6
+                spacing: 8
 
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 2
+                    spacing: 3
                     // utilities: screenshots, recording, quick toggles
                     BarButton {
                         id: utilsBtn
@@ -575,11 +576,11 @@ Scope {
                 // clock: hours, a sideways colon that fades with the seconds, minutes
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 1
+                    spacing: 2
                     component ClockText: Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         font.family: Theme.font
-                        font.pixelSize: 13
+                        font.pixelSize: 14
                         font.features: { "tnum": 1 }
                     }
                     ClockText { font.weight: Font.Bold; color: Theme.text; text: Qt.formatTime(clock.date, "hh") }
@@ -602,9 +603,9 @@ Scope {
                 // status
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: 28
+                    width: 32
                     height: statusCol.height
-                    radius: 14
+                    radius: 16
                     color: Qt.alpha(Theme.text, 0.05)
                     Column {
                         id: statusCol
