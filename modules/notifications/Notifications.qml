@@ -91,6 +91,7 @@ Scope {
         function close(prefix: string): void { if (prefix) root.withdraw(prefix); }
     }
     signal withdraw(string prefix)
+    property Item replyPill: null // the pop-up whose reply field is open
 
     function remove(key: real): void { // real: keys (ms × 1000) overflow a 32-bit int
         popups = popups.filter(p => p.key !== key);
@@ -100,6 +101,7 @@ Scope {
         id: server
         keepOnReload: true // live reloads keep the D-Bus name
         actionsSupported: true
+        inlineReplySupported: true
         bodyMarkupSupported: true
         bodyHyperlinksSupported: true
         bodyImagesSupported: false
@@ -136,7 +138,8 @@ Scope {
         exclusiveZone: 0
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "bead-notifications"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        // the keyboard only while a reply is being typed
+        WlrLayershell.keyboardFocus: root.replyPill ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
         // clicks only land on the pills themselves
         mask: Region {
@@ -209,12 +212,15 @@ Scope {
                     iconGlyph: spec && !iconIsPath ? icon : ""
                     buttons: spec ? spec.buttons ?? []
                         : modelData.actions.filter(a => a.id !== "default" && a.label)
+                            .concat(notif?.hasInlineReply ? [{ id: "__reply", label: "Reply" }] : [])
                     duration: spec ? spec.duration ?? 6000 : critical ? 0
                         : modelData.timeout > 0 ? modelData.timeout : 6000
                     sticky: modelData.sticky
                     autopilot: spec ? spec.autopilot !== false : true
                     align: "right"
                     edge: true
+                    wideButtons: !spec   // notifications; the CLI's choices keep their size
+                    closable: !spec
                     drawShape: false // the blob above draws it
                     gap: 6           // close enough to melt into each other
                     calm: true
@@ -250,8 +256,68 @@ Scope {
                         dismiss("dismissed");
                     }
                     onAnswered: id => {
+                        if (id === "__reply") { pill.startReply(); return; }
                         if (spec) root.report(spec.id, "result", id);
                         else Notifs.invoke(modelData.key, id);
+                    }
+
+                    // ── inline reply (apps that offer one: messengers) ──
+                    property bool replying: false
+                    holding: replying
+                    function startReply(): void {
+                        replying = true;
+                        root.replyPill = pill;
+                        replyFocus.restart(); // once the layer has the keyboard
+                    }
+                    function endReply(send: bool): void {
+                        const text = replyField.text.trim();
+                        replying = false;
+                        if (root.replyPill === pill) root.replyPill = null;
+                        if (send && text && notif) { notif.sendInlineReply(text); dismiss("replied"); }
+                        replyField.text = "";
+                    }
+                    Component.onDestruction: if (root.replyPill === pill) root.replyPill = null
+                    Timer { id: replyFocus; interval: 80; onTriggered: replyField.forceActiveFocus() }
+                    Rectangle {
+                        width: parent?.width ?? 0
+                        height: pill.replying ? 36 : 0
+                        visible: pill.replying
+                        radius: 18
+                        color: Qt.alpha(Theme.text, 0.07)
+                        border.width: 1
+                        border.color: Qt.alpha(Theme.tone("action"), replyField.activeFocus ? 0.6 : 0.2)
+                        TextInput {
+                            id: replyField
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 40
+                            verticalAlignment: TextInput.AlignVCenter
+                            clip: true
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            color: Theme.text
+                            selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
+                            Keys.onReturnPressed: pill.endReply(true)
+                            Keys.onEnterPressed: pill.endReply(true)
+                            Keys.onEscapePressed: pill.endReply(false)
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: !replyField.text
+                                font: replyField.font
+                                color: Theme.subtext
+                                text: pill.notif?.inlineReplyPlaceholder || "Reply…"
+                            }
+                        }
+                        Icon {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "send"
+                            size: 17
+                            fill: 1
+                            color: replyField.text.trim() ? Theme.tone("action") : Theme.subtext
+                            MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: pill.endReply(true) }
+                        }
                     }
                     // promise toasts: the CLI rewrites this file when its command ends
                     FileView {

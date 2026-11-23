@@ -23,6 +23,10 @@ Item {
     property var buttons: []              // [{ id, label, tone?, react? }]
     property int duration: 6000           // ms; 0 = stays until dismissed
     property bool sticky: false           // stay expanded until answered
+    property bool holding: false          // e.g. typing a reply: open, no timeout
+    property bool wideButtons: false      // buttons share the row evenly (≤3 a row)
+    property bool closable: false         // a round × at the body's top right
+    default property alias extra: extraSlot.data // more body content, under the buttons
     property bool autopilot: true
     property int expandDelay: 700
     property bool autoExpand: true        // open the body by itself (else only on hover)
@@ -138,8 +142,10 @@ Item {
 
     // A clicked button: report it at once, then (with a reaction like
     // "success:Done") fold the body and morph the pill into it before leaving.
+    function syncHover(): void { hovered = hitHover.hovered || bodyHover.hovered || xHover.hovered; }
     function answer(id: string, react: string): void {
         if (leaving || reacting) return;
+        if (id.startsWith("__")) { answered(id); return; } // a local control (e.g. Reply): stays
         answered(id);
         if (!react) { dismiss(id); return; }
         result = id;
@@ -166,8 +172,16 @@ Item {
     Timer { id: dismissTimer; onTriggered: root.dismiss("timeout") }
     Timer { id: exitDelay; interval: 480; onTriggered: root.retract() }
 
-    onHoveredChanged: {
+    onHoldingChanged: {
         if (leaving || reacting) return;
+        if (holding) { collapseTimer.stop(); dismissTimer.stop(); expandTimer.stop(); expanded = true; }
+        else if (!hovered) {
+            if (!sticky) expanded = false;
+            if (duration > 0) { dismissTimer.interval = duration; dismissTimer.start(); }
+        }
+    }
+    onHoveredChanged: {
+        if (leaving || reacting || holding) return;
         if (hovered) {
             collapseTimer.stop(); dismissTimer.stop(); expandTimer.stop();
             if (hasBody && kind !== "loading") expanded = true;
@@ -235,7 +249,9 @@ Item {
             x: (root.open ? 0 : toast.pillX) + toast.slide
             width: (root.open ? root.toastW : pillW.value) + (root.edge ? root.wallW : 0)
             height: root.pillH + Math.max(0, bodyHt.value)
-            HoverHandler { onHoveredChanged: root.hovered = hovered }
+            // the buttons sit on top of this and take the hover, so the body
+            // tracks it too (else reaching for a button folded it up)
+            HoverHandler { id: hitHover; onHoveredChanged: root.syncHover() }
             TapHandler { onTapped: root.clicked() }
             DragHandler {
                 id: drag
@@ -376,6 +392,28 @@ Item {
             }
         }
 
+        // the round × (closes it; the notification stays in history)
+        Rectangle {
+            visible: root.closable && content.opacity > 0.01
+            opacity: content.opacity
+            x: toast.slide + root.toastW - 16 - width
+            y: root.pillH + 12
+            z: 2
+            width: 24; height: 24; radius: 12
+            color: Qt.alpha(Theme.text, xMa.containsMouse ? 0.16 : 0.08)
+            Behavior on color { ColorAnimation { duration: 150 } }
+            HoverHandler { id: xHover; onHoveredChanged: root.syncHover() }
+            Icon { anchors.centerIn: parent; name: "close"; size: 15; color: xMa.containsMouse ? Theme.text : Theme.subtext }
+            MouseArea {
+                id: xMa
+                anchors.fill: parent
+                enabled: root.open
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.dismiss("dismissed")
+            }
+        }
+
         // body: description + buttons
         Column {
             id: content
@@ -386,6 +424,7 @@ Item {
             spacing: 12
             enabled: root.open
             opacity: 0
+            HoverHandler { id: bodyHover; onHoveredChanged: root.syncHover() }
             Connections {
                 target: root
                 function onOpenChanged() {
@@ -404,7 +443,7 @@ Item {
 
             Text {
                 visible: root.desc.length > 0
-                width: root.toastW - 32
+                width: root.toastW - 32 - (root.closable ? 30 : 0) // room for the ×
                 wrapMode: Text.Wrap
                 maximumLineCount: 8
                 elide: Text.ElideRight
@@ -430,14 +469,17 @@ Item {
                         required property var modelData
                         required property int index
                         readonly property color tone: modelData.tone || (index === 0 ? Theme.tone("action") : Theme.neutral)
-                        width: lbl.implicitWidth + 20
-                        height: 28
+                        readonly property int perRow: root.buttons.length <= 3 ? root.buttons.length : 2
+                        width: root.wideButtons ? (root.toastW - 32 - 8 * (perRow - 1)) / perRow : lbl.implicitWidth + 20
+                        height: root.wideButtons ? 32 : 28
                         radius: 14
                         color: Qt.alpha(tone, ma.containsMouse ? 0.25 : 0.15)
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text {
                             id: lbl
                             anchors.centerIn: parent
+                            width: Math.min(implicitWidth, btn.width - 16)
+                            elide: Text.ElideRight
                             font.family: Theme.font
                             font.pixelSize: 12
                             font.weight: Font.Medium
@@ -453,6 +495,12 @@ Item {
                         }
                     }
                 }
+            }
+            Item {
+                id: extraSlot
+                visible: childrenRect.height > 0 // only while something in it shows
+                width: root.toastW - 32
+                height: childrenRect.height
             }
         }
     }
