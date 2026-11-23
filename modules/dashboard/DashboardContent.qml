@@ -9,7 +9,7 @@ import qs.services
 
 // The dashboard's insides: a tab bar (springy highlight pill, scroll to switch)
 // flanked by volume and brightness sliders, and pages that slide between tabs:
-// Dashboard, Media, Performance, Weather, Timers.
+// Dashboard, Media, Performance, Weather, Timers, Wallpapers.
 Item {
     id: root
 
@@ -25,7 +25,8 @@ Item {
         { name: "Media", icon: "queue_music" },
         { name: "Performance", icon: "monitoring" },
         { name: "Weather", icon: "partly_cloudy_day" },
-        { name: "Timers", icon: "timer" }
+        { name: "Timers", icon: "timer" },
+        { name: "Wallpapers", icon: "wallpaper" }
     ]
 
     // ── a small horizontal slider: icon (click) + track (drag / scroll) + value ──
@@ -228,6 +229,10 @@ Item {
         Page {
             index: 4
             TimersTab { anchors.fill: parent }
+        }
+        Page {
+            index: 5
+            WallpapersTab { anchors.fill: parent }
         }
     }
 }

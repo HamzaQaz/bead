@@ -2,6 +2,7 @@
 // bead: a desktop shell built from sileo-style pills, replacing Caelestia one
 // piece at a time. Colours come from Caelestia's wallpaper scheme.
 import Quickshell
+import qs.modules.background
 import qs.modules.bar
 import qs.modules.island
 import qs.modules.lock
@@ -18,6 +19,8 @@ ShellRoot {
     Bar {}
     Island {}
     LockScreen {}
+    Background {}
+    readonly property string wallKind: Wallpaper.kind  // starts the Wallpaper singleton (restores the choice)
 
     // services that must run without anything showing them
     readonly property bool idleOn: Idle.active
