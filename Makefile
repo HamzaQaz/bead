@@ -1,7 +1,7 @@
 PREFIX ?= $(HOME)/.local
 SHARE  := $(PREFIX)/share/bead
 
-.PHONY: build install run
+.PHONY: build install run glint install-glint strand test
 
 build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb
 
@@ -30,3 +30,26 @@ install: build
 # run from the source tree (for development)
 run: build
 	QT_SCALE_FACTOR=$${BEAD_SCALE:-1.35} qs -p .
+
+# Glint: the toast CLI (Go) and its Claude Code hook. Optional; needs go.
+glint/glint: glint/*.go glint/go.mod
+	cd glint && go build -trimpath -o glint .
+
+glint/qml/goo.frag.qsb: glint/qml/goo.frag
+	/usr/lib/qt6/bin/qsb --glsl "100es,120,150" --hlsl 50 --msl 12 -o $@ $<
+
+glint: glint/glint glint/qml/goo.frag.qsb
+
+install-glint: glint
+	install -Dm755 glint/glint $(PREFIX)/bin/glint
+	install -Dm644 glint/qml/toast.qml $(PREFIX)/share/glint/toast.qml
+	install -Dm644 glint/qml/goo.frag.qsb $(PREFIX)/share/glint/goo.frag.qsb
+	install -Dm755 glint/claude-hook.sh $(PREFIX)/share/glint/claude-hook.sh
+
+# strand: the installer (./install.sh builds and runs it)
+strand:
+	cd strand && go build -trimpath -o strand .
+
+test:
+	cd strand && go test ./...
+	cd glint && go vet ./...

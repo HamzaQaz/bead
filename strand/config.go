@@ -1,0 +1,186 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// ── Glint ↔ Claude Code ──
+
+// claudeHooks adds Glint's hook to ~/.claude/settings.json for each event it
+// handles, skipping any event that already runs a toast hook.
+func claudeHooks() (string, error) {
+	path := filepath.Join(home, ".claude", "settings.json")
+	m := map[string]any{}
+	if b, err := os.ReadFile(path); err == nil {
+		if err := json.Unmarshal(b, &m); err != nil {
+			return "", fmt.Errorf("%s isn't valid JSON, so strand left it alone: %w", path, err)
+		}
+	}
+	hook := "~/.local/share/glint/claude-hook.sh"
+	events := []struct {
+		name, matcher string
+		timeout       int
+	}{
+		{"PermissionRequest", "", 300},
+		{"PreToolUse", "AskUserQuestion", 300},
+		{"PostToolUse", "AskUserQuestion", 10},
+		{"Stop", "", 10},
+		{"Notification", "", 10},
+	}
+	hooks, _ := m["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+	}
+	var added []string
+	for _, ev := range events {
+		list, _ := hooks[ev.name].([]any)
+		if mentions(list, "claude-hook.sh", "claude-toast.sh") {
+			continue
+		}
+		entry := map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hook, "timeout": ev.timeout}}}
+		if ev.matcher != "" {
+			entry["matcher"] = ev.matcher
+		}
+		hooks[ev.name] = append(list, entry)
+		added = append(added, ev.name)
+	}
+	if len(added) == 0 {
+		return "Claude Code already has toast hooks: left alone", nil
+	}
+	m["hooks"] = hooks
+	if err := backup(path); err != nil {
+		return "", err
+	}
+	b, _ := json.MarshalIndent(m, "", "  ")
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.WriteFile(path, append(b, '\n'), 0o600); err != nil {
+		return "", err
+	}
+	return "hooked: " + strings.Join(added, ", "), nil
+}
+
+func mentions(v any, needles ...string) bool {
+	b, _ := json.Marshal(v)
+	for _, n := range needles {
+		if strings.Contains(string(b), n) {
+			return true
+		}
+	}
+	return false
+}
+
+// ── Hyprland ──
+
+func hyprTarget(lua bool) string {
+	if lua {
+		return "~/.config/hypr/bead.lua, required from hyprland.lua"
+	}
+	return "~/.config/hypr/bead.conf, sourced from hyprland.conf"
+}
+
+type bind struct{ keys, what, global, exec string }
+
+var binds = []bind{
+	{"SUPER + SUPER_L", "launcher (release)", "launcher", ""},
+	{"SUPER + Tab", "workspace overview", "overview", ""},
+	{"SUPER + Space", "voice command (hold)", "voice", ""},
+	{"SUPER + A", "dictate (hold)", "dictate", ""},
+	{"SUPER + K", "dashboard", "", "bead dashboard toggle"},
+	{"SUPER + N", "notifications", "", "bead notifs toggle"},
+	{"SUPER + L", "lock", "", "bead lock"},
+	{"SUPER + V", "clipboard", "", "bead clip"},
+	{"SUPER + Period", "emoji", "", "bead emoji"},
+	{"SUPER + SHIFT + S", "screenshot area", "", "bead shot area"},
+	{"Print", "screenshot area", "", "bead shot area"},
+	{"SUPER + SHIFT + C", "colour picker", "", "bead pick"},
+	{"SUPER + ALT + R", "record screen", "", "bead record screen sound"},
+	{"XF86AudioPlay", "play / pause", "mediaToggle", ""},
+	{"XF86AudioNext", "next track", "mediaNext", ""},
+	{"XF86AudioPrev", "previous track", "mediaPrev", ""},
+	{"XF86MonBrightnessUp", "brightness up", "", "bead brightness up"},
+	{"XF86MonBrightnessDown", "brightness down", "", "bead brightness down"},
+}
+
+func hyprBinds(lua bool) (string, error) {
+	hypr := filepath.Join(configDir, "hypr")
+	var file, main, include string
+	var b strings.Builder
+	if lua {
+		file, main, include = filepath.Join(hypr, "bead.lua"), filepath.Join(hypr, "hyprland.lua"), `require("bead")`
+		b.WriteString("-- bead (written by strand). Edit freely; strand won't overwrite it.\n")
+		b.WriteString(`local bead = os.getenv("HOME") .. "/.local/bin/bead"` + "\n")
+		b.WriteString("hl.on(\"hyprland.start\", function()\n")
+		b.WriteString("    hl.exec_cmd(bead .. \" start\")\n")
+		b.WriteString("    hl.exec_cmd(\"wl-paste --type text --watch cliphist store\") -- clipboard history (Super+V)\n")
+		b.WriteString("    hl.exec_cmd(\"wl-paste --type image --watch cliphist store\")\n")
+		b.WriteString("end)\n\n")
+		for _, k := range binds {
+			opts := ""
+			if k.keys == "SUPER + SUPER_L" {
+				opts = ", { release = true }"
+			} else if strings.HasPrefix(k.keys, "XF86") || k.keys == "Print" {
+				opts = ", { locked = true }"
+			}
+			if k.global != "" {
+				fmt.Fprintf(&b, "hl.bind(%q, hl.dsp.global(\"bead:%s\")%s) -- %s\n", k.keys, k.global, opts, k.what)
+			} else {
+				fmt.Fprintf(&b, "hl.bind(%q, hl.dsp.exec_cmd(bead .. %q)%s) -- %s\n", k.keys, strings.TrimPrefix(k.exec, "bead"), opts, k.what)
+			}
+		}
+	} else {
+		file, main, include = filepath.Join(hypr, "bead.conf"), filepath.Join(hypr, "hyprland.conf"), "source = ~/.config/hypr/bead.conf"
+		b.WriteString("# bead (written by strand). Edit freely; strand won't overwrite it.\n")
+		b.WriteString("exec-once = ~/.local/bin/bead start\n")
+		b.WriteString("exec-once = wl-paste --type text --watch cliphist store # clipboard history (Super+V)\n")
+		b.WriteString("exec-once = wl-paste --type image --watch cliphist store\n\n")
+		for _, k := range binds {
+			flag := "bind"
+			if k.keys == "SUPER + SUPER_L" {
+				flag = "bindr"
+			} else if strings.HasPrefix(k.keys, "XF86") || k.keys == "Print" {
+				flag = "bindl"
+			}
+			mods, key := confKeys(k.keys)
+			if k.global != "" {
+				fmt.Fprintf(&b, "%s = %s, %s, global, bead:%s # %s\n", flag, mods, key, k.global, k.what)
+			} else {
+				fmt.Fprintf(&b, "%s = %s, %s, exec, ~/.local/bin/%s # %s\n", flag, mods, key, k.exec, k.what)
+			}
+		}
+	}
+	made, err := writeNew(file, b.String(), 0o644)
+	if err != nil {
+		return "", err
+	}
+	note := "wrote " + file
+	if !made {
+		note = file + " already there: left alone"
+	}
+	cur, err := os.ReadFile(main)
+	if err != nil {
+		return note + "; couldn't read " + main + ", so add this line yourself: " + include, nil
+	}
+	if strings.Contains(string(cur), include) {
+		return note, nil
+	}
+	if err := backup(main); err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(main, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	_, err = fmt.Fprintf(f, "\n%s\n", include)
+	return note + " and added it to " + filepath.Base(main), err
+}
+
+// "SUPER + SHIFT + S" -> "SUPER SHIFT", "S"
+func confKeys(k string) (string, string) {
+	parts := strings.Split(k, " + ")
+	return strings.Join(parts[:len(parts)-1], " "), parts[len(parts)-1]
+}

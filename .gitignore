@@ -1,2 +1,5 @@
 shaders/*.qsb
 __pycache__/
+glint/glint
+glint/qml/*.qsb
+strand/strand
