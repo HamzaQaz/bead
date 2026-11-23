@@ -88,7 +88,7 @@ Scope {
         function ping(): string { return "pong"; }
     }
 
-    function remove(key: int): void {
+    function remove(key: real): void { // real: keys (ms × 1000) overflow a 32-bit int
         popups = popups.filter(p => p.key !== key);
     }
 

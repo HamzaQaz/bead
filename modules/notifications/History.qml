@@ -25,6 +25,8 @@ Scope {
         function open(): void { Notifs.panelOpen = true; }
         function close(): void { Notifs.panelOpen = false; }
         function clear(): void { Notifs.clear(); }
+        // clear one app's notifications (by its name)
+        function clearApp(app: string): void { Notifs.removeApp(app); }
         function dnd(): void { Notifs.dnd = !Notifs.dnd; }
     }
 

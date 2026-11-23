@@ -34,7 +34,8 @@ pick) exec qs -p "$share" ipc call capture pick ;;
 wallpaper) # bead wallpaper [random [still|live]|still PATH|live ID|current]
 	case ${2:-current} in
 	random) exec qs -p "$share" ipc call wallpaper random "${3:-all}" ;;
-	still|live) exec qs -p "$share" ipc call wallpaper "$2" "$3" ;;
+	still) exec qs -p "$share" ipc call wallpaper still "$(realpath -- "$3")" ;;
+	live) exec qs -p "$share" ipc call wallpaper live "$3" ;;
 	*) exec qs -p "$share" ipc call wallpaper current ;;
 	esac ;;
 special) # bead special [music|communication|todo|sysmon|bitwarden|specialws]

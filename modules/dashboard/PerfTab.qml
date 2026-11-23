@@ -105,11 +105,19 @@ Row {
             x: 16; y: 14
             spacing: 14
             Repeater {
-                model: [{ name: "CPU", c: Theme.tone("action") }, { name: "GPU", c: Theme.tone("info") }]
+                // CPU solid, GPU dashed and dimmer: tellable apart even when the
+                // scheme's tones are all one grey
+                model: [{ name: "CPU", hollow: false }, { name: "GPU", hollow: true }]
                 Row {
                     required property var modelData
                     spacing: 6
-                    Rectangle { width: 8; height: 8; radius: 4; color: parent.modelData.c; anchors.verticalCenter: parent.verticalCenter }
+                    Rectangle {
+                        width: 8; height: 8; radius: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: parent.modelData.hollow ? "transparent" : Theme.tone("action")
+                        border.width: parent.modelData.hollow ? 1.5 : 0
+                        border.color: Qt.alpha(Theme.tone("info"), 0.8)
+                    }
                     Label { text: parent.modelData.name; font.pixelSize: 11 }
                 }
             }
@@ -122,14 +130,25 @@ Row {
             width: parent.width - 28
             height: parent.height - 38 - 62
             function points(h: list<real>): string {
-                const n = SysStats.historyLength;
                 let d = "";
                 for (let i = 0; i < h.length; i++) {
-                    const x = plot.width * (i + n - h.length) / (n - 1);
+                    // spread across the width until the history fills, then scroll
+                    const x = plot.width * i / Math.max(1, h.length - 1);
                     const y = plot.height * (1 - Math.max(0, Math.min(1, h[i])));
                     d += (i ? " L " : "M ") + x.toFixed(1) + " " + y.toFixed(1);
                 }
                 return d;
+            }
+            // the line closed down to the bottom, for the fill
+            function area(h: list<real>): string {
+                if (h.length < 2) return "";
+                return points(h) + ` L ${plot.width.toFixed(1)} ${plot.height} L 0 ${plot.height} Z`;
+            }
+            Label {
+                anchors.centerIn: parent
+                visible: SysStats.cpuHistory.length < 3
+                font.pixelSize: 11
+                text: "Collecting…"
             }
             Repeater {
                 model: [0.25, 0.5, 0.75]
@@ -144,12 +163,23 @@ Row {
             Shape {
                 anchors.fill: parent
                 preferredRendererType: Shape.CurveRenderer
+                ShapePath { // CPU's soft fill
+                    strokeColor: "transparent"
+                    fillGradient: LinearGradient {
+                        y1: 0; y2: plot.height
+                        GradientStop { position: 0; color: Qt.alpha(Theme.tone("action"), 0.22) }
+                        GradientStop { position: 1; color: Qt.alpha(Theme.tone("action"), 0) }
+                    }
+                    PathSvg { path: plot.area(SysStats.cpuHistory) }
+                }
                 ShapePath {
-                    strokeColor: Theme.tone("info")
-                    strokeWidth: 2
+                    strokeColor: Qt.alpha(Theme.tone("info"), 0.8)
+                    strokeWidth: 1.6
+                    strokeStyle: ShapePath.DashLine
+                    dashPattern: [2.5, 2]
                     fillColor: "transparent"
                     joinStyle: ShapePath.RoundJoin
-                    capStyle: ShapePath.RoundCap
+                    capStyle: ShapePath.FlatCap
                     PathSvg { path: plot.points(SysStats.gpuHistory) }
                 }
                 ShapePath {

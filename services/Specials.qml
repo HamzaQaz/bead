@@ -72,21 +72,25 @@ Singleton {
 
     Process {
         id: clients
-        command: ["hyprctl", "-j", "clients"]
+        // clients, then monitors (fresh, for "specialws")
+        command: ["sh", "-c", "hyprctl -j clients; printf '\\036'; hyprctl -j monitors"]
+        // a toggle that arrived after the output was read but before exit
+        onExited: if (root.queue.length) running = true
         stdout: StdioCollector {
             onStreamFinished: {
-                let list = [];
-                try { list = JSON.parse(text); } catch (e) {}
+                const [c, m] = text.split("\x1e");
+                let list = [], mons = [];
+                try { list = JSON.parse(c); mons = JSON.parse(m); } catch (e) {}
                 const todo = Array.from(root.queue); // a copy: the property is live
                 root.queue = [];
-                for (const name of todo) root.run(name, list);
+                for (const name of todo) root.run(name, list, mons);
             }
         }
     }
 
-    function run(name: string, list: var): void {
+    function run(name: string, list: var, mons: var): void {
         if (name === "specialws") {
-            const m = Hyprland.focusedMonitor?.lastIpcObject;
+            const m = mons.find(x => x.focused);
             const cur = (m?.specialWorkspace?.name ?? "").replace(/^special:/, "") || "special";
             dispatch(`hl.dsp.workspace.toggle_special(${q(cur)})`);
             return;

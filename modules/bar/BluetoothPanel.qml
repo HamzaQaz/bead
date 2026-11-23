@@ -74,7 +74,8 @@ Column {
         visible: !root.bt?.enabled || root.devices.length === 0
         topPadding: 6
         bottomPadding: 6
-        text: !root.bt ? "No Bluetooth adapter" : !root.bt.enabled ? "Bluetooth is off" : "Looking for devices…"
+        text: !root.bt ? "No Bluetooth adapter" : !root.bt.enabled ? "Bluetooth is off"
+            : root.bt.discovering ? "Looking for devices…" : "No devices yet. Refresh to search."
     }
 
     Repeater {

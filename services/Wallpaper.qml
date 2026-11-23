@@ -25,21 +25,20 @@ Singleton {
     property list<var> lives: []   // { id, title, type, preview }
     property bool busy: false
 
+    // a file:// URL that survives #, ?, % and spaces in names
+    function url(path: string): string { return path ? "file://" + path.split("/").map(encodeURIComponent).join("/") : ""; }
+
     function isCurrent(w: var): bool { return w.id ? kind === "live" && current === w.id : kind === "still" && current === w.path; }
 
     function setStill(path: string): void {
         kind = "still"; current = path; save();
-        busy = true;
-        run.command = ["sh", "-c", '"$1" stop; caelestia wallpaper -f "$2"', "sh", engine, path];
-        run.running = true;
+        start(["sh", "-c", '"$1" stop; caelestia wallpaper -f "$2"', "sh", engine, path]);
     }
     function setLive(id: string): void {
         kind = "live"; current = id; save();
-        busy = true;
         // wallengine themes from the workshop preview; a still capture of the
         // live wallpaper (~/Pictures/Wallpapers/we-<id>-live.png) is better
-        run.command = ["sh", "-c", '"$1" "$2"; f="$3/we-$2-live.png"; [ -f "$f" ] && caelestia wallpaper -f "$f"; exit 0', "sh", engine, id, stillDir];
-        run.running = true;
+        start(["sh", "-c", '"$1" "$2"; f="$3/we-$2-live.png"; [ -f "$f" ] && caelestia wallpaper -f "$f"; exit 0', "sh", engine, id, stillDir]);
     }
     function pick(w: var): void { if (w.id) setLive(w.id); else setStill(w.path); }
     function random(which: string): void {
@@ -49,7 +48,21 @@ Singleton {
     }
     function refresh(): void { lister.running = true; }
 
-    Process { id: run; onExited: root.busy = false }
+    // one switch at a time; a pick made meanwhile runs next (the latest wins)
+    property var pending: null
+    function start(cmd: var): void {
+        if (run.running) { pending = cmd; return; }
+        busy = true;
+        run.command = cmd;
+        run.running = true;
+    }
+    Process {
+        id: run
+        onExited: {
+            if (root.pending) { const c = root.pending; root.pending = null; root.busy = false; root.start(c); }
+            else root.busy = false;
+        }
+    }
 
     // list both kinds: "S\tpath" and "L\tid\ttype\tpreview\ttitle"
     Process {

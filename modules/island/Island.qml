@@ -223,12 +223,20 @@ Scope {
         activityTimer.restart();
     }
     property var peekEntry: null
+    // notifications arriving while one shows wait their turn (the newest 5),
+    // each shown a little shorter while more are waiting
+    property list<var> peekQueue: []
+    function peekAt(e: var): void {
+        if (openCount > 0) { peekQueue = []; return; } // the dashboard lists them already
+        peekEntry = e;
+        flash("notif", "", peekQueue.length ? 2200 : 3500);
+    }
     Connections {
         target: Notifs
         function onPosted(e: var) {
             if (root.activity === "timerdone") return; // its own alarm is showing
-            root.peekEntry = e;
-            root.flash("notif", "", 3500);
+            if (root.activity === "notif") root.peekQueue = [...root.peekQueue, e].slice(-5);
+            else root.peekAt(e);
         }
     }
     property real doneTotal: 0
@@ -240,7 +248,19 @@ Scope {
         target: Recorder
         function onRecordingChanged() { if (Recorder.recording && root.ready) root.flash("recstart", "", 2200); }
     }
-    Timer { id: activityTimer; interval: 1600; onTriggered: root.activity = "" }
+    Timer {
+        id: activityTimer
+        interval: 1600
+        onTriggered: {
+            if (root.peekQueue.length) { // the next waiting notification
+                const next = root.peekQueue[0];
+                root.peekQueue = root.peekQueue.slice(1);
+                root.peekAt(next);
+                return;
+            }
+            root.activity = "";
+        }
+    }
 
     property bool ready: false // ignore what PipeWire reports at startup
     Timer { interval: 1500; running: true; onTriggered: root.ready = true }

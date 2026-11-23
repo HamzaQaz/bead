@@ -8,7 +8,9 @@ import Quickshell.Io
 // Screenshots (area, window, screen), screen recordings and the colour
 // picker. Files go where Caelestia's did: ~/Pictures/Screenshots and
 // ~/Videos/Recordings. Screenshots are copied to the clipboard; the
-// notification offers Edit (satty) and Open. Everything waits a moment
+// notification offers Edit (satty) and Open (for 30 minutes: after that
+// nothing waits on it, so a notification kept in the history can't leave a
+// process behind). Everything waits a moment
 // first so the panel that asked has closed.
 Singleton {
     id: root
@@ -21,11 +23,13 @@ Singleton {
         sleep 0.4
         case $1 in
         area) g=$(slurp -d) || exit 0; grim -g "$g" "$f" ;;
-        window) grim -g "$3" "$f" ;;
+        window) # where the focused window is now (asked at capture time)
+            g=$(hyprctl -j activewindow | jq -r \'if .at then "\\(.at[0]),\\(.at[1]) \\(.size[0])x\\(.size[1])" else empty end\')
+            if [ -n "$g" ]; then grim -g "$g" "$f"; else grim -o "$2" "$f"; fi ;;
         *) grim -o "$2" "$f" ;;
         esac || exit 0
         wl-copy -t image/png < "$f"
-        a=$(notify-send -a Screenshot -i "$f" -A edit=Edit -A open=Open "Screenshot saved" "Copied to the clipboard · ${f##*/}")
+        a=$(timeout 1800 notify-send -a Screenshot -i "$f" -A edit=Edit -A open=Open "Screenshot saved" "Copied to the clipboard · ${f##*/}")
         case $a in edit) satty --filename "$f" --output-filename "$f" ;; open) xdg-open "$f" ;; esac'
 
     // $1 mode (screen|area), $2 monitor, $3 sound device ("" for none)
@@ -38,20 +42,14 @@ Singleton {
         [ -n "$snd" ] && set -- "$@" "--audio=$snd"
         wf-recorder "$@" -f "$f" >/dev/null 2>&1
         [ -s "$f" ] || exit 0
-        a=$(notify-send -a Recorder -i video-x-generic -A open=Open -A folder="Show folder" "Recording saved" "${f##*/}")
+        a=$(timeout 1800 notify-send -a Recorder -i video-x-generic -A open=Open -A folder="Show folder" "Recording saved" "${f##*/}")
         case $a in open) xdg-open "$f" ;; folder) xdg-open "$dir" ;; esac'
 
     function monitorName(): string { return Hyprland.focusedMonitor?.name ?? ""; }
     function soundDevice(sound: bool): string { return sound && Audio.sink ? Audio.sink.name + ".monitor" : ""; }
 
     function shot(mode: string): void {
-        let geom = "";
-        if (mode === "window") {
-            const w = Hyprland.activeToplevel?.lastIpcObject;
-            if (!w?.at) mode = "screen";
-            else geom = `${w.at[0]},${w.at[1]} ${w.size[0]}x${w.size[1]}`;
-        }
-        Quickshell.execDetached(["sh", "-c", shotScript, "sh", mode, monitorName(), geom]);
+        Quickshell.execDetached(["sh", "-c", shotScript, "sh", mode, monitorName()]);
     }
     // sound: record what's playing (defaults to the panel's switch)
     function record(mode, sound): void {

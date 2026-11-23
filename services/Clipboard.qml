@@ -21,6 +21,7 @@ Singleton {
     Process {
         id: lister
         command: ["cliphist", "list"]
+        onExited: root.loading = false   // even if it failed
         stdout: StdioCollector {
             onStreamFinished: {
                 const out = [];
@@ -33,16 +34,27 @@ Singleton {
                 }
                 root.entries = out;
                 root.loading = false;
+                // forget thumbnails of entries no longer in the history
+                const keep = out.filter(e => e.image).map(e => e.id).join(" ");
+                Quickshell.execDetached(["sh", "-c", 'cd "$1" 2>/dev/null || exit 0; for f in *; do [ -e "$f" ] || continue; case " $2 " in *" ${f%.*} "*) ;; *) rm -f -- "$f" ;; esac; done', "sh", root.cacheDir, keep]);
             }
         }
     }
 
     function thumbPath(e: var): string { return `${cacheDir}/${e.id}.${e.image?.fmt ?? "png"}`; }
     // write the image to the cache (once); `done` runs when it's there
-    function ensureThumb(e: var, done: var): void {
+    // entry id -> thumbnail URL, once it's on disk (rows bind to this, so a
+    // row that's gone by then is simply not around to care)
+    property var thumbs: ({})
+    function ensureThumb(e: var): void {
+        if (thumbs[e.id]) return;
         const p = Qt.createQmlObject('import Quickshell.Io; Process {}', root);
-        p.command = ["sh", "-c", 'mkdir -p "$1"; [ -s "$2" ] || printf "%s\\n" "$3" | cliphist decode > "$2"', "sh", cacheDir, thumbPath(e), e.line];
-        p.exited.connect(() => { done(); p.destroy(); });
+        const path = thumbPath(e);
+        p.command = ["sh", "-c", 'mkdir -p "$1"; [ -s "$2" ] || printf "%s\\n" "$3" | cliphist decode > "$2"', "sh", cacheDir, path, e.line];
+        p.exited.connect(() => {
+            root.thumbs = Object.assign({}, root.thumbs, { [e.id]: "file://" + path });
+            p.destroy();
+        });
         p.running = true;
     }
 

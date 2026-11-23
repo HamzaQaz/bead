@@ -347,13 +347,13 @@ Item {
                 Rectangle { // clipboard image
                     id: clipThumb
                     readonly property var img: row.modelData.c?.image ?? null
-                    property string src: ""
+                    readonly property string src: img ? (Clipboard.thumbs[row.modelData.c.id] ?? "") : ""
                     anchors.fill: parent
                     radius: 7
                     clip: true
                     visible: !!img
                     color: Qt.alpha(Theme.text, 0.08)
-                    Component.onCompleted: if (img) { const e = row.modelData.c; Clipboard.ensureThumb(e, () => clipThumb.src = "file://" + Clipboard.thumbPath(e)); }
+                    Component.onCompleted: if (img) Clipboard.ensureThumb(row.modelData.c)
                     Image {
                         anchors.fill: parent
                         source: clipThumb.src

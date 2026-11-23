@@ -20,10 +20,14 @@ while read -r line; do
     *"boolean false"*) # back: let the outputs settle, then look
         sleep 3
         pgrep -f "qs -p $share" >/dev/null || continue
-        if qs -p "$share" log 2>/dev/null | tail -n +"$((before + 1))" | grep -q -E 'of null|TypeError'; then
+        # (no grep -q: under pipefail its early exit would SIGPIPE the log
+        # reader and hide the very flood of errors we're looking for)
+        if qs -p "$share" log 2>/dev/null | tail -n +"$((before + 1))" | grep -E 'of null|TypeError' >/dev/null; then
             locked=$(qs -p "$share" ipc call lock isLocked 2>/dev/null)
-            "$bead" restart >/dev/null 2>&1
-            if [ "$locked" = true ]; then sleep 2; "$bead" lock; fi
+            # restart through Hyprland, so the new bead isn't part of this
+            # service (systemd would kill it whenever the service restarts)
+            then_lock=""; [ "$locked" = true ] && then_lock=" && sleep 2 && $bead lock"
+            hyprctl dispatch "hl.dsp.exec_cmd(\"$bead restart$then_lock\")" >/dev/null
         fi ;;
     esac
 done

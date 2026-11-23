@@ -6,7 +6,8 @@ import Quickshell.Wayland
 import qs.services
 
 // Draws a still wallpaper on every screen (live ones are linux-wallpaperengine's
-// job). A new picture crossfades in over the old one.
+// job). A new picture fades in on top of the old one; only once it's fully in
+// does the old one go, so the crossfade never dips to black.
 Variants {
     model: Quickshell.screens
 
@@ -21,32 +22,44 @@ Variants {
         WlrLayershell.namespace: "bead-background"
         color: "black"
 
-        // two layers: the one on top fades in, then becomes the bottom
-        property bool flip: false
-        readonly property string src: Wallpaper.kind === "still" ? "file://" + Wallpaper.current : ""
-        onSrcChanged: {
-            const next = flip ? a : b;
-            next.source = src;
+        readonly property string src: Wallpaper.kind === "still" ? Wallpaper.url(Wallpaper.current) : ""
+        property Item front: a   // the layer showing now
+        onSrcChanged: show(src)
+        Component.onCompleted: if (src) show(src)
+
+        // load into the back layer, and bring it forward once it's ready
+        function show(url: string): void {
+            if (!url) return;
+            const back = front === a ? b : a;
+            back.wanted = url;
+            back.opacity = 0;
+            back.source = "";     // a source equal to the old one would never reload
+            back.source = url;
         }
+        function ready(layer: Item): void {
+            if (layer.wanted !== src || layer === front) return; // superseded meanwhile
+            const old = front;
+            front = layer;
+            layer.z = 1; old.z = 0;
+            layer.opacity = 1;
+            old.fadeOut = true;   // dropped once the new one has fully faded in
+        }
+
         component Layer: Image {
+            id: layer
+            property string wanted: ""
+            property bool fadeOut: false
             anchors.fill: parent
             fillMode: Image.PreserveAspectCrop
             sourceSize: Qt.size(win.width, win.height)
             asynchronous: true
             cache: false
             opacity: 0
-            Behavior on opacity { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { id: fade; duration: 600; easing.type: Easing.OutCubic } }
+            onStatusChanged: if (status === Image.Ready) win.ready(layer)
+            onOpacityChanged: if (opacity === 1 && win.front === layer) { const o = layer === a ? b : a; if (o.fadeOut) { o.fadeOut = false; o.opacity = 0; } }
         }
-        Layer {
-            id: a
-            z: win.flip ? 0 : 1
-            onStatusChanged: if (status === Image.Ready && source == win.src) { opacity = 1; b.opacity = 0; win.flip = false; }
-        }
-        Layer {
-            id: b
-            z: win.flip ? 1 : 0
-            onStatusChanged: if (status === Image.Ready && source == win.src) { opacity = 1; a.opacity = 0; win.flip = true; }
-        }
-        Component.onCompleted: if (src) a.source = src
+        Layer { id: a }
+        Layer { id: b }
     }
 }

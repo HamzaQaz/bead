@@ -118,7 +118,7 @@ Item {
 
                 Image {
                     anchors.fill: parent
-                    source: "file://" + (cell.live ? cell.modelData.preview : cell.modelData.path)
+                    source: Wallpaper.url(cell.live ? cell.modelData.preview : cell.modelData.path)
                     sourceSize: Qt.size(320, 180)
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true

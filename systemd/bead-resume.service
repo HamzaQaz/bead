@@ -6,6 +6,8 @@ After=default.target
 Type=simple
 ExecStart=%h/.local/bin/bead-resume
 Restart=always
+# only stop the watcher itself, never anything it started
+KillMode=process
 RestartSec=5
 
 [Install]

@@ -72,13 +72,18 @@ Singleton {
     function drop(key: real): void {
         entries = entries.filter(e => e.key !== key);
     }
+    // every entry of one app (by name)
+    function removeApp(app: string): void {
+        // plain keys first: elements read from the entries list point into it
+        // by position, so removing as we go would hit the wrong ones
+        const keys = entries.filter(e => e.appName === app).map(e => e.key);
+        for (const k of keys) remove(k);
+    }
     function clear(): void {
-        for (const e of entries) {
-            const n = live[e.key];
-            if (n) n.dismiss();
-        }
-        live = {};
+        const all = live;
+        live = {};          // so the closed handlers below don't edit entries mid-way
         entries = [];
+        for (const k in all) all[k]?.dismiss();
     }
 
     // ── persistence ──

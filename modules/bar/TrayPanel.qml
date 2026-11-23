@@ -36,7 +36,9 @@ Column {
             required property SystemTrayItem modelData
             readonly property bool pinned: TrayPins.isPinned(modelData.id)
             image: modelData.icon
-            title: modelData.tooltipTitle || modelData.title || modelData.id
+            // some apps report themselves in lower case ("spotify")
+            readonly property string name: modelData.tooltipTitle || modelData.title || modelData.id
+            title: name.charAt(0).toUpperCase() + name.slice(1)
             sub: modelData.title && modelData.title !== title ? modelData.title : ""
             onClicked: e => {
                 if (e.button === Qt.RightButton || row.modelData.onlyMenu) root.menu(row.modelData, row);

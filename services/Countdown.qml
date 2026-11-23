@@ -105,13 +105,13 @@ Singleton {
         running: root.items.some(i => i.running)
         onTriggered: {
             root.now = Date.now();
-            for (const t of root.timers) {
-                if (t.running && root.remainingOf(t) <= 0) {
-                    root.stop(t.id);
-                    root.finished(t.total);
-                    Quickshell.execDetached(["notify-send", "-a", "Timer", "-i", "alarm-symbolic", "Timer done",
-                        (t.name && t.name !== root.fmtTotal(t.total) ? t.name + " · " : "") + root.fmtTotal(t.total) + " is up"]);
-                }
+            // plain copies first: stop() rewrites the list we'd be walking
+            const done = root.timers.filter(t => t.running && root.remainingOf(t) <= 0).map(t => ({ id: t.id, name: t.name, total: t.total }));
+            for (const t of done) {
+                root.stop(t.id);
+                root.finished(t.total);
+                Quickshell.execDetached(["notify-send", "-a", "Timer", "-i", "alarm-symbolic", "Timer done",
+                    (t.name && t.name !== root.fmtTotal(t.total) ? t.name + " · " : "") + root.fmtTotal(t.total) + " is up"]);
             }
         }
     }

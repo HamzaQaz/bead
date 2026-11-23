@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import Qt.labs.folderlistmodel
 import Quickshell
 import qs.components
@@ -97,25 +98,39 @@ Column {
         width: root.width
         spacing: 8
         Repeater {
-            model: Math.min(3, shots.count)
+            model: shots   // newest first; only the first three show
             Rectangle {
                 id: thumb
                 required property int index
-                readonly property string path: shots.get(index, "filePath")
+                required property string filePath
+                readonly property string path: filePath
+                visible: index < 3
                 width: (root.width - 16) / 3
                 height: width * 9 / 16
                 radius: 10
-                clip: true
                 color: Qt.alpha(Theme.text, 0.06)
-                border.width: thumbMa.containsMouse ? 2 : 0
-                border.color: Theme.tone("action")
+                // the picture, rounded by a mask (clip alone keeps square corners)
                 Image {
                     anchors.fill: parent
-                    anchors.margins: thumb.border.width
-                    source: "file://" + thumb.path
+                    source: Wallpaper.url(thumb.path)
                     sourceSize: Qt.size(240, 135)
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: thumbMask
+                        maskThresholdMin: 0.5
+                        maskSpreadAtMin: 1
+                    }
+                }
+                Rectangle { id: thumbMask; anchors.fill: parent; radius: 10; visible: false; layer.enabled: true }
+                Rectangle { // hover ring
+                    anchors.fill: parent
+                    radius: 10
+                    color: "transparent"
+                    border.width: thumbMa.containsMouse ? 2 : 0
+                    border.color: Theme.tone("action")
                 }
                 MouseArea {
                     id: thumbMa

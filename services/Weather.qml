@@ -33,9 +33,10 @@ Singleton {
         if (coords) forecast();
         else get("http://ip-api.com/json?fields=status,city,lat,lon,countryCode", r => {
             if (r.status !== "success") return;
+            // country first: with no coords yet, the units change doesn't fetch twice
+            country = r.countryCode ?? "";
             coords = { lat: r.lat, lon: r.lon };
             city = r.city ?? "";
-            country = r.countryCode ?? "";
             forecast();
         });
     }
