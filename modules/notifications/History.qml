@@ -430,6 +430,16 @@ Scope {
                         readonly property bool grouped: !!item.modelData.grouped
                         readonly property bool stacked: visible && (item.modelData.more ?? 0) > 0
                         readonly property var actions: (Notifs.live[modelData.key] ? modelData.actions ?? [] : []).filter(a => a.id !== "default" && a.label)
+                            .concat(Notifs.live[modelData.key]?.hasInlineReply ? [{ id: "__reply", label: "Reply" }] : [])
+                        // inline reply, while the app still has the notification open
+                        property bool replying: false
+                        function sendReply(): void {
+                            const n = Notifs.live[modelData.key];
+                            const t = replyField.text.trim();
+                            if (n && t) { n.sendInlineReply(t); Notifs.remove(modelData.key); }
+                            replying = false;
+                            replyField.text = "";
+                        }
                         width: list.width
                         height: body.implicitHeight + 20
                         radius: 14
@@ -519,13 +529,17 @@ Scope {
                                     delegate: Rectangle {
                                         id: chip
                                         required property var modelData
-                                        width: chipLabel.implicitWidth + 18
-                                        height: 24
-                                        radius: 12
+                                        // the row's width, shared evenly (as on the pop-ups)
+                                        readonly property int perRow: row.actions.length <= 3 ? row.actions.length : 2
+                                        width: (parent.width - 6 * (perRow - 1)) / perRow
+                                        height: 28
+                                        radius: 14
                                         color: Qt.alpha(Theme.tone("action"), chipArea.containsMouse ? 0.25 : 0.15)
                                         Text {
                                             id: chipLabel
                                             anchors.centerIn: parent
+                                            width: Math.min(implicitWidth, chip.width - 14)
+                                            elide: Text.ElideRight
                                             font.family: Theme.font
                                             font.pixelSize: 11
                                             font.weight: Font.Medium
@@ -538,11 +552,54 @@ Scope {
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
+                                                if (chip.modelData.id === "__reply") { row.replying = true; replyField.forceActiveFocus(); return; }
                                                 Notifs.invoke(row.modelData.key, chip.modelData.id);
                                                 Notifs.remove(row.modelData.key);
                                             }
                                         }
                                     }
+                                }
+                            }
+                            Item { width: 1; height: 6; visible: row.replying }
+                            Rectangle {
+                                width: parent.width
+                                height: 34
+                                visible: row.replying
+                                radius: 17
+                                color: Qt.alpha(Theme.text, 0.07)
+                                border.width: 1
+                                border.color: Qt.alpha(Theme.tone("action"), replyField.activeFocus ? 0.6 : 0.2)
+                                TextInput {
+                                    id: replyField
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 14
+                                    anchors.rightMargin: 38
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    clip: true
+                                    font.family: Theme.font
+                                    font.pixelSize: 13
+                                    color: Theme.text
+                                    selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
+                                    Keys.onReturnPressed: row.sendReply()
+                                    Keys.onEnterPressed: row.sendReply()
+                                    Keys.onEscapePressed: e => { row.replying = false; text = ""; e.accepted = true; }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: !replyField.text
+                                        font: replyField.font
+                                        color: Theme.subtext
+                                        text: Notifs.live[row.modelData.key]?.inlineReplyPlaceholder || "Reply…"
+                                    }
+                                }
+                                Icon {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 9
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: "send"
+                                    size: 17
+                                    fill: 1
+                                    color: replyField.text.trim() ? Theme.tone("action") : Theme.subtext
+                                    MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: row.sendReply() }
                                 }
                             }
                         }
