@@ -25,4 +25,7 @@ ShellRoot {
     // services that must run without anything showing them
     readonly property bool idleOn: Idle.active
     readonly property var specialApps: Specials.apps  // registers the special-workspace shortcuts
+    // the launcher's ; and : modes open instantly: their data is loaded up front
+    readonly property int clipWarm: Clipboard.entries.length
+    readonly property int emojiWarm: Emoji.all.length
 }

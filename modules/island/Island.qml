@@ -404,6 +404,7 @@ Scope {
                 interval: 300
                 onTriggered: {
                     win.hovered = false;
+                    if (win.expanded) win.closedAt = Date.now();
                     win.expanded = false;
                     if (!activityTimer.running && win.showsActivity) root.activity = "";
                 }
@@ -412,11 +413,15 @@ Scope {
             // one to the other must not count as leaving
             readonly property bool pointerIn: edgeHover.hovered || boxHover.hovered
             onPointerInChanged: pointerIn ? enterHover() : leaveHover()
+            // just after it closes, crossing the top strip on the way out (or the
+            // pill as it shrinks) isn't a request to open it again: that made it
+            // spring back to full size before closing for real
+            property real closedAt: 0
             function enterHover(): void {
                 if (root.fullscreen && !open) return;
                 leaveTimer.stop();
                 hovered = true;
-                if (!expanded) openTimer.restart();
+                if (!expanded && Date.now() - closedAt > 600) openTimer.restart();
             }
             function leaveHover(): void {
                 openTimer.stop();
@@ -953,8 +958,11 @@ Scope {
                 LauncherView {
                     id: launcherView
                     anchors.horizontalCenter: parent.horizontalCenter
-                    width: wantW
-                    height: wantH
+                    // follow the springing shape, so switching modes (; clipboard,
+                    // : emoji) or a longer result list grows smoothly, not in a snap
+                    width: win.state === "launcher" ? Math.min(sw.value, wantW + 24) : wantW
+                    height: win.state === "launcher" ? sh.value : wantH
+                    clip: true
                     opacity: win.state === "launcher" ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: win.state === "launcher" ? 240 : 110 } }

@@ -366,22 +366,30 @@ Item {
                     visible: !!img
                     color: Qt.alpha(Theme.text, 0.08)
                     Component.onCompleted: if (img) Clipboard.ensureThumb(row.modelData.c)
-                    Image {
-                        id: clipImg
+                    // only image rows build the rounded thumbnail: its mask needs an
+                    // offscreen layer, far too heavy to make for every row of every mode
+                    Loader {
                         anchors.fill: parent
-                        source: clipThumb.src
-                        sourceSize: Qt.size(96, 96)
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        visible: false
-                    }
-                    Rectangle { id: clipMask; anchors.fill: parent; radius: 7; visible: false; layer.enabled: true }
-                    MultiEffect { // rounded (clip ignores radius)
-                        anchors.fill: parent
-                        source: clipImg
-                        maskEnabled: true
-                        maskSource: clipMask
-                        visible: clipImg.status === Image.Ready
+                        active: !!clipThumb.img
+                        sourceComponent: Item {
+                            Image {
+                                id: clipImg
+                                anchors.fill: parent
+                                source: clipThumb.src
+                                sourceSize: Qt.size(96, 96)
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                visible: false
+                            }
+                            Rectangle { id: clipMask; anchors.fill: parent; radius: 7; visible: false; layer.enabled: true }
+                            MultiEffect { // rounded (clip ignores radius)
+                                anchors.fill: parent
+                                source: clipImg
+                                maskEnabled: true
+                                maskSource: clipMask
+                                visible: clipImg.status === Image.Ready
+                            }
+                        }
                     }
                 }
                 Rectangle {

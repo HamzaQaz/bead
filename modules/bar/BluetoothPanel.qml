@@ -27,6 +27,14 @@ Column {
     onActiveChanged: scan()
     Connections { target: root.bt; function onEnabledChanged() { root.scan(); } }
     function scan(): void { if (bt && bt.enabled) bt.discovering = active; }
+    // the refresh button: a fresh scan (the panel is already scanning while open,
+    // so a plain toggle would have stopped it)
+    function rescan(): void {
+        if (!bt || !bt.enabled) return;
+        if (bt.discovering) { bt.discovering = false; rescanTimer.restart(); }
+        else bt.discovering = true;
+    }
+    Timer { id: rescanTimer; interval: 400; onTriggered: if (root.bt?.enabled) root.bt.discovering = true }
 
     function glyph(icon: string): string {
         if (/headset|headphone/.test(icon)) return "headphones";
@@ -49,18 +57,20 @@ Column {
             width: 26; height: 26; radius: 13
             color: Qt.alpha(Theme.text, scanMa.containsMouse ? 0.1 : 0)
             Icon {
+                id: scanIcon
                 anchors.centerIn: parent
                 name: "refresh"
+                ref: "circle" // centre on the arrow's circle, not its ink (the arrowhead skews that), so it spins true
                 size: 17
                 color: root.bt?.discovering ? Theme.tone("action") : Theme.subtext
                 RotationAnimation on rotation {
                     running: !!root.bt?.discovering
                     loops: Animation.Infinite
                     from: 0; to: 360; duration: 1400
-                    onRunningChanged: if (!running) parent.rotation = 0
+                    onRunningChanged: if (!running) scanIcon.rotation = 0
                 }
             }
-            MouseArea { id: scanMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.bt.discovering = !root.bt.discovering }
+            MouseArea { id: scanMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.rescan() }
         }
         Toggle {
             anchors.verticalCenter: parent.verticalCenter

@@ -17,7 +17,14 @@ Singleton {
     property bool loading: false
     readonly property string cacheDir: (Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache") + "/bead/clip"
 
-    function load(): void { loading = true; lister.running = true; }
+    // Opening `;` shows what's already here at once and refreshes quietly behind
+    // it (cliphist is quick, but only an unchanged list skips the redraw).
+    // "Loading…" only shows on the very first load.
+    function load(): void {
+        if (!entries.length) loading = true;
+        if (!lister.running) lister.running = true;
+    }
+    Component.onCompleted: load() // warm at startup
 
     Process {
         id: lister
@@ -35,7 +42,8 @@ Singleton {
                     const image = m ? { fmt: m[1], w: +m[2], h: +m[3] } : null;
                     out.push({ id, line, text: m ? "" : body, image, type: image ? "image" : root.typeOf(body) });
                 }
-                root.entries = out;
+                // skip the redraw when nothing changed
+                if (out.map(e => e.line).join("\n") !== root.entries.map(e => e.line).join("\n")) root.entries = out;
                 root.loading = false;
                 // forget thumbnails of entries no longer in the history
                 const keep = out.filter(e => e.image).map(e => e.id).join(" ");

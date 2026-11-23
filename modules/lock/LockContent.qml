@@ -251,6 +251,7 @@ Item {
                         id: goIcon
                         anchors.fill: parent
                         name: Lock.st === "checking" ? "progress_activity" : Lock.st === "success" ? "lock_open" : "arrow_forward"
+                        ref: Lock.st === "checking" ? "circle" : "" // spin about the arc's centre
                         size: 19
                         color: Lock.password || Lock.st === "checking" ? Theme.frame : Theme.subtext
                         RotationAnimation on rotation {
