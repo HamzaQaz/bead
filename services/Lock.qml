@@ -23,11 +23,29 @@ Singleton {
     property int failures: 0
     signal shake()
 
+    // Locking first takes a still of each monitor: the lock screen's first frame
+    // is then exactly your desktop, which fades away. Without it the lock
+    // surface showed black for a frame or two before its capture arrived (a
+    // flash). The stills live in a private folder and go on unlock.
+    readonly property string stillDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/bead/lock"
+    property int stillGen: 0 // bumped per lock, so the images reload
     function lock(): void {
-        if (locked) return;
+        if (locked || snapping.running) return;
         reset();
+        snapping.command = ["sh", "-c", 'd=$1; shift; mkdir -p "$d" && chmod 700 "$d" || exit 1; for o; do grim -t ppm -o "$o" "$d/$o.ppm" & done; wait',
+            "sh", stillDir, ...Quickshell.screens.map(s => s.name)];
+        snapping.running = true;
+        snapGuard.restart();
+    }
+    function finishLock(): void {
+        snapGuard.stop();
+        if (locked) return;
+        stillGen++;
         locked = true;
     }
+    Process { id: snapping; onExited: root.finishLock() }
+    Timer { id: snapGuard; interval: 800; onTriggered: root.finishLock() } // never hold a lock up
+    function stillFor(name: string): string { return stillGen > 0 ? "file://" + stillDir + "/" + name + ".ppm?" + stillGen : ""; }
     function reset(): void { password = ""; st = "idle"; errorText = ""; failures = 0; }
 
     function submit(): void {
@@ -43,7 +61,10 @@ Singleton {
     Timer {
         id: exitTimer
         interval: 470 // the screen's exit takes 440 ms
-        onTriggered: { root.locked = false; root.preview = false; root.reset(); }
+        onTriggered: {
+            root.locked = false; root.preview = false; root.reset();
+            Quickshell.execDetached(["sh", "-c", 'rm -f "$1"/*.ppm', "sh", root.stillDir]);
+        }
     }
 
     PamContext {

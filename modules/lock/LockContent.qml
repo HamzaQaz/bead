@@ -52,10 +52,22 @@ Item {
         printErrors: false
         onLoaded: root.wallPath = text().trim()
     }
+    // the still taken just before locking (see Lock.lock); a live capture when
+    // there's none (the preview, or if taking it was too slow)
+    Image {
+        id: still
+        anchors.fill: parent
+        source: Lock.locked ? Lock.stillFor(root.screen?.name ?? "") : ""
+        asynchronous: false // in the very first frame
+        cache: false
+        fillMode: Image.Stretch
+        visible: status === Image.Ready
+    }
     ScreencopyView {
         id: copy
         anchors.fill: parent
-        captureSource: root.screen
+        captureSource: still.status === Image.Ready ? null : root.screen
+        visible: still.status !== Image.Ready
         live: false
     }
     Image {
@@ -70,7 +82,7 @@ Item {
     readonly property bool hasWall: wall.status === Image.Ready
     MultiEffect {
         anchors.fill: parent
-        source: root.hasWall ? wall : copy
+        source: root.hasWall ? wall : still.status === Image.Ready ? still : copy
         opacity: root.hasWall ? root.bg : 1
         autoPaddingEnabled: false
         blurEnabled: true
