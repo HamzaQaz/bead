@@ -17,6 +17,7 @@ install: build
 	install -Dm755 bin/bead $(PREFIX)/bin/bead
 	install -Dm755 bin/bead-resume $(PREFIX)/bin/bead-resume
 	install -Dm755 bin/bead-discord $(PREFIX)/bin/bead-discord
+	install -Dm755 bin/bead-dictate $(PREFIX)/bin/bead-dictate
 	install -Dm644 systemd/bead-resume.service $(HOME)/.config/systemd/user/bead-resume.service
 	@if pgrep -f "qs -p $(SHARE) -n" >/dev/null; then \
 		if $(PREFIX)/bin/bead restart >/dev/null; then echo "bead restarted"; \

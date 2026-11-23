@@ -174,6 +174,18 @@ Scope {
     }
 
     // bound in Hyprland as hl.dsp.global("bead:overview") on Super+Tab
+    // push-to-talk dictation: hold, speak, release (Super+H)
+    GlobalShortcut {
+        appid: "bead"
+        name: "dictate"
+        description: "Hold to dictate into the focused field"
+        onPressed: Dictation.start()
+        onReleased: Dictation.stop()
+    }
+    Connections {
+        target: Dictation
+        function onFailed(why) { root.toast("mic_off", why, "error", 3500); }
+    }
     GlobalShortcut {
         appid: "bead"
         name: "overview"
@@ -386,7 +398,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
                 // launcher…) tucks at the resting width, not as a wide strip
@@ -578,6 +590,63 @@ Scope {
                     visible: opacity > 0.01
                     SwapFade on opacity {}
 
+                    // live: dictation. The mic and your level while you hold the key,
+                    // then pulsing dots while whisper works (click: stop / cancel)
+                    Row {
+                        visible: Dictation.active
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "mic"
+                            size: 17
+                            fill: 1
+                            color: Theme.tone("action")
+                        }
+                        Row {
+                            visible: Dictation.state === "listening"
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+                            Repeater {
+                                model: 5
+                                Rectangle {
+                                    required property int index
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 3
+                                    radius: 1.5
+                                    color: Theme.text
+                                    // the middle bars reach highest
+                                    readonly property real shape: [0.55, 0.8, 1, 0.8, 0.55][index]
+                                    height: 4 + 12 * Math.min(1, Dictation.level * shape * 1.3)
+                                    Behavior on height { NumberAnimation { duration: 70 } }
+                                }
+                            }
+                        }
+                        Row {
+                            visible: Dictation.state === "transcribing"
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 3
+                            Repeater {
+                                model: 3
+                                Rectangle {
+                                    id: dot
+                                    required property int index
+                                    width: 5; height: 5; radius: 2.5
+                                    color: Theme.text
+                                    opacity: 0.3
+                                    SequentialAnimation on opacity {
+                                        running: Dictation.state === "transcribing"
+                                        loops: Animation.Infinite
+                                        PauseAnimation { duration: dot.index * 140 }
+                                        NumberAnimation { to: 1; duration: 260 }
+                                        NumberAnimation { to: 0.3; duration: 260 }
+                                        PauseAnimation { duration: (2 - dot.index) * 140 }
+                                    }
+                                }
+                            }
+                        }
+                        TapHandler { onTapped: Dictation.state === "listening" ? Dictation.stop() : Dictation.cancel() }
+                    }
                     // live: Discord call (click mutes, right-click deafens); who's talking
                     Row {
                         visible: Discord.inCall
@@ -721,7 +790,7 @@ Scope {
                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
                     }
                     Rectangle { // between live chips and the rest
-                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall
+                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Dictation.active
                         anchors.verticalCenter: parent.verticalCenter
                         width: 1; height: 14
                         color: Qt.alpha(Theme.text, 0.15)
