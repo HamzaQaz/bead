@@ -80,9 +80,36 @@ Scope {
         }
         return out;
     }
+    // the notification's image, else its app's icon: the one it sent, else the
+    // one in the app's desktop entry (found by name); "" when there's none
     function iconOf(e: var): url {
-        return e?.image ? e.image : e?.appIcon ? Quickshell.iconPath(e.appIcon, true) : "";
+        if (e?.image) return e.image;
+        if (e?.appIcon) {
+            const p = /^(\/|file:)/.test(e.appIcon) ? e.appIcon : Quickshell.iconPath(e.appIcon, true);
+            if (p) return p;
+        }
+        const app = (e?.appName ?? "").toLowerCase();
+        if (!app) return "";
+        const d = DesktopEntries.applications.values.find(x => x.name.toLowerCase() === app || x.id.toLowerCase().replace(/\.desktop$/, "").split(".").pop() === app);
+        return d?.icon ? Quickshell.iconPath(d.icon, true) : "";
     }
+    // no icon: the app's initial on a colour picked from its name
+    function initialOf(e: var): string { return ((e?.appName || e?.summary || "?").trim()[0] ?? "?").toUpperCase(); }
+    function hueOf(e: var): color {
+        const n = e?.appName || "?";
+        let h = 0;
+        for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360;
+        return Qt.hsla(h / 360, 0.45, 0.62, 1);
+    }
+
+    // clear all: the cards fly out one after another, then the list empties
+    property bool clearing: false
+    function clearAll(): void {
+        if (clearing || Notifs.entries.length === 0) return;
+        clearing = true;
+        clearTimer.start();
+    }
+    Timer { id: clearTimer; interval: 420; onTriggered: { Notifs.clear(); root.clearing = false; } }
 
     // Lucide
     readonly property string bellIcon: "M10.268 21a2 2 0 0 0 3.464 0 M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
@@ -252,7 +279,7 @@ Scope {
                     RoundButton {
                         icon: root.trashIcon
                         visible: Notifs.entries.length > 0
-                        onClicked: Notifs.clear()
+                        onClicked: root.clearAll()
                     }
                 }
                 Text {
@@ -306,7 +333,50 @@ Scope {
                     delegate: Item {
                         id: item
                         required property var modelData
+                        required property int index
                         readonly property string type: modelData.type
+                        // swiping right: follows the pointer, fades; far enough (or
+                        // flung) and it's dismissed, else it springs back
+                        property real swipe: 0
+                        readonly property bool swipeable: type === "notif" || type === "group"
+                        opacity: 1 - Math.min(0.85, Math.max(0, swipe) / (width * 0.6))
+                        transform: Translate { x: item.swipe + item.fly }
+                        Behavior on swipe { enabled: !swipeDrag.active; SpringAnimation { spring: 4; damping: 0.35; epsilon: 0.5 } }
+                        function dismiss(): void {
+                            if (type === "group") { for (const k of modelData.keys) Notifs.remove(k); }
+                            else Notifs.remove(modelData.e.key);
+                        }
+                        DragHandler {
+                            id: swipeDrag
+                            enabled: item.swipeable
+                            target: null
+                            xAxis.enabled: true
+                            yAxis.enabled: false
+                            dragThreshold: 12
+                            onTranslationChanged: item.swipe = Math.max(-20, translation.x * (translation.x < 0 ? 0.25 : 1))
+                            onActiveChanged: {
+                                if (active) return;
+                                const far = item.swipe > item.width * 0.35 || (item.swipe > 40 && centroid.velocity.x > 600);
+                                if (far) { flyOut.from = item.swipe; flyOut.restart(); }
+                                else item.swipe = 0;
+                            }
+                        }
+                        NumberAnimation {
+                            id: flyOut
+                            target: item; property: "swipe"; to: item.width + 40; duration: 180; easing.type: Easing.InCubic
+                            onFinished: item.dismiss()
+                        }
+                        // clear all: each one flies out a beat after the one above
+                        property real fly: 0
+                        Connections {
+                            target: root
+                            function onClearingChanged(): void { if (root.clearing) cascade.restart(); }
+                        }
+                        SequentialAnimation {
+                            id: cascade
+                            PauseAnimation { duration: Math.min(260, item.index * 35) }
+                            NumberAnimation { target: item; property: "fly"; to: item.width + 40; duration: 220; easing.type: Easing.InBack; easing.overshoot: 1.2 }
+                        }
                         width: list.width
                         height: type === "section" ? 30 : type === "group" ? 36 : row.height + (row.stacked ? 6 : 0)
 
@@ -353,13 +423,18 @@ Scope {
                             fillMode: Image.PreserveAspectFit
                             mipmap: true
                         }
-                        Glyph {
-                            x: 15
+                        Rectangle {
+                            x: 14
                             anchors.verticalCenter: parent.verticalCenter
                             visible: gIcon.status !== Image.Ready
-                            size: 15
-                            path: root.bellIcon
-                            tone: Theme.subtext
+                            width: 18; height: 18; radius: 9
+                            color: Qt.alpha(root.hueOf(item.modelData.first), 0.25)
+                            Text {
+                                anchors.centerIn: parent
+                                font.family: Theme.font; font.pixelSize: 10; font.weight: Font.Bold
+                                color: root.hueOf(item.modelData.first)
+                                text: item.type === "group" ? root.initialOf(item.modelData.first) : ""
+                            }
                         }
                         Row {
                             x: 42
@@ -474,7 +549,7 @@ Scope {
                         Rectangle { // icon
                             x: 10; y: 12
                             width: 30; height: 30; radius: 15
-                            color: Qt.alpha(row.modelData.urgency === NotificationUrgency.Critical ? Theme.tone("error") : Theme.tone("action"), 0.15)
+                            color: Qt.alpha(row.modelData.urgency === NotificationUrgency.Critical ? Theme.tone("error") : img.status === Image.Ready ? Theme.tone("action") : root.hueOf(row.modelData), 0.15)
                             readonly property url src: row.visible ? root.iconOf(row.modelData) : ""
                             Image {
                                 id: img
@@ -487,12 +562,12 @@ Scope {
                                 smooth: true
                                 mipmap: true
                             }
-                            Glyph {
+                            Text {
                                 anchors.centerIn: parent
                                 visible: img.status !== Image.Ready
-                                size: 15
-                                path: root.bellIcon
-                                tone: Theme.tone("action")
+                                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Bold
+                                color: row.modelData.urgency === NotificationUrgency.Critical ? Theme.tone("error") : root.hueOf(row.modelData)
+                                text: row.visible ? root.initialOf(row.modelData) : ""
                             }
                         }
 
@@ -517,7 +592,7 @@ Scope {
                                 font.pixelSize: 13
                                 font.weight: Font.Medium
                                 color: Theme.text
-                                text: row.modelData.summary
+                                text: row.modelData.summary ?? ""
                             }
                             Text {
                                 width: parent.width
@@ -531,7 +606,7 @@ Scope {
                                 lineHeightMode: Text.FixedHeight
                                 color: Theme.subtext
                                 textFormat: Text.StyledText
-                                text: row.modelData.body
+                                text: row.modelData.body ?? ""
                             }
                             Flow {
                                 width: parent.width
