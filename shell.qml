@@ -6,6 +6,7 @@ import qs.modules.bar
 import qs.modules.island
 import qs.modules.lock
 import qs.modules.notifications
+import qs.services
 
 ShellRoot {
     // Live reloads break module imports and icon loading mid-session, and would
@@ -17,4 +18,7 @@ ShellRoot {
     Bar {}
     Island {}
     LockScreen {}
+
+    // services that must run without anything showing them
+    readonly property bool idleOn: Idle.active
 }
