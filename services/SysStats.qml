@@ -24,6 +24,16 @@ Singleton {
     property real rxRate: 0   // bytes/s
     property real txRate: 0
     property string uptime: ""
+    property list<real> cores: []     // per-core load, 0–1
+    property real vramUsedGb: 0
+    property real vramTotalGb: 0
+    readonly property real vram: vramTotalGb > 0 ? vramUsedGb / vramTotalGb : 0
+    property list<real> rxHistory: []
+    property list<real> txHistory: []
+    property var lastCores: []
+    // the busiest processes (only sampled while someone looks: procsWanted)
+    property bool procsWanted: false
+    property list<var> procs: []      // { pid, name, cpu (% of one core), memMb }
     property list<real> cpuHistory: []
     property list<real> gpuHistory: []
     readonly property int historyLength: 40
@@ -45,10 +55,37 @@ Singleton {
         onTriggered: proc.running = true
     }
 
+    Timer {
+        interval: 2000
+        repeat: true
+        triggeredOnStart: true
+        running: root.active && root.procsWanted
+        onTriggered: if (!top.running) top.running = true
+    }
+    Process {
+        id: top
+        // the second of two quick samples: real recent CPU, not lifetime averages
+        command: ["sh", "-c", "top -b -n 2 -d 0.5 -o %CPU -e m -w 512 | awk '/^top -/{n++} n==2 && $1 ~ /^[0-9]+$/ {c=$12; for(i=13;i<=NF;i++) c=c\" \"$i; print $1\"\\t\"$9\"\\t\"$6\"\\t\"c}' | head -6"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const out = [];
+                for (const line of text.split("\n")) {
+                    const f = line.split("\t");
+                    if (f.length < 4) continue;
+                    const mem = String(f[2]);
+                    const mb = mem.endsWith("g") ? parseFloat(mem) * 1024 : parseFloat(mem);
+                    out.push({ pid: +f[0], cpu: parseFloat(String(f[1]).replace(",", ".")) || 0, memMb: mb || 0, name: f[3] });
+                }
+                root.procs = out.filter(p => p.name !== "top" && p.name !== "awk" && p.name !== "sh").slice(0, 5);
+            }
+        }
+    }
+
     Process {
         id: proc
         command: ["sh", "-c", `
-            head -1 /proc/stat
+            grep '^cpu' /proc/stat
+            for f in /sys/class/drm/card*/device/mem_info_vram_used; do [ -r "$f" ] && { echo "vram $(cat "$f") $(cat "\${f%used}total")"; break; }; done
             awk '/^(MemTotal|MemAvailable):/ {print $1, $2}' /proc/meminfo
             for f in /sys/class/drm/card*/device/gpu_busy_percent; do [ -r "$f" ] && { echo "gpu $(cat "$f")"; break; }; done
             for h in /sys/class/hwmon/hwmon*; do
@@ -65,9 +102,19 @@ Singleton {
             onStreamFinished: {
                 let total = 0, avail = 0;
                 const now = Date.now();
+                const cores = [], coreNow = [];
                 for (const line of text.split("\n")) {
                     const f = line.trim().split(/\s+/);
+                    if (/^cpu\d+$/.test(f[0])) {
+                        const v = f.slice(1, 9).map(Number);
+                        const idle = v[3] + v[4], all = v.reduce((a, b) => a + b, 0);
+                        const k = coreNow.length, was = root.lastCores[k];
+                        cores.push(was && all > was.all ? 1 - (idle - was.idle) / (all - was.all) : 0);
+                        coreNow.push({ all: all, idle: idle });
+                        continue;
+                    }
                     switch (f[0]) {
+                    case "vram": root.vramUsedGb = +f[1] / 1073741824; root.vramTotalGb = +f[2] / 1073741824; break;
                     case "cpu": {
                         const v = f.slice(1, 9).map(Number);
                         const idle = v[3] + v[4], all = v.reduce((a, b) => a + b, 0);
@@ -108,6 +155,9 @@ Singleton {
                     root.memUsedGb = (total - avail) / 1048576;
                     root.memTotalGb = total / 1048576;
                 }
+                if (coreNow.length) { root.cores = cores; root.lastCores = coreNow; }
+                root.rxHistory = [...root.rxHistory, root.rxRate].slice(-root.historyLength);
+                root.txHistory = [...root.txHistory, root.txRate].slice(-root.historyLength);
                 root.cpuHistory = [...root.cpuHistory, root.cpu].slice(-root.historyLength);
                 root.gpuHistory = [...root.gpuHistory, root.gpu].slice(-root.historyLength);
             }

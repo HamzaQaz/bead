@@ -6,27 +6,169 @@ import qs.components
 import qs.config
 import qs.services
 
-// Timers and the stopwatch: everything running, each with pause / resume,
-// +1 min or lap, and stop; laps under the stopwatch. On the left, quick starts.
+// Timers and the stopwatch. On the left a dial to set one (drag round it or
+// scroll; past an hour in 5-minute steps), an optional name, presets and the
+// stopwatch. On the right everything running, each with pause / resume (a
+// morphing play/pause), +1 min or lap, and stop; laps under the stopwatch.
 Row {
     id: root
     spacing: 16
 
-    // ── quick start ──
+    // ── quick start: a dial you turn (drag round it, or scroll), presets ──
     Card {
         id: quick
-        width: 236
+        width: 420
         height: parent.height
-        Column {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
-            Text {
-                font.family: Theme.font
-                font.pixelSize: 13
-                font.weight: Font.Medium
+
+        // minutes on the dial: 1–60 in single minutes, then 5-minute steps to 2 h
+        property int mins: 5
+        function nudge(d: int): void {
+            const step = mins >= 60 && d > 0 || mins > 60 ? 5 : 1;
+            mins = Math.max(1, Math.min(120, mins + d * step));
+        }
+        function start(): void { Countdown.startTimer(mins * 60000, nameField.text.trim()); nameField.text = ""; startPop.restart(); }
+
+        Item {
+            id: dial
+            x: 18
+            anchors.verticalCenter: parent.verticalCenter
+            width: 172; height: 172
+            // what the ring shows: the minutes within the hour, eased
+            property real shown: quick.mins > 60 ? 1 : quick.mins / 60
+            Behavior on shown { SpringAnimation { spring: 4; damping: 0.4; epsilon: 0.001 } }
+            Shape {
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    strokeColor: Qt.alpha(Theme.text, 0.08)
+                    strokeWidth: 12
+                    fillColor: "transparent"
+                    PathAngleArc { centerX: 86; centerY: 86; radiusX: 74; radiusY: 74; startAngle: 0; sweepAngle: 360 }
+                }
+                ShapePath {
+                    strokeColor: Theme.tone("action")
+                    strokeWidth: 12
+                    fillColor: "transparent"
+                    capStyle: ShapePath.RoundCap
+                    PathAngleArc { centerX: 86; centerY: 86; radiusX: 74; radiusY: 74; startAngle: -90; sweepAngle: Math.max(0.5, 360 * dial.shown) }
+                }
+                // past an hour: a second, inner lap
+                ShapePath {
+                    strokeColor: Qt.alpha(Theme.tone("action"), 0.55)
+                    strokeWidth: 5
+                    fillColor: "transparent"
+                    capStyle: ShapePath.RoundCap
+                    PathAngleArc { centerX: 86; centerY: 86; radiusX: 60; radiusY: 60; startAngle: -90; sweepAngle: quick.mins > 60 ? 360 * (quick.mins - 60) / 60 : 0 }
+                }
+            }
+            // twelve ticks inside the ring, like a clock
+            Repeater {
+                model: 12
+                Item {
+                    required property int index
+                    x: 86; y: 86
+                    rotation: index * 30
+                    Rectangle {
+                        x: -1
+                        y: -50
+                        width: 2; height: parent.index % 3 === 0 ? 7 : 4; radius: 1
+                        color: Qt.alpha(Theme.text, parent.index % 3 === 0 ? 0.35 : 0.16)
+                    }
+                }
+            }
+            // the knob at the end of the arc
+            Rectangle {
+                readonly property real a: (dial.shown * 360 - 90) * Math.PI / 180
+                x: 86 + Math.cos(a) * 74 - width / 2
+                y: 86 + Math.sin(a) * 74 - height / 2
+                width: turn.pressed ? 24 : 20; height: width; radius: width / 2
                 color: Theme.text
-                text: "Start"
+                border.width: 4
+                border.color: Theme.tone("action")
+                Behavior on width { SpringAnimation { spring: 6; damping: 0.3 } }
+            }
+            Column {
+                anchors.centerIn: parent
+                Text {
+                    id: minsText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    font.family: Theme.font
+                    font.pixelSize: 34
+                    font.weight: Font.DemiBold
+                    font.features: { "tnum": 1 }
+                    color: Theme.text
+                    text: quick.mins >= 60 ? Math.floor(quick.mins / 60) + ":" + String(quick.mins % 60).padStart(2, "0") : quick.mins
+                }
+                Label {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    font.pixelSize: 11
+                    text: quick.mins >= 60 ? "hours" : quick.mins === 1 ? "minute" : "minutes"
+                }
+            }
+            MouseArea {
+                id: turn
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                property real last: -1
+                // angle from 12 o'clock, 0–60 "minutes"; past the top keeps going
+                function at(x: real, y: real): real {
+                    let a = Math.atan2(x - 86, -(y - 86)) * 180 / Math.PI;
+                    if (a < 0) a += 360;
+                    return a / 6;
+                }
+                onPressed: e => last = at(e.x, e.y)
+                // one turn is 60 minutes; whole minutes apply as you go
+                onPositionChanged: e => {
+                    if (!pressed) return;
+                    const now = at(e.x, e.y);
+                    let d = now - last;
+                    if (d > 30) d -= 60; else if (d < -30) d += 60; // across 12 o'clock
+                    last = now;
+                    acc += d;
+                    const whole = acc > 0 ? Math.floor(acc) : Math.ceil(acc);
+                    if (whole !== 0) {
+                        acc -= whole;
+                        quick.mins = Math.max(1, Math.min(120, quick.mins + whole));
+                    }
+                }
+                property real acc: 0
+                onReleased: { acc = 0; if (quick.mins > 60) quick.mins = Math.round(quick.mins / 5) * 5; }
+                onDoubleClicked: quick.start()
+            }
+            WheelHandler { onWheel: e => quick.nudge(e.angleDelta.y > 0 ? 1 : -1) }
+        }
+
+        // the right side: name, presets, go
+        Column {
+            x: dial.x + dial.width + 20
+            width: parent.width - x - 18
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 10
+            Rectangle { // an optional name
+                width: parent.width
+                height: 32
+                radius: 10
+                color: Qt.alpha(Theme.text, 0.06)
+                border.width: nameField.activeFocus ? 1.5 : 0
+                border.color: Theme.tone("action")
+                TextInput {
+                    id: nameField
+                    anchors.fill: parent
+                    anchors.leftMargin: 12; anchors.rightMargin: 12
+                    verticalAlignment: TextInput.AlignVCenter
+                    font.family: Theme.font
+                    font.pixelSize: 12
+                    color: Theme.text
+                    clip: true
+                    maximumLength: 40
+                    onAccepted: quick.start()
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !nameField.text && !nameField.activeFocus
+                        font.pixelSize: 12
+                        text: "Name (optional)"
+                    }
+                }
             }
             Grid {
                 columns: 4
@@ -36,57 +178,53 @@ Row {
                     Rectangle {
                         id: chip
                         required property int modelData
-                        width: 47; height: 34; radius: 17
-                        color: Qt.alpha(Theme.text, chipMa.pressed ? 0.16 : chipMa.containsMouse ? 0.11 : 0.06)
-                        scale: chipMa.pressed ? 0.94 : 1
+                        readonly property bool on: quick.mins === modelData
+                        width: (190 - 18) / 4; height: 28; radius: 14
+                        color: on ? Theme.tone("action") : Qt.alpha(Theme.text, chipMa.pressed ? 0.16 : chipMa.containsMouse ? 0.11 : 0.06)
+                        scale: chipMa.pressed ? 0.92 : 1
                         Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
                         Behavior on color { ColorAnimation { duration: 140 } }
                         Text {
                             anchors.centerIn: parent
-                            font.family: Theme.font
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
-                            color: Theme.text
+                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                            color: chip.on ? Theme.frame : Theme.text
                             text: chip.modelData === 60 ? "1h" : chip.modelData + "m"
                         }
-                        MouseArea {
-                            id: chipMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Countdown.startTimer(chip.modelData * 60000, chip.modelData === 25 ? "Focus" : chip.modelData === 3 ? "Tea" : "")
-                        }
+                        MouseArea { id: chipMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: quick.mins = chip.modelData }
                     }
                 }
             }
-            Rectangle {
-                width: parent.width
-                height: 38
-                radius: 19
-                color: swMa.containsMouse ? Qt.alpha(Theme.tone("action"), 0.9) : Theme.tone("action")
-                scale: swMa.pressed ? 0.96 : 1
-                Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 7
-                    Icon { anchors.verticalCenter: parent.verticalCenter; name: "avg_pace"; size: 18; fill: 1; color: Theme.frame }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        font.family: Theme.font
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
-                        color: Theme.frame
-                        text: Countdown.stopwatch ? "Restart stopwatch" : "Stopwatch"
+            Row {
+                spacing: 8
+                Rectangle { // start
+                    id: go
+                    width: 118; height: 36; radius: 18
+                    color: Theme.tone("action")
+                    scale: goMa.pressed ? 0.94 : 1
+                    Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
+                    SequentialAnimation {
+                        id: startPop
+                        NumberAnimation { target: go; property: "scale"; to: 1.08; duration: 110; easing.type: Easing.OutQuad }
+                        NumberAnimation { target: go; property: "scale"; to: 1; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 2 }
                     }
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Icon { anchors.verticalCenter: parent.verticalCenter; name: "play_arrow"; size: 18; fill: 1; color: Theme.frame }
+                        Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.frame; text: "Start" }
+                    }
+                    MouseArea { id: goMa; anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: quick.start() }
                 }
-                MouseArea { id: swMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Countdown.startStopwatch() }
+                Rectangle { // stopwatch
+                    width: 64; height: 36; radius: 18
+                    color: Qt.alpha(Theme.text, swMa.pressed ? 0.16 : swMa.containsMouse ? 0.11 : 0.06)
+                    scale: swMa.pressed ? 0.94 : 1
+                    Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
+                    Icon { anchors.centerIn: parent; name: "avg_pace"; size: 18; fill: 1; color: Theme.text }
+                    MouseArea { id: swMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Countdown.startStopwatch() }
+                }
             }
-            Label {
-                width: parent.width
-                wrapMode: Text.WordWrap
-                font.pixelSize: 11
-                text: "Or from the launcher: > timer 7m30s"
-            }
+            Label { font.pixelSize: 10; text: "Turn the dial or scroll · double-click starts" }
         }
     }
 
@@ -207,7 +345,10 @@ Row {
                             scale: cma.pressed ? 0.92 : 1
                             Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
                             Behavior on color { ColorAnimation { duration: 140 } }
-                            Icon { anchors.fill: parent; name: ctl.glyph; size: 19; fill: 1; color: ctl.main ? Theme.frame : Theme.text }
+                            property bool morph: false   // play/pause as a morphing shape
+                            property bool playing: false
+                            Icon { visible: !ctl.morph; anchors.fill: parent; name: ctl.glyph; size: 19; fill: 1; color: ctl.main ? Theme.frame : Theme.text }
+                            PlayPause { visible: ctl.morph; anchors.centerIn: parent; size: 18; playing: ctl.playing; color: ctl.main ? Theme.frame : Theme.text }
                             MouseArea { id: cma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ctl.hit() }
                         }
                         Row {
@@ -220,7 +361,7 @@ Row {
                                 visible: !card.sw || card.it.running
                                 onHit: card.sw ? Countdown.lap(card.it.id) : Countdown.addTime(card.it.id, 60000)
                             }
-                            Ctl { glyph: card.it.running ? "pause" : "play_arrow"; main: true; onHit: Countdown.toggle(card.it.id) }
+                            Ctl { morph: true; playing: card.it.running; main: true; onHit: Countdown.toggle(card.it.id) }
                             Ctl { glyph: "stop"; onHit: Countdown.stop(card.it.id) }
                         }
 
