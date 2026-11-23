@@ -3,7 +3,7 @@
 // fields and a smooth minimum, with a soft drop shadow. Coordinates are in
 // item pixels; rects are (x, y, w, h).
 // Optional `wall` (w > 0): a square-edged strip (the screen frame) the shape
-// melts into, so it looks like it grows out of the edge of the screen.
+// joins with clean rounded fillets, so it grows out of the edge of the screen.
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -34,6 +34,13 @@ float smin(float a, float b, float k) {
     return min(a, b) - h * h * k * 0.25;
 }
 
+// exact union with circular fillets of radius r (hg_sdf fOpUnionRound): clean
+// concave corners where a shape meets the screen frame, like Caelestia's drawers
+float roundUnion(float a, float b, float r) {
+    vec2 u = max(vec2(r - a, r - b), vec2(0.0));
+    return max(r, min(a, b)) - length(u);
+}
+
 float shape(vec2 p) {
     float d = sdRoundBox(p, pill, radius);
     // Like sileo's blur+threshold, a thin body must melt away gradually rather
@@ -42,7 +49,7 @@ float shape(vec2 p) {
     float fadeH = goo * 0.6;
     float db = sdRoundBox(p, body, radius) + max(fadeH - body.w, 0.0) * 2.0;
     d = smin(d, db, goo);
-    if (wall.z > 0.0) d = smin(d, sdRoundBox(p, wall, 0.0), goo);
+    if (wall.z > 0.0) d = roundUnion(d, sdRoundBox(p, wall, 0.0), radius * 0.75);
     return d;
 }
 

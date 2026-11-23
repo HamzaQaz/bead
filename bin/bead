@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead [start|stop|restart|claim|log]: run the shell in the background.
+# bead [start|stop|restart|claim|brightness up|down|log]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
 share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
@@ -14,6 +14,9 @@ claim)
 	case $owner in
 	*caelestia*) qs -c caelestia kill >/dev/null 2>&1; sleep 0.5; setsid -f caelestia shell -d >/dev/null 2>&1 ;;
 	esac ;;
+brightness) # bead brightness up|down
+	case $2 in up) f=brightnessUp ;; down) f=brightnessDown ;; *) echo "usage: bead brightness up|down" >&2; exit 2 ;; esac
+	exec qs -p "$share" ipc call osd "$f" ;;
 log) exec qs -p "$share" log -f ;;
-*) echo "usage: bead [start|stop|restart|claim|log]" >&2; exit 2 ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|log]" >&2; exit 2 ;;
 esac

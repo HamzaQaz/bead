@@ -3,6 +3,7 @@
 // piece at a time. Colours come from Caelestia's wallpaper scheme.
 import Quickshell
 import qs.modules.notifications
+import qs.modules.osd
 
 ShellRoot {
     // Live reloads break module imports and icon loading mid-session, and would
@@ -10,4 +11,5 @@ ShellRoot {
     settings.watchFiles: false
 
     Notifications {}
+    Osd {}
 }

@@ -10,7 +10,7 @@ shaders/%.frag.qsb: shaders/%.frag
 
 install: build
 	install -d $(SHARE)
-	cp -r shell.qml config components modules $(SHARE)/
+	cp -r shell.qml config components modules services $(SHARE)/
 	install -Dm644 -t $(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb
 	install -Dm755 bin/bead $(PREFIX)/bin/bead
 	@if pgrep -f "qs -p $(SHARE)" >/dev/null; then $(PREFIX)/bin/bead restart >/dev/null 2>&1; echo "bead restarted"; fi
