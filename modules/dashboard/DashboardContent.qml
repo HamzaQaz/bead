@@ -188,7 +188,11 @@ Item {
         }
     }
 
-    // ── pages: each slides in from the side of its tab ──
+    // ── pages: only two ever move. Switching tabs, the new page glides in
+    // from the side of its tab while the old one drifts the other way and
+    // fades out early, however far apart the tabs are (no pages in between
+    // flash past). A switch mid-way (scrolling through tabs) takes over from
+    // wherever the outgoing page had got to. ──
     Item {
         id: pages
         x: 20
@@ -196,19 +200,37 @@ Item {
         width: root.width - 40
         height: root.height - 64 - 20
 
-        property real at: root.tab
-        Behavior on at { SpringAnimation { spring: 3.2; damping: 0.34; epsilon: 0.001 } }
+        property int cur: root.tab   // the page arriving (or shown)
+        property int prev: -1        // the page leaving
+        property int dir: 1          // +1: the new tab is to the right
+        property real t: 1           // 0 → 1 over a switch
+        property real outFrom: 1     // how visible the leaving page was when it started leaving
+
+        Connections {
+            target: root
+            function onTabChanged(): void {
+                if (root.tab === pages.cur) return;
+                pages.outFrom = pages.t;
+                pages.prev = pages.cur;
+                pages.dir = root.tab > pages.cur ? 1 : -1;
+                pages.cur = root.tab;
+                swap.restart();
+            }
+        }
+        NumberAnimation { id: swap; target: pages; property: "t"; from: 0; to: 1; duration: 520; easing.type: Easing.OutQuint }
 
         component Page: Item {
             property int index: 0
-            readonly property real d: index - pages.at
+            readonly property bool arriving: index === pages.cur
+            readonly property bool leaving: index === pages.prev && pages.t < 1 && !arriving
             width: pages.width
             height: pages.height
-            x: d * 70
-            opacity: Math.max(0, 1 - Math.abs(d) * 1.6)
-            scale: 1 - Math.min(0.04, Math.abs(d) * 0.04)
+            x: arriving ? pages.dir * 64 * (1 - pages.t) : leaving ? -pages.dir * 40 * pages.t : 0
+            opacity: arriving ? Math.min(1, pages.t * 1.25) : leaving ? pages.outFrom * Math.max(0, 1 - pages.t * 2.4) : 0
+            scale: arriving ? 0.975 + 0.025 * pages.t : leaving ? 1 - 0.03 * pages.t : 1
+            z: arriving ? 1 : 0
             visible: opacity > 0.01
-            enabled: Math.abs(d) < 0.5
+            enabled: arriving
         }
 
         Page {
