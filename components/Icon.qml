@@ -31,6 +31,12 @@ Text {
     TextMetrics { id: tm; font: icon.font; text: icon.ref || icon.name }
     FontMetrics { id: fm; font: icon.font }
     readonly property rect ink: tm.tightBoundingRect
-    leftPadding: ink.width > 0 ? width / 2 - (ink.x + ink.width / 2) : 0
-    topPadding: ink.height > 0 ? height / 2 - (fm.ascent + ink.y + ink.height / 2) : 0
+    // optical centring: a play triangle's outline-centre sits left of where
+    // the eye puts its middle (its weight is all on the flat side), so nudge it
+    readonly property real optical: ({ play_arrow: 0.04, send: 0.03 })[name] ?? 0
+    leftPadding: ink.width > 0 ? width / 2 - (ink.x + ink.width / 2) + optical * size : 0
+    // vertically: Qt's tight bounds are wrong for this font (they always end at
+    // the baseline), but every Material Symbol is drawn centred on its 1 em
+    // grid, which sits on the baseline, so centre that grid instead
+    topPadding: height / 2 - (fm.ascent - size / 2)
 }
