@@ -13,8 +13,8 @@ Item {
     id: root
 
     readonly property bool result: Passkey.st === "success" || Passkey.st === "cancelled"
-    readonly property real wantW: result ? resultRow.implicitWidth + 48 : 400
-    readonly property real wantH: result ? 46 : (Passkey.st === "error" ? 190 : 170)
+    readonly property real wantW: result ? resultRow.implicitWidth + 48 : 316
+    readonly property real wantH: result ? 46 : content.implicitHeight + 30
 
     function focusField(): void { field.forceActiveFocus(); }
 
@@ -38,42 +38,55 @@ Item {
         Connections { target: Passkey; function onShake() { shake.restart(); } }
 
         Column {
-            x: 22 + ask.shakeX
-            y: 16
-            width: parent.width - 44
-            spacing: 10
+            id: content
+            x: 20 + ask.shakeX
+            y: 14
+            width: parent.width - 40
+            spacing: 9
 
-            Row {
-                spacing: 10
+            Column {
+                width: parent.width
+                spacing: 3
                 Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
                     width: 30; height: 30; radius: 15
                     color: Qt.alpha(Theme.tone("action"), 0.15)
-                    Icon { anchors.centerIn: parent; name: "passkey"; size: 18; fill: 1; color: Theme.tone("action") }
+                    Icon { anchors.centerIn: parent; name: "passkey"; size: 17; fill: 1; color: Theme.tone("action") }
                 }
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    Text {
-                        font.family: Theme.font
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                        color: Theme.text
-                        text: Passkey.registering ? "Create a passkey" : "Sign in with a passkey"
-                    }
-                    Label {
-                        font.pixelSize: 11
-                        textFormat: Text.StyledText
-                        text: (Passkey.registering ? "for " : "to ")
-                            + "<font color='" + Theme.text + "'>" + (Passkey.req?.rpId ?? "") + "</font>"
-                            + (Passkey.req?.user ? " as " + Passkey.req.user : "")
-                    }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    font.family: Theme.font
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                    color: Theme.text
+                    text: Passkey.registering ? "Create a passkey" : "Sign in with a passkey"
+                }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideMiddle
+                    font.family: Theme.font
+                    font.pixelSize: 12
+                    font.weight: Font.Medium
+                    color: Theme.text
+                    text: Passkey.req?.rpId ?? ""
+                }
+                Label {
+                    width: parent.width
+                    visible: !!Passkey.req?.user
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    font.pixelSize: 11
+                    text: Passkey.req?.user ?? ""
                 }
             }
 
             // password
             Rectangle {
                 width: parent.width
-                height: 38
-                radius: 19
+                height: 32
+                radius: 16
                 color: Qt.alpha(Theme.text, 0.06)
                 border.width: 1
                 border.color: Passkey.st === "error" ? Qt.alpha(Theme.tone("error"), 0.7)
@@ -82,13 +95,21 @@ Item {
                 TextInput {
                     id: field
                     anchors.fill: parent
-                    anchors.leftMargin: 16
-                    anchors.rightMargin: 16
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 18
+                    horizontalAlignment: TextInput.AlignHCenter
                     verticalAlignment: TextInput.AlignVCenter
                     echoMode: TextInput.Password
                     passwordCharacter: "•"
+                    // a centred caret would sit inside the placeholder: show it once typing
+                    cursorDelegate: Rectangle {
+                        width: 2
+                        radius: 1
+                        color: Theme.tone("action")
+                        visible: field.text.length > 0 && field.cursorVisible
+                    }
                     font.family: Theme.font
-                    font.pixelSize: 14
+                    font.pixelSize: 13
                     color: Theme.text
                     selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                     enabled: Passkey.st !== "checking"
@@ -96,42 +117,44 @@ Item {
                     Keys.onReturnPressed: { Passkey.submit(text); text = ""; }
                     Keys.onEnterPressed: { Passkey.submit(text); text = ""; }
                     Keys.onEscapePressed: Passkey.deny()
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: !field.text && !field.preeditText
-                        text: Passkey.st === "checking" ? "Checking…" : "Your password"
-                    }
+                }
+                Label {
+                    anchors.centerIn: parent
+                    visible: !field.text && !field.preeditText
+                    text: Passkey.st === "checking" ? "Checking…" : "Your password"
                 }
             }
 
             Label {
+                width: parent.width
                 visible: Passkey.st === "error"
+                horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: 11
                 color: Theme.tone("error")
                 text: Passkey.errorText
             }
 
             Row {
-                anchors.right: parent.right
+                id: buttons
+                width: parent.width
                 spacing: 8
                 Repeater {
                     model: [{ t: "Deny", main: false }, { t: Passkey.registering ? "Create" : "Approve", main: true }]
                     Rectangle {
                         id: b
                         required property var modelData
-                        width: bt.implicitWidth + 32
-                        height: 32
-                        radius: 16
+                        width: (buttons.width - buttons.spacing) / 2
+                        height: 30
+                        radius: 15
                         opacity: Passkey.st === "checking" ? 0.5 : 1
                         color: modelData.main ? Theme.tone("action") : Qt.alpha(Theme.text, bma.containsMouse ? 0.12 : 0.07)
-                        scale: bma.pressed ? 0.94 : 1
+                        scale: bma.pressed ? 0.95 : 1
                         Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Text {
-                            id: bt
                             anchors.centerIn: parent
                             font.family: Theme.font
-                            font.pixelSize: 13
+                            font.pixelSize: 12
                             font.weight: Font.DemiBold
                             color: b.modelData.main ? Theme.frame : Theme.text
                             text: b.modelData.t
