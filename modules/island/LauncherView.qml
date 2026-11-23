@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.components
 import qs.config
@@ -86,6 +87,26 @@ Item {
         if (code !== null) out.push(`<pre style="font-family:monospace;">${esc(code.join("\n"))}</pre>`); // still streaming
         flushPara(); flushList();
         return out.join("");
+    }
+
+    // ── open windows ──
+    function windowsFor(q: string): list<var> {
+        const ql = q.toLowerCase();
+        const out = [];
+        for (const t of Hyprland.toplevels.values) {
+            const app = t.wayland?.appId ?? t.lastIpcObject?.class ?? "";
+            const entry = app ? DesktopEntries.heuristicLookup(app) : null;
+            const name = entry?.name ?? app;
+            const title = t.title ?? "";
+            const s = Math.max(Apps.score(ql, title.toLowerCase()), Apps.score(ql, name.toLowerCase()) * 1.1);
+            if (s > 0) out.push({ s: s, t: t, title: title || name, name: name, icon: entry?.icon ?? app, ws: t.workspace?.name ?? "" });
+        }
+        out.sort((a, b) => b.s - a.s);
+        return out.slice(0, 5);
+    }
+    function focusWindow(w: var): void {
+        const a = String(w.t.address);
+        Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.focus({ window = "address:${a.startsWith("0x") ? a : "0x" + a}" })`]);
     }
 
     // ── maths ──
@@ -207,6 +228,8 @@ Item {
         }
         const out = [];
         if (mathy && calc.result) out.push({ kind: "calc" });
+        // open windows that match, above the apps: Enter switches to one
+        if (q && !mathy) out.push(...windowsFor(q).map(w => ({ kind: "win", w: w })));
         return out.concat(Apps.search(q).slice(0, 40).map(e => ({ kind: "app", e: e })));
     }
     onResultsChanged: { current = 0; confirming = ""; }
@@ -224,6 +247,7 @@ Item {
         else if (r.kind === "emoji") { close(); Emoji.type(r.m, copyOnly); }
         else if (r.kind === "ask") Ask.ask(r.q);
         else if (r.kind === "app") { Apps.launch(r.e); close(); }
+        else if (r.kind === "win") { close(); focusWindow(r.w); }
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
         else {
             if (r.a.id === "timermenu") { field.text = "> timer "; return; } // stay open: pick a length
@@ -333,7 +357,8 @@ Item {
                 x: 10
                 anchors.verticalCenter: parent.verticalCenter
                 width: 30; height: 30
-                readonly property string path: row.modelData.kind === "app" ? Quickshell.iconPath(row.modelData.e.icon, true) : ""
+                readonly property string path: row.modelData.kind === "app" ? Quickshell.iconPath(row.modelData.e.icon, true)
+                    : row.modelData.kind === "win" ? Quickshell.iconPath(row.modelData.w.icon, true) : ""
                 Image {
                     id: appImg
                     anchors.fill: parent
@@ -403,7 +428,8 @@ Item {
                         fill: 1
                         color: row.confirm ? Theme.tone("error") : Theme.tone("action")
                         name: row.modelData.kind === "calc" ? "calculate" : row.modelData.kind === "action" ? row.a.glyph
-                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? root.clipGlyph(row.modelData.c.type) : "apps"
+                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? root.clipGlyph(row.modelData.c.type)
+                            : row.modelData.kind === "win" ? "select_window" : "apps"
                     }
                 }
             }
@@ -420,6 +446,7 @@ Item {
                     font.weight: row.sel ? Font.DemiBold : Font.Medium
                     color: row.confirm ? Theme.tone("error") : Theme.text
                     text: row.modelData.kind === "app" ? row.modelData.e.name
+                        : row.modelData.kind === "win" ? row.modelData.w.title
                         : row.modelData.kind === "calc" ? calc.result
                         : row.modelData.kind === "ask" ? row.modelData.q
                         : row.modelData.kind === "clip" ? (row.modelData.c.image ? "Image · " + row.modelData.c.image.w + "×" + row.modelData.c.image.h
@@ -434,6 +461,7 @@ Item {
                     font.pixelSize: 11
                     visible: text !== ""
                     text: row.modelData.kind === "app" ? (row.modelData.e.comment || row.modelData.e.genericName || "")
+                        : row.modelData.kind === "win" ? "Switch to " + row.modelData.w.name + (row.modelData.w.ws ? "  ·  workspace " + row.modelData.w.ws : "")
                         : row.modelData.kind === "calc" ? "= " + root.expr + "  ·  Enter copies"
                         : row.modelData.kind === "ask" ? "Ask Claude  ·  Enter"
                         : row.modelData.kind === "clip" ? (row.sel ? "Enter pastes  ·  Shift+Enter copies  ·  Shift+Del forgets" : root.clipHint(row.modelData.c))
