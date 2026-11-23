@@ -23,6 +23,28 @@ Singleton {
     }
 
     // ── wireless device batteries (UPower: mice, keyboards, headsets…) ──
+    // the ones worth showing: not the laptop battery, the mains or UPower's summary
+    readonly property list<var> peripherals: UPower.devices.values.filter(d =>
+        !d.isLaptopBattery && d.nativePath !== "" && d.type !== UPowerDeviceType.LinePower && d.isPresent)
+    readonly property var lowest: peripherals.reduce((a, d) => !a || pct(d) < pct(a) ? d : a, null)
+    function charging(d: UPowerDevice): bool {
+        return d.state === UPowerDeviceState.Charging || d.state === UPowerDeviceState.PendingCharge;
+    }
+    function stateText(d: UPowerDevice): string {
+        switch (d.state) {
+        case UPowerDeviceState.Charging: return "Charging";
+        case UPowerDeviceState.FullyCharged: return "Full";
+        case UPowerDeviceState.PendingCharge: return "Waiting to charge";
+        default: return "On battery";
+        }
+    }
+    // a Material battery glyph for a level (0-100)
+    function batteryGlyph(p: int, isCharging: bool): string {
+        if (isCharging) return "battery_charging_full";
+        if (p <= 10) return "battery_alert";
+        if (p >= 95) return "battery_full";
+        return "battery_" + Math.max(0, Math.min(6, Math.floor(p / 100 * 7))) + "_bar";
+    }
     function pct(d: UPowerDevice): int {
         const p = d.percentage;
         return Math.round(p <= 1 ? p * 100 : p); // 0..1 in recent Quickshell

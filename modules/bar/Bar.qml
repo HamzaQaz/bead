@@ -107,7 +107,7 @@ Scope {
 
     SystemClock { id: clock; precision: SystemClock.Minutes }
 
-    // `qs ipc call bar panel wifi|bt|tray|sound|utils|power|close` on the focused monitor
+    // `qs ipc call bar panel wifi|bt|tray|sound|utils|power|battery|close` on the focused monitor
     signal panelRequested(string name, string screen)
     // Ctrl+Alt+Delete (bead:session): the power panel on the focused monitor
     GlobalShortcut {
@@ -199,7 +199,7 @@ Scope {
                 target: root
                 function onPanelRequested(name, screen) {
                     if (screen !== scope.modelData.name) return;
-                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn }[name];
+                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn, battery: batteryBtn }[name];
                     if (from) win.toggle(name, from); else win.panel = "";
                 }
             }
@@ -218,7 +218,7 @@ Scope {
                 anchorY: win.panelY
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
-                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel })[win.shownPanel] ?? trayPanel
+                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel, battery: batteryPanel })[win.shownPanel] ?? trayPanel
                 contentW: cur.width
                 contentH: cur.implicitHeight
                 Keys.onEscapePressed: win.panel = ""
@@ -228,6 +228,7 @@ Scope {
                 SoundPanel { id: soundPanel; visible: win.shownPanel === "sound" }
                 UtilitiesPanel { id: utilsPanel; visible: win.shownPanel === "utils"; active: win.panel === "utils"; onDone: win.panel = "" }
                 PowerPanel { id: powerPanel; visible: win.shownPanel === "power"; active: win.panel === "power"; onDone: win.panel = "" }
+                BatteryPanel { id: batteryPanel; visible: win.shownPanel === "battery" }
                 TrayPanel {
                     id: trayPanel
                     visible: win.shownPanel === "tray"
@@ -673,6 +674,21 @@ Scope {
                                 onClicked: Audio.toggleMute()
                                 onWheel: e => Audio.setVolume(Audio.volume + (e.angleDelta.y > 0 ? 0.05 : -0.05))
                             }
+                        }
+                        // wireless devices' batteries: the lowest one's level (click for all)
+                        BarButton {
+                            id: batteryBtn
+                            readonly property var d: Osd.lowest
+                            readonly property int level: d ? Osd.pct(d) : 100
+                            readonly property bool charging: !!d && Osd.charging(d)
+                            visible: !!d
+                            lit: win.panel === "battery"
+                            icon: Osd.batteryGlyph(level, charging)
+                            iconRef: "battery_full"
+                            iconFill: 1
+                            tone: level <= 10 && !charging ? Theme.tone("error") : level <= 20 && !charging ? Theme.tone("warning") : Theme.text
+                            pulsing: level <= 10 && !charging
+                            onClicked: win.toggle("battery", batteryBtn)
                         }
                         BarButton {
                             id: wifiBtn
