@@ -103,20 +103,56 @@ Item {
     }
 
     // ── actions ──
+    // timers and the stopwatch: what's running comes first, with its controls
+    readonly property list<var> timeActions: {
+        const out = [];
+        for (const t of Countdown.items) {
+            const what = t.kind === "stopwatch" ? "the stopwatch" : t.name + " timer";
+            out.push({ id: "c-toggle-" + t.id, op: "toggle", tid: t.id, glyph: t.running ? "pause" : "play_arrow",
+                title: (t.running ? "Pause " : "Resume ") + what, sub: t.running ? "Running" : "Paused" });
+            if (t.kind === "stopwatch")
+                out.push({ id: "c-lap-" + t.id, op: "lap", tid: t.id, glyph: "flag", title: "Lap", sub: (t.laps.length ? t.laps.length + " so far" : "Mark a lap") });
+            else
+                out.push({ id: "c-add-" + t.id, op: "add", tid: t.id, glyph: "more_time", title: "Add a minute to the " + what, sub: "Rides on the island" });
+            out.push({ id: "c-stop-" + t.id, op: "stop", tid: t.id, glyph: "stop_circle", title: "Stop " + what, sub: "See them all on the dashboard's Timers tab" });
+        }
+        if (Countdown.items.length > 1)
+            out.push({ id: "c-stopall", op: "stopall", glyph: "timer_off", title: "Stop all timers", sub: Countdown.items.length + " running" });
+        out.push({ id: "timermenu", glyph: "timer", title: "Timer…", sub: "Pick a length, or type one: > timer 7m30s" });
+        out.push({ id: "stopwatch", glyph: "avg_pace", title: Countdown.stopwatch ? "Restart the stopwatch" : "Start a stopwatch", sub: "Laps and all, on the dashboard's Timers tab" });
+        return out;
+    }
+    readonly property list<var> presets: [
+        { m: 1, n: "1 minute" }, { m: 3, n: "3 minutes", note: "Tea" }, { m: 5, n: "5 minutes" },
+        { m: 10, n: "10 minutes" }, { m: 15, n: "15 minutes" }, { m: 25, n: "25 minutes", note: "Focus" },
+        { m: 45, n: "45 minutes" }, { m: 60, n: "1 hour" }
+    ]
     readonly property list<var> actions: [
+        ...timeActions,
         ...Session.actions,
         { id: "dnd", title: Notifs.dnd ? "Turn off Do Not Disturb" : "Do Not Disturb", sub: "Hold notification popups", glyph: Notifs.dnd ? "notifications_active" : "notifications_off" },
         { id: "clear", title: "Clear notifications", sub: Notifs.entries.length + " in history", glyph: "clear_all" },
         { id: "island", title: "Hide / show the island", sub: "Same as Super+I", glyph: "visibility" },
-        { id: "stopwatch", title: "Start a stopwatch", sub: "Rides on the island", glyph: "timer" }
+        { id: "awake", title: Idle.keepAwake ? "Stop keeping awake" : "Keep awake", sub: "Don't lock, blank or sleep when idle", glyph: "coffee" }
     ]
     function runAction(a: var): void {
+        if (a.op) {
+            switch (a.op) {
+            case "toggle": Countdown.toggle(a.tid); break;
+            case "add": Countdown.addTime(a.tid, 60000); break;
+            case "lap": Countdown.lap(a.tid); break;
+            case "stop": Countdown.stop(a.tid); break;
+            case "stopall": Countdown.stopAll(); break;
+            }
+            return;
+        }
         switch (a.id) {
         case "dnd": Notifs.dnd = !Notifs.dnd; break;
         case "clear": Notifs.clear(); break;
         case "island": islandToggle.running = true; break;
         case "stopwatch": Countdown.startStopwatch(); break;
-        case "timer": Countdown.startTimer(a.ms); break;
+        case "awake": Idle.keepAwake = !Idle.keepAwake; break;
+        case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
         default: Session.run(a);
         }
     }
@@ -129,9 +165,20 @@ Item {
         if (q.startsWith(">")) {
             const a = q.slice(1).trim().toLowerCase();
             const out = [];
-            const t = /^timer\s+(.+)$/.exec(a);
-            if (t && Countdown.parse(t[1]) > 0)
-                out.push({ kind: "action", a: { id: "timer", ms: Countdown.parse(t[1]), title: "Start a " + t[1].trim() + " timer", sub: "Rides on the island", glyph: "timer" } });
+            // "> timer [length]": the presets, and whatever length you typed
+            const t = /^tim(?:er?)?(?:\s+(.*))?$/.exec(a);
+            if (t) {
+                const rest = (t[1] ?? "").trim();
+                const ms = Countdown.parse(rest);
+                if (ms > 0)
+                    out.push({ kind: "action", a: { id: "timer", ms: ms, title: "Start a " + Countdown.fmtTotal(ms) + " timer", sub: "Rides on the island", glyph: "timer" } });
+                for (const p of presets)
+                    if (!rest || String(p.m).startsWith(rest) || p.n.startsWith(rest) || (p.note ?? "").toLowerCase().startsWith(rest))
+                        if (p.m * 60000 !== ms)
+                            out.push({ kind: "action", a: { id: "timer", ms: p.m * 60000, name: p.note ?? "", title: "Start a " + (p.m === 60 ? "1 hour" : p.m + " minute") + " timer",
+                                sub: p.note ? p.note + " · rides on the island" : "Rides on the island", glyph: "timer" } });
+                if (/^timer\s/.test(a) || out.length) return out;
+            }
             const scored = actions.map((x, i) => ({ x: x, i: i, s: a ? Apps.score(a, x.title.toLowerCase()) : 1 })).filter(x => x.s > 0);
             scored.sort((p, q2) => q2.s - p.s || p.i - q2.i); // keep the list order on ties
             return out.concat(scored.map(x => ({ kind: "action", a: x.x })));
@@ -155,6 +202,7 @@ Item {
         else if (r.kind === "app") { Apps.launch(r.e); close(); }
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
         else {
+            if (r.a.id === "timermenu") { field.text = "> timer "; return; } // stay open: pick a length
             if (r.a.confirm && confirming !== r.a.id) { current = i; confirming = r.a.id; return; }
             close();
             runAction(r.a);

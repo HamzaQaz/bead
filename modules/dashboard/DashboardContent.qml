@@ -9,7 +9,7 @@ import qs.services
 
 // The dashboard's insides: a tab bar (springy highlight pill, scroll to switch)
 // flanked by volume and brightness sliders, and pages that slide between tabs:
-// Dashboard, Media, Performance, Weather.
+// Dashboard, Media, Performance, Weather, Timers.
 Item {
     id: root
 
@@ -24,7 +24,8 @@ Item {
         { name: "Dashboard", icon: "dashboard" },
         { name: "Media", icon: "queue_music" },
         { name: "Performance", icon: "monitoring" },
-        { name: "Weather", icon: "partly_cloudy_day" }
+        { name: "Weather", icon: "partly_cloudy_day" },
+        { name: "Timers", icon: "timer" }
     ]
 
     // ── a small horizontal slider: icon (click) + track (drag / scroll) + value ──
@@ -141,12 +142,14 @@ Item {
                     required property var modelData
                     required property int index
                     readonly property bool current: root.tab === index
-                    width: tbRow.implicitWidth + 28
+                    // only the current tab shows its name; it slides open as you switch
+                    width: tbRow.implicitWidth + 24
                     height: parent.height
                     Row {
                         id: tbRow
                         anchors.centerIn: parent
-                        spacing: 7
+                        spacing: tb.current ? 7 : 0
+                        Behavior on spacing { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                         Icon {
                             anchors.verticalCenter: parent.verticalCenter
                             name: tb.modelData.icon
@@ -156,13 +159,18 @@ Item {
                             Behavior on color { ColorAnimation { duration: 200 } }
                         }
                         Text {
+                            id: tbName
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
                             font.pixelSize: 13
-                            font.weight: tb.current ? Font.DemiBold : Font.Medium
-                            color: tb.current ? Theme.text : Theme.subtext
+                            font.weight: Font.DemiBold
+                            color: Theme.text
                             text: tb.modelData.name
-                            Behavior on color { ColorAnimation { duration: 200 } }
+                            clip: true
+                            width: tb.current ? implicitWidth : 0
+                            opacity: tb.current ? 1 : 0
+                            Behavior on width { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
                         }
                     }
                     MouseArea {
@@ -216,6 +224,10 @@ Item {
         Page {
             index: 3
             WeatherTab { anchors.fill: parent }
+        }
+        Page {
+            index: 4
+            TimersTab { anchors.fill: parent }
         }
     }
 }

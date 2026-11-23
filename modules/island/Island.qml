@@ -165,7 +165,7 @@ Scope {
         function toggle(): void { root.pinnedOn = root.pinnedOn ? "" : root.home.name; }
         function open(): void { root.pinnedOn = root.home.name; }
         function close(): void { root.pinnedOn = ""; }
-        function tab(n: int): void { root.tab = Math.max(0, Math.min(3, n)); root.pinnedOn = root.home.name; }
+        function tab(n: int): void { root.tab = Math.max(0, Math.min(4, n)); root.pinnedOn = root.home.name; }
     }
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
