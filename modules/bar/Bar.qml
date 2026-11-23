@@ -22,7 +22,8 @@ import qs.services
 // side; top to bottom: logo (opens the launcher),
 // workspaces (a glyph per window, like Caelestia's, a springy highlight on the active
 // one; click or scroll to switch), the focused window's title, the tray,
-// the clock, Wi-Fi and Bluetooth (each opens its panel), power (the session
+// the clock, sound (scroll for volume, middle-click mutes; a red mic while
+// something records), Wi-Fi and Bluetooth (each opens its panel), power (the session
 // panel). The frame steps aside for fullscreen windows.
 Scope {
     id: root
@@ -105,7 +106,7 @@ Scope {
 
     SystemClock { id: clock; precision: SystemClock.Minutes }
 
-    // `qs ipc call bar panel wifi|bt|tray|power|close` on the focused monitor
+    // `qs ipc call bar panel wifi|bt|tray|sound|power|close` on the focused monitor
     signal panelRequested(string name, string screen)
     IpcHandler {
         target: "bar"
@@ -190,7 +191,7 @@ Scope {
                 target: root
                 function onPanelRequested(name, screen) {
                     if (screen !== scope.modelData.name) return;
-                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn }[name];
+                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn }[name];
                     if (from) win.toggle(name, from); else win.panel = "";
                 }
             }
@@ -209,13 +210,14 @@ Scope {
                 anchorY: win.panelY
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
-                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel })[win.shownPanel] ?? trayPanel
+                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel })[win.shownPanel] ?? trayPanel
                 contentW: cur.width
                 contentH: cur.implicitHeight
                 Keys.onEscapePressed: win.panel = ""
 
                 WifiPanel { id: wifiPanel; visible: win.shownPanel === "wifi"; active: win.panel === "wifi" }
                 BluetoothPanel { id: btPanel; visible: win.shownPanel === "bt"; active: win.panel === "bt" }
+                SoundPanel { id: soundPanel; visible: win.shownPanel === "sound" }
                 PowerPanel { id: powerPanel; visible: win.shownPanel === "power"; active: win.panel === "power"; onDone: win.panel = "" }
                 TrayPanel {
                     id: trayPanel
@@ -605,6 +607,30 @@ Scope {
                             frames: ["wifi_1_bar", "wifi_2_bar", "wifi"]
                             running: statusCol.wifiConnecting || statusCol.wifiSearching
                             interval: statusCol.wifiConnecting ? 220 : 450
+                        }
+                        // an app is recording: a pulsing mic (click for the sound panel)
+                        BarButton {
+                            id: micBtn
+                            visible: Audio.recording.length > 0
+                            icon: Audio.micMuted ? "mic_off" : "mic"
+                            iconFill: 1
+                            tone: Audio.micMuted ? Theme.subtext : Theme.tone("error")
+                            pulsing: !Audio.micMuted
+                            onClicked: win.toggle("sound", soundBtn)
+                        }
+                        BarButton {
+                            id: soundBtn
+                            iconRef: "volume_up"
+                            icon: Audio.levelGlyph(Audio.volume, Audio.muted)
+                            tone: Audio.muted ? Theme.subtext : Theme.text
+                            lit: win.panel === "sound"
+                            onClicked: win.toggle("sound", soundBtn)
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.MiddleButton
+                                onClicked: Audio.toggleMute()
+                                onWheel: e => Audio.setVolume(Audio.volume + (e.angleDelta.y > 0 ? 0.05 : -0.05))
+                            }
                         }
                         BarButton {
                             id: wifiBtn
