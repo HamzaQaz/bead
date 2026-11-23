@@ -8,6 +8,7 @@ import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import qs.components
 import qs.config
+import qs.services
 
 // Also shows `toast` CLI toasts (IPC target "toast"), e.g. Claude Code prompts:
 // they join the same stack, and questions stay pinned open at the top.
@@ -27,21 +28,13 @@ Scope {
     property list<var> popups: []
     property int serial: 0
 
-    function snapshot(n: Notification): var {
-        return {
-            key: ++serial,
+    // a popup for a recorded history entry (same key)
+    function popupFor(n: Notification, e: var): var {
+        return Object.assign({}, e, {
             notif: n,
-            id: n.id,
-            appName: n.appName,
-            summary: n.summary,
-            body: n.body,
-            image: n.image,
-            appIcon: n.appIcon,
-            urgency: n.urgency,
             sticky: n.urgency === NotificationUrgency.Critical,
-            timeout: n.expireTimeout,
-            actions: n.actions.map(a => ({ id: a.identifier, label: a.text }))
-        };
+            timeout: n.expireTimeout
+        });
     }
 
     // at most `maxShown` on screen: the oldest ones expire
@@ -111,7 +104,11 @@ Scope {
 
         onNotification: n => {
             n.tracked = true;
-            root.add(root.snapshot(n));
+            const e = Notifs.record(n);
+            // the history panel shows it live; Do Not Disturb holds all but critical
+            if (Notifs.panelOpen) return;
+            if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical) return;
+            root.add(root.popupFor(n, e));
         }
     }
 
@@ -232,6 +229,7 @@ Scope {
                     }
                     function resync(): void {
                         if (!notif) return;
+                        Notifs.refresh(modelData.key);
                         title = notif.summary || notif.appName || "Notification";
                         desc = notif.body;
                         refresh();
@@ -239,13 +237,12 @@ Scope {
 
                     onClicked: {
                         if (spec && buttons.length > 0) return; // answer with a button
-                        const def = notif?.actions.find(a => a.identifier === "default");
-                        if (def) def.invoke();
+                        if (notif) Notifs.invoke(modelData.key, "default");
                         dismiss("dismissed");
                     }
                     onAnswered: id => {
                         if (spec) root.report(spec.id, "result", id);
-                        else notif?.actions.find(a => a.identifier === id)?.invoke();
+                        else Notifs.invoke(modelData.key, id);
                     }
                     // promise toasts: the CLI rewrites this file when its command ends
                     FileView {
@@ -268,10 +265,9 @@ Scope {
                     }
                     onFinished: reason => {
                         if (spec) root.report(spec.id, "result", reason);
-                        if (notif) {
-                            if (reason === "timeout") notif.expire();
-                            else if (reason !== "closed") notif.dismiss();
-                        }
+                        // timed out: it stays in the history; dismissed or acted on: gone
+                        if (modelData.notif && reason !== "timeout" && reason !== "closed")
+                            Notifs.remove(modelData.key);
                         root.remove(modelData.key);
                     }
                 }

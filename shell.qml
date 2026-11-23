@@ -11,5 +11,6 @@ ShellRoot {
     settings.watchFiles: false
 
     Notifications {}
+    History {}
     Osd {}
 }
