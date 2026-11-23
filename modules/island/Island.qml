@@ -48,7 +48,10 @@ Scope {
         function toggle(): void { root.hidden = !root.hidden; }
         function show(): void { root.hidden = false; }
         function hide(): void { root.hidden = true; }
+        // the media card without hovering (a keybind, or checking how it looks)
+        function media(): void { root.mediaPinned = !root.mediaPinned; }
     }
+    property bool mediaPinned: false
     property bool hiddenLoaded: false
     onHiddenChanged: if (hiddenLoaded) hiddenStore.setText(JSON.stringify({ hidden: hidden }))
     FileView {
@@ -383,7 +386,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard ? "media" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
                 // launcher…) tucks at the resting width, not as a wide strip
@@ -557,7 +560,7 @@ Scope {
                     id: hit
                     anchors.fill: parent
                     WheelHandler {
-                        enabled: !win.open
+                        enabled: !win.open && win.state !== "media" // the media card scrolls the player's volume
                         onWheel: e => {
                             if (!win.showsActivity || root.activity === "workspace") root.flash("volume", "");
                             root.nudge(e.angleDelta.y > 0 ? 1 : -1);
