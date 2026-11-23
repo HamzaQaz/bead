@@ -40,18 +40,27 @@ Item {
     readonly property real bg: ease(enter / 0.6) * (1 - ease(leave))
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
+
+    // Caps Lock, from the keyboard LEDs (checked while the lock shows)
+    property bool caps: false
+    Timer {
+        interval: 400
+        repeat: true
+        triggeredOnStart: true
+        running: Lock.shown && root.main
+        onTriggered: if (!capsProbe.running) capsProbe.running = true
+    }
+    Process {
+        id: capsProbe
+        command: ["sh", "-c", "cat /sys/class/leds/*::capslock/brightness 2>/dev/null | grep -qv '^0$' && echo on || echo off"]
+        stdout: StdioCollector { onStreamFinished: root.caps = text.trim() === "on" }
+    }
     readonly property MprisPlayer player: Mpris.players.values.find(p => p.isPlaying) ?? Mpris.players.values[0] ?? null
 
     // ── background: your windows fade away to the wallpaper (Caelestia's
     // still of it), lightly blurred; they fade back in as you unlock. No
     // wallpaper file: the screen itself, blurred enough to hide text. ──
-    property string wallPath: ""
-    FileView {
-        path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/caelestia/wallpaper/path.txt"
-        blockLoading: true
-        printErrors: false
-        onLoaded: root.wallPath = text().trim()
-    }
+    readonly property string wallPath: Wallpaper.stillPath
     // the still taken just before locking (see Lock.lock); a live capture when
     // there's none (the preview, or if taking it was too slow)
     Image {
@@ -133,14 +142,45 @@ Item {
             opacity: t
             scale: 0.94 + 0.06 * t
             spacing: 2
-            Text {
+            // each digit rolls up to the next when it changes
+            Row {
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.family: Theme.font
-                font.pixelSize: 118
-                font.weight: Font.DemiBold
-                font.features: { "tnum": 1 }
-                color: Theme.text
-                text: Qt.formatTime(clock.date, "hh:mm")
+                Repeater {
+                    model: 5
+                    Item {
+                        id: digit
+                        required property int index
+                        readonly property string ch: Qt.formatTime(clock.date, "hh:mm").charAt(index)
+                        property string shown: ch
+                        property string old: ""
+                        property real t: 1
+                        width: probe.implicitWidth
+                        height: probe.implicitHeight
+                        clip: true
+                        onChChanged: { old = shown; shown = ch; roll.restart(); }
+                        NumberAnimation { id: roll; target: digit; property: "t"; from: 0; to: 1; duration: 620; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                        Text { id: probe; visible: false; font: newT.font; text: digit.index === 2 ? ":" : "0" }
+                        Text {
+                            visible: digit.t < 1
+                            y: -digit.height * 0.7 * digit.t
+                            opacity: 1 - digit.t
+                            font: newT.font
+                            color: Theme.text
+                            text: digit.old
+                        }
+                        Text {
+                            id: newT
+                            y: digit.height * 0.7 * (1 - digit.t)
+                            opacity: Math.min(1, digit.t * 1.5)
+                            font.family: Theme.font
+                            font.pixelSize: 118
+                            font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                            color: Theme.text
+                            text: digit.shown
+                        }
+                    }
+                }
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -185,6 +225,20 @@ Item {
                 Behavior on border.color { ColorAnimation { duration: 180 } }
 
                 property real shakeX: 0
+                // each key: a tiny breath of the pill
+                property int typed: 0
+                Connections {
+                    target: Lock
+                    function onPasswordChanged(): void {
+                        if (Lock.password.length > pill.typed) keyPulse.restart();
+                        pill.typed = Lock.password.length;
+                    }
+                }
+                SequentialAnimation {
+                    id: keyPulse
+                    NumberAnimation { target: pill; property: "scale"; to: 1.018; duration: 70; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: pill; property: "scale"; to: 1; duration: 220; easing.type: Easing.OutBack; easing.overshoot: 2 }
+                }
                 transform: Translate { x: pill.shakeX }
                 SequentialAnimation {
                     id: shake
@@ -293,10 +347,10 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 height: 16
                 font.pixelSize: 13
-                color: Theme.tone("error")
-                opacity: Lock.st === "error" ? 1 : 0
+                opacity: Lock.st === "error" || root.caps ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 160 } }
-                text: Lock.errorText
+                color: Lock.st === "error" ? Theme.tone("error") : Theme.tone("warning")
+                text: Lock.st === "error" ? Lock.errorText : "Caps Lock is on"
             }
         }
 
@@ -433,7 +487,8 @@ Item {
                         width: 34; height: 34; radius: 17
                         opacity: modelData.ok ? 1 : 0.35
                         color: modelData.main ? Theme.tone("action") : Qt.alpha(Theme.text, cma.containsMouse ? 0.1 : 0)
-                        Icon { anchors.fill: parent; name: cb.modelData.g; size: 20; fill: 1; color: cb.modelData.main ? Theme.frame : Theme.text }
+                        Icon { visible: !cb.modelData.main; anchors.fill: parent; name: cb.modelData.g; size: 20; fill: 1; color: Theme.text }
+                        PlayPause { visible: !!cb.modelData.main; anchors.centerIn: parent; size: 18; playing: !!root.player?.isPlaying; color: Theme.frame }
                         MouseArea { id: cma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: if (cb.modelData.ok) cb.modelData.go() }
                     }
                 }
