@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|log]: run the shell in the background.
+# bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|log]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
 share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
@@ -22,6 +22,8 @@ notifs) # bead notifs [toggle|open|close|clear|dnd]
 	exec qs -p "$share" ipc call notifs "${2:-toggle}" ;;
 dashboard) # bead dashboard [toggle|open|close|tab N]
 	exec qs -p "$share" ipc call dashboard "${2:-toggle}" ${3:+"$3"} ;;
+island) # bead island [toggle|show|hide]
+	exec qs -p "$share" ipc call island "${2:-toggle}" ;;
 log) exec qs -p "$share" log -f ;;
-*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|log]" >&2; exit 2 ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|log]" >&2; exit 2 ;;
 esac
