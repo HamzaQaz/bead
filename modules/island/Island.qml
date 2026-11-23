@@ -537,7 +537,8 @@ Scope {
                     id: restRow
                     anchors.centerIn: parent
                     spacing: 10
-                    opacity: win.state === "rest" ? 1 : 0
+                    // waits for the dashboard to be gone, so the two never overlap
+                    opacity: win.state === "rest" && dash.opacity < 0.05 ? 1 : 0
                     visible: opacity > 0.01
                     SwapFade on opacity {}
 
@@ -1003,12 +1004,13 @@ Scope {
 
                 // ── open: the dashboard ──
                 DashboardContent {
+                    id: dash
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: win.openW
                     height: win.openH
                     opacity: win.state === "open" ? 1 : 0
                     visible: opacity > 0.01
-                    Behavior on opacity { NumberAnimation { duration: win.state === "open" ? 320 : 140 } }
+                    Behavior on opacity { NumberAnimation { duration: win.state === "open" ? 320 : 90; easing.type: win.state === "open" ? Easing.Linear : Easing.OutCubic } } // gone before the resting row fades in
                     clock: clock
                     player: root.player
                     screen: win.screen
