@@ -523,7 +523,7 @@ Scope {
                 readonly property bool here: (t?.workspace?.id ?? -999) === win.activeWs
                 Text {
                     id: title
-                    visible: parent.here && !!parent.t
+                    visible: Settings.showTitle && parent.here && !!parent.t
                     rotation: 90
                     transformOrigin: Item.TopLeft
                     x: (win.fullW + height) / 2

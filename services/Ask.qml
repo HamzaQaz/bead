@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 
 // Ask Claude a quick question from the launcher, through the Claude Code CLI
@@ -19,7 +20,7 @@ Singleton {
     readonly property bool active: st !== ""
     readonly property bool busy: st === "asking"
 
-    readonly property string model: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
+    readonly property string model: Settings.askModel || "sonnet"
     readonly property string system: "You are answering a quick question typed into a desktop launcher "
         + "(Hyprland on CachyOS / Arch Linux, fish shell). Answer directly and briefly: usually one to four "
         + "sentences, or a short list or code block when that is clearer. No preamble, no sign-off."

@@ -1,0 +1,53 @@
+pragma Singleton
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+
+// bead's settings, kept in ~/.config/bead/settings.json. Changing one here (or
+// in the dashboard's Settings tab) saves it; editing the file applies live.
+Singleton {
+    id: root
+
+    // idle, in minutes (0 = never)
+    property alias lockAfter: a.lockAfter
+    property alias screenOffAfter: a.screenOffAfter
+    property alias suspendAfter: a.suspendAfter
+    property alias pauseForMedia: a.pauseForMedia   // stay awake while something plays
+    // looks
+    property alias theme: a.theme                   // "wallpaper" | "sileo"
+    property alias showTitle: a.showTitle           // the window title down the bar
+    property alias islandScreen: a.islandScreen     // monitor name; "" = $BEAD_ISLAND_SCREEN or DP-1
+    // other
+    property alias units: a.units                   // "auto" | "celsius" | "fahrenheit"
+    property alias askModel: a.askModel             // "sonnet" | "opus" | "haiku"
+
+    readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || "DP-1"
+
+    FileView {
+        id: file
+        path: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/bead/settings.json"
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        atomicWrites: true
+        onFileChanged: reload()
+        onAdapterUpdated: writeAdapter()
+        onLoadFailed: err => { if (err === FileViewError.FileNotFound) { Quickshell.execDetached(["mkdir", "-p", file.path.replace(/\/[^/]*$/, "")]); saveLater.start(); } }
+
+        JsonAdapter {
+            id: a
+            property real lockAfter: 3
+            property real screenOffAfter: 5
+            property real suspendAfter: 10
+            property bool pauseForMedia: true
+            property string theme: Quickshell.env("BEAD_THEME") === "sileo" ? "sileo" : "wallpaper"
+            property bool showTitle: true
+            property string islandScreen: ""
+            property string units: "auto"
+            property string askModel: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
+        }
+    }
+    // first run: write the defaults once the folder exists
+    Timer { id: saveLater; interval: 300; onTriggered: file.writeAdapter() }
+}

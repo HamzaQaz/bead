@@ -9,7 +9,7 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property bool themed: (Quickshell.env("BEAD_THEME") || "caelestia") !== "sileo"
+    readonly property bool themed: Settings.theme !== "sileo"
     property var scheme: ({})
 
     function c(key: string, fallback: string): color {

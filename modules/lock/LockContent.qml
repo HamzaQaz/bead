@@ -20,7 +20,7 @@ Item {
     // the lock UI goes on the main monitor (the island's); others just blur.
     // Every screen keeps a password field, since keyboard focus lands on
     // whichever monitor is focused.
-    readonly property bool main: screen?.name === (Quickshell.env("BEAD_ISLAND_SCREEN") || "DP-1")
+    readonly property bool main: screen?.name === Settings.home
 
     // ── motion: one clock (enter, 0-1 over 1.1 s) staged per element, and
     // one for leaving on success (0-1), so everything moves as a sequence ──

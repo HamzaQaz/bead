@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 
 // Weather from Open-Meteo, located by IP (ip-api.com), the same sources
 // Caelestia uses. Fetched on demand (refresh()), at most every 20 minutes.
@@ -10,7 +11,10 @@ Singleton {
 
     property bool ready: false
     property string city: ""
-    property bool fahrenheit: false
+    property string country: ""
+    // Settings.units, or by country (°F in the US, Liberia, Myanmar)
+    readonly property bool fahrenheit: Settings.units === "fahrenheit" || Settings.units === "auto" && ["US", "LR", "MM"].includes(country)
+    onFahrenheitChanged: if (coords) { lastFetch = 0; refresh(); }
     property real temp: 0
     property real feels: 0
     property real humidity: 0
@@ -31,7 +35,7 @@ Singleton {
             if (r.status !== "success") return;
             coords = { lat: r.lat, lon: r.lon };
             city = r.city ?? "";
-            fahrenheit = ["US", "LR", "MM"].includes(r.countryCode);
+            country = r.countryCode ?? "";
             forecast();
         });
     }

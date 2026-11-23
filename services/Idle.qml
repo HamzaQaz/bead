@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Mpris
@@ -16,15 +17,16 @@ import Quickshell.Wayland
 Singleton {
     id: root
 
+    // from Settings (minutes; 0 skips a step)
     readonly property list<var> steps: [
-        { after: 180, idle: "lock" },
-        { after: 300, idle: "dpms off", back: "dpms on" },
-        { after: 600, idle: "suspend" }
-    ]
+        { after: Settings.lockAfter * 60, idle: "lock" },
+        { after: Settings.screenOffAfter * 60, idle: "dpms off", back: "dpms on" },
+        { after: Settings.suspendAfter * 60, idle: "suspend" }
+    ].filter(s => s.after > 0)
 
     property bool keepAwake: false
     readonly property bool playing: Mpris.players.values.some(p => p.isPlaying)
-    readonly property bool active: !keepAwake && !playing
+    readonly property bool active: !keepAwake && !(Settings.pauseForMedia && playing)
 
     function act(a: string): void {
         switch (a) {

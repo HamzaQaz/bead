@@ -135,6 +135,7 @@ Item {
         { id: "dnd", title: Notifs.dnd ? "Turn off Do Not Disturb" : "Do Not Disturb", sub: "Hold notification popups", glyph: Notifs.dnd ? "notifications_active" : "notifications_off" },
         { id: "clear", title: "Clear notifications", sub: Notifs.entries.length + " in history", glyph: "clear_all" },
         { id: "island", title: "Hide / show the island", sub: "Same as Super+I", glyph: "visibility" },
+        { id: "settings", title: "Settings", sub: "Idle timings, colours, main monitor…", glyph: "settings" },
         { id: "walls", title: "Wallpapers", sub: "Pick one on the dashboard; the colours follow", glyph: "wallpaper" },
         { id: "wallshuffle", title: "Shuffle wallpaper", sub: "Another one at random", glyph: "shuffle" },
         { id: "awake", title: Idle.keepAwake ? "Stop keeping awake" : "Keep awake", sub: "Don't lock, blank or sleep when idle", glyph: "coffee" }
@@ -157,6 +158,7 @@ Item {
         case "stopwatch": Countdown.startStopwatch(); break;
         case "awake": Idle.keepAwake = !Idle.keepAwake; break;
         case "walls": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "5"]); break;
+        case "settings": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "6"]); break;
         case "wallshuffle": Wallpaper.random("all"); break;
         case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
         default: Session.run(a);

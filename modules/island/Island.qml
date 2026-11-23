@@ -37,7 +37,7 @@ Scope {
     id: root
 
     // the island's monitor
-    readonly property string homeName: Quickshell.env("BEAD_ISLAND_SCREEN") || "DP-1"
+    readonly property string homeName: Settings.home
     readonly property ShellScreen home: Quickshell.screens.find(s => s.name === homeName) ?? Quickshell.screens[0]
 
     // ── hidden (keybind), saved in $XDG_STATE_HOME/bead/island.json ──
@@ -172,7 +172,7 @@ Scope {
         function toggle(): void { root.pinnedOn = root.pinnedOn ? "" : root.home.name; }
         function open(): void { root.pinnedOn = root.home.name; }
         function close(): void { root.pinnedOn = ""; }
-        function tab(n: int): void { root.tab = Math.max(0, Math.min(5, n)); root.pinnedOn = root.home.name; }
+        function tab(n: int): void { root.tab = Math.max(0, Math.min(6, n)); root.pinnedOn = root.home.name; }
     }
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
