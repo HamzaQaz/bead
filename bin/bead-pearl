@@ -1,0 +1,35 @@
+#!/bin/sh
+# Pearl's wire: stream one answer, printing each server-sent event's JSON on
+# its own line (and an error body, if the request fails).
+#
+#   bead-pearl api BODY          Anthropic Messages API. Key: $ANTHROPIC_API_KEY,
+#                                else ${XDG_CONFIG_HOME:-~/.config}/bead/anthropic-key
+#   bead-pearl local PORT BODY   a llama-server on 127.0.0.1:PORT
+#
+# The key goes to curl on stdin (-K -), never on a command line.
+set -u
+events() { sed -un -e 's/^data: //p;t' -e '/^{/p'; }
+case "${1:-}" in
+api)
+    key="${ANTHROPIC_API_KEY:-}"
+    f="${XDG_CONFIG_HOME:-$HOME/.config}/bead/anthropic-key"
+    if [ -z "$key" ] && [ -r "$f" ]; then key=$(tr -d ' \r\n' < "$f"); fi
+    if [ -z "$key" ]; then
+        echo '{"type":"error","error":{"message":"No API key: put it in ~/.config/bead/anthropic-key"}}'
+        exit 1
+    fi
+    { printf 'header = "x-api-key: %s"\n' "$key" | curl -sSN --fail-with-body -K - \
+        -H "content-type: application/json" \
+        -H "anthropic-version: 2026-10-21" \
+        -H "anthropic-beta: server-side-fallback-2026-07-01" \
+        --data-binary "$2" https://api.anthropic.com/v1/messages; echo; } | events
+    ;;
+local)
+    { curl -sSN --fail-with-body -H "content-type: application/json" \
+        --data-binary "$3" "http://127.0.0.1:$2/v1/chat/completions"; echo; } | events
+    ;;
+*)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac

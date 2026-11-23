@@ -16,11 +16,13 @@ Singleton {
     property alias pauseForMedia: a.pauseForMedia   // stay awake while something plays
     // looks
     property alias theme: a.theme                   // "wallpaper" | "sileo"
+    property alias tint: a.tint                     // Tint's strength: "vibrant" | "muted" | "mono"
     property alias showTitle: a.showTitle           // the window title down the bar
     property alias islandScreen: a.islandScreen     // monitor name; "" = $BEAD_ISLAND_SCREEN or DP-1
     // other
     property alias units: a.units                   // "auto" | "celsius" | "fahrenheit"
     property alias askModel: a.askModel             // "sonnet" | "opus" | "haiku"
+    property alias askVia: a.askVia                 // "claude" (Claude Code) | "api" (own key) | "local"
 
     readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || "DP-1"
 
@@ -42,10 +44,12 @@ Singleton {
             property real suspendAfter: 10
             property bool pauseForMedia: true
             property string theme: Quickshell.env("BEAD_THEME") === "sileo" ? "sileo" : "wallpaper"
+            property string tint: "vibrant"
             property bool showTitle: true
             property string islandScreen: ""
             property string units: "auto"
             property string askModel: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
+            property string askVia: "claude"
         }
     }
     // first run: write the defaults once the folder exists

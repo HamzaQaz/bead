@@ -404,37 +404,47 @@ Item {
                 In {
                     order: 1; width: root.colW; height: 44
                     Line {
+                        label: "Tint"
+                        hint: Settings.theme === "sileo" ? "Only with wallpaper colours" : "How much colour to take"
+                        opacity: Settings.theme === "sileo" ? 0.45 : 1
+                        Choice { options: [{ v: "vibrant", t: "Vibrant" }, { v: "muted", t: "Muted" }, { v: "mono", t: "Mono" }]; value: Settings.tint; onChose: v => Settings.tint = v }
+                    }
+                }
+                In {
+                    order: 2; width: root.colW; height: 44
+                    Line {
                         label: "Main monitor"
                         hint: "Island and lock screen"
                         Choice { options: Quickshell.screens.map(s => ({ v: s.name, t: s.name })); value: Settings.home; onChose: v => Settings.islandScreen = v }
                     }
                 }
                 In {
-                    order: 2; width: root.colW; height: 44
+                    order: 3; width: root.colW; height: 44
                     Line { label: "Window title in the bar"; hint: "Down the side, under the workspaces"; Toggle { checked: Settings.showTitle; onToggled: Settings.showTitle = !Settings.showTitle } }
                 }
                 In {
-                    order: 3; width: root.colW; height: 44
+                    order: 4; width: root.colW; height: 44
                     Line { label: "Wallpaper"; hint: "Or pick one on the Wallpapers tab"; Action { text: "Shuffle"; glyph: "shuffle"; onHit: Wallpaper.random("all") } }
                 }
             }
             // the palette in use
             In {
                 visible: root.section === 1
-                order: 4
-                y: 2 * 46 + 22
-                width: rows.width
-                height: 60
+                order: 5
+                x: root.colW + 24
+                y: 2 * 46 + 2
+                width: root.colW
+                height: 44
                 Label { font.pixelSize: 10; text: "Palette" }
                 Row {
-                    y: 20
+                    y: 17
                     spacing: 8
                     Repeater {
                         model: [Theme.tone("action"), Theme.text, Theme.subtext, Theme.frame, Theme.tone("success"), Theme.tone("warning"), Theme.tone("error")]
                         Rectangle {
                             required property var modelData
                             required property int index
-                            width: 34; height: 34; radius: 17
+                            width: 24; height: 24; radius: 12
                             color: modelData
                             border.width: 1
                             border.color: Qt.alpha(Theme.text, 0.12)
@@ -453,13 +463,26 @@ Item {
                 In {
                     order: 0; width: root.colW; height: 44
                     Line {
+                        label: "Pearl answers with"
+                        hint: Settings.askVia === "api" ? "Your key, in ~/.config/bead/anthropic-key"
+                            : Settings.askVia === "local" ? "Offline, small: the voice model"
+                            : "Your Claude Code login"
+                        Choice { options: [{ v: "claude", t: "Claude Code" }, { v: "api", t: "API key" }, { v: "local", t: "Local" }]; value: Settings.askVia; onChose: v => Settings.askVia = v }
+                    }
+                }
+                In {
+                    order: 1; width: root.colW; height: 44
+                    Line {
+                        opacity: Settings.askVia === "local" ? 0.4 : 1
+                        enabled: Settings.askVia !== "local"
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
                         label: "Claude model"
                         hint: "For ? asks and spoken questions"
                         Choice { options: [{ v: "haiku", t: "Haiku" }, { v: "sonnet", t: "Sonnet" }, { v: "opus", t: "Opus" }]; value: Settings.askModel; onChose: v => Settings.askModel = v }
                     }
                 }
                 In {
-                    order: 1; width: root.colW; height: 44
+                    order: 2; width: root.colW; height: 44
                     Line {
                         label: "Voice models"
                         hint: Voice.warm ? (Voice.serverReady ? "Loaded · unload after 4 min idle" : "Loading…") : "Not loaded · start with a voice command"
@@ -467,7 +490,7 @@ Item {
                     }
                 }
                 In {
-                    order: 2; width: root.colW; height: 44
+                    order: 3; width: root.colW; height: 44
                     Line {
                         label: "Voice command"
                         hint: "Hold, speak, let go"
@@ -475,7 +498,7 @@ Item {
                     }
                 }
                 In {
-                    order: 3; width: root.colW; height: 44
+                    order: 4; width: root.colW; height: 44
                     Line {
                         label: "Dictation"
                         hint: "Types into whatever field has focus"
@@ -483,7 +506,7 @@ Item {
                     }
                 }
                 In {
-                    order: 4; width: root.colW; height: 44
+                    order: 5; width: root.colW; height: 44
                     Line {
                         label: "Microphone"
                         hint: Audio.micMuted ? "Muted: voice can't hear you" : "Listening is only ever while you hold the key"

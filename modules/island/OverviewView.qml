@@ -35,14 +35,7 @@ Item {
     property string caption: ""
     readonly property bool multiMonitor: Quickshell.screens.length > 1
     // the wallpaper's still (Caelestia keeps one even for live wallpapers), behind each card
-    property string wallPath: ""
-    FileView {
-        path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/caelestia/wallpaper/path.txt"
-        watchChanges: true
-        printErrors: false
-        onLoaded: root.wallPath = text().trim()
-        onFileChanged: reload()
-    }
+    readonly property string wallPath: Wallpaper.stillPath
     // staggered entrance, replayed on every open
     property real enter: 0
     NumberAnimation { id: enterAnim; target: root; property: "enter"; from: 0; to: 1; duration: 520 }

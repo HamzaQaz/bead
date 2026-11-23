@@ -3,12 +3,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.config
 
 // Wallpapers: stills from ~/Pictures/Wallpapers (bead draws them, see
 // modules/background) and live Wallpaper Engine items from Steam's workshop
 // (played by ~/.local/bin/wallengine through linux-wallpaperengine). Picking
-// either regenerates the colour scheme with `caelestia wallpaper -f`, which
-// bead's Theme and the lock screen read. The choice is kept in
+// either rebuilds the colours with Tint (bin/bead-tint), which bead's Theme
+// reads; Tint also records the wallpaper's still (stillPath) for the lock
+// screen and the overview. The choice is kept in
 // $XDG_STATE_HOME/bead/wallpaper.json and restored when bead starts.
 Singleton {
     id: root
@@ -25,6 +27,39 @@ Singleton {
     property list<var> lives: []   // { id, title, type, preview }
     property bool busy: false
 
+    // the wallpaper as a still image: Tint's record, else Caelestia's
+    readonly property string stillPath: tintPath || caelestiaPath
+    property string tintPath: ""
+    property string caelestiaPath: ""
+    FileView {
+        path: root.stateDir + "/wallpaper-path"
+        watchChanges: true
+        printErrors: false
+        onLoaded: root.tintPath = text().trim()
+        onFileChanged: reload()
+        onLoadFailed: root.tintPath = ""
+    }
+    FileView {
+        path: (Quickshell.env("XDG_STATE_HOME") || root.home + "/.local/state") + "/caelestia/wallpaper/path.txt"
+        watchChanges: true
+        printErrors: false
+        onLoaded: root.caelestiaPath = text().trim()
+        onFileChanged: reload()
+    }
+
+    // ── Tint ──
+    readonly property string tintBin: root.home + "/.local/bin/bead-tint"
+    // a live wallpaper: its captured still if there is one, else the workshop preview
+    function tintLive(id: string): string {
+        return `f="$3/we-$2-live.png"; [ -f "$f" ] || f="$4"; [ -n "$f" ] && "$5" --variant "$6" "$f"`;
+    }
+    function retint(): void {
+        if (kind === "still" && current) start(["sh", "-c", '"$1" --variant "$2" "$3"', "sh", tintBin, Settings.tint, current]);
+        else if (kind === "live" && current)
+            start(["sh", "-c", tintLive(current) + "; exit 0", "sh", "", current, stillDir, lives.find(x => x.id === current)?.preview ?? "", tintBin, Settings.tint]);
+    }
+    Connections { target: Settings; function onTintChanged(): void { root.retint(); } }
+
     // a file:// URL that survives #, ?, % and spaces in names
     function url(path: string): string { return path ? "file://" + path.split("/").map(encodeURIComponent).join("/") : ""; }
 
@@ -32,13 +67,13 @@ Singleton {
 
     function setStill(path: string): void {
         kind = "still"; current = path; save();
-        start(["sh", "-c", '"$1" stop; caelestia wallpaper -f "$2"', "sh", engine, path]);
+        start(["sh", "-c", '"$1" stop; "$3" --variant "$4" "$2"', "sh", engine, path, tintBin, Settings.tint]);
     }
     function setLive(id: string): void {
         kind = "live"; current = id; save();
         // wallengine themes from the workshop preview; a still capture of the
         // live wallpaper (~/Pictures/Wallpapers/we-<id>-live.png) is better
-        start(["sh", "-c", '"$1" "$2"; f="$3/we-$2-live.png"; [ -f "$f" ] && caelestia wallpaper -f "$f"; exit 0', "sh", engine, id, stillDir]);
+        start(["sh", "-c", '"$1" "$2"; ' + tintLive(id) + '; exit 0', "sh", engine, id, stillDir, lives.find(x => x.id === id)?.preview ?? "", tintBin, Settings.tint]);
     }
     function pick(w: var): void { if (w.id) setLive(w.id); else setStill(w.path); }
     function random(which: string): void {
@@ -109,7 +144,10 @@ Singleton {
         if (kind === "still") Quickshell.execDetached([engine, "stop"]);
         else Quickshell.execDetached(["sh", "-c", 'pgrep -x linux-wallpaper >/dev/null || exec "$1"', "sh", engine]);
         if (!kind) adopt.running = true;
+        firstTint.restart();
     }
+    // no Tint colours yet (first run, or coming from Caelestia): make them
+    Timer { id: firstTint; interval: 3000; onTriggered: if (!root.tintPath) root.retint() }
     Process {
         id: adopt
         command: ["cat", root.home + "/.local/state/wallengine-current"]

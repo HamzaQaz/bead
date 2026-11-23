@@ -1,6 +1,6 @@
 //@ pragma UseQApplication
-// bead: a desktop shell built from sileo-style pills, replacing Caelestia one
-// piece at a time. Colours come from Caelestia's wallpaper scheme.
+// bead: a desktop shell for Hyprland built from sileo-style pills. Colours
+// come from the wallpaper (Tint, bin/bead-tint).
 import Quickshell
 import qs.modules.background
 import qs.modules.bar
