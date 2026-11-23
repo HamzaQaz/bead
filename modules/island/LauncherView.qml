@@ -4,6 +4,8 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Networking
+import Quickshell.Bluetooth
 import Quickshell.Io
 import qs.components
 import qs.config
@@ -162,7 +164,20 @@ Item {
         { id: "settings", title: "Settings", sub: "Idle timings, colours, main monitor…", glyph: "settings" },
         { id: "walls", title: "Wallpapers", sub: "Pick one on the dashboard; the colours follow", glyph: "wallpaper" },
         { id: "wallshuffle", title: "Shuffle wallpaper", sub: "Another one at random", glyph: "shuffle" },
-        { id: "awake", title: Idle.keepAwake ? "Stop keeping awake" : "Keep awake", sub: "Don't lock, blank or sleep when idle", glyph: "coffee" }
+        { id: "awake", title: Idle.keepAwake ? "Stop keeping awake" : "Keep awake", sub: "Don't lock, blank or sleep when idle", glyph: "coffee" },
+        // toggles
+        { id: "wifi", title: Networking.wifiEnabled ? "Turn Wi-Fi off" : "Turn Wi-Fi on", sub: "Wi-Fi", glyph: Networking.wifiEnabled ? "wifi_off" : "wifi" },
+        { id: "bt", title: Bluetooth.defaultAdapter?.enabled ? "Turn Bluetooth off" : "Turn Bluetooth on", sub: "Bluetooth", glyph: Bluetooth.defaultAdapter?.enabled ? "bluetooth_disabled" : "bluetooth" },
+        { id: "mute", title: Audio.muted ? "Unmute sound" : "Mute sound", sub: "Output", glyph: Audio.muted ? "volume_up" : "volume_off" },
+        { id: "mic", title: Audio.micMuted ? "Unmute microphone" : "Mute microphone", sub: "Input", glyph: Audio.micMuted ? "mic" : "mic_off" },
+        // capture
+        { id: "shot", title: "Screenshot an area", sub: "Select a region", glyph: "screenshot_region" },
+        { id: "shotscreen", title: "Screenshot the screen", sub: "The focused monitor", glyph: "screenshot_monitor" },
+        { id: "rec", title: Recorder.recording ? "Stop recording" : "Record the screen", sub: Recorder.recording ? Recorder.label : "Without sound", glyph: Recorder.recording ? "stop_circle" : "screen_record" },
+        { id: "pick", title: "Pick a colour", sub: "Copies its hex", glyph: "colorize" },
+        // bead and the vault
+        { id: "restart", title: "Restart bead", sub: "Behind a still, so nothing flashes", glyph: "restart_alt" },
+        { id: "vault", title: "Open the vault", sub: "Obsidian · brain", glyph: "book_2" }
     ]
     function runAction(a: var): void {
         if (a.op) {
@@ -185,9 +200,22 @@ Item {
         case "settings": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "6"]); break;
         case "wallshuffle": Wallpaper.random("all"); break;
         case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
+        case "wifi": Networking.wifiEnabled = !Networking.wifiEnabled; break;
+        case "bt": if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled; break;
+        case "mute": Audio.toggleMute(); break;
+        case "mic": Audio.toggleMicMute(); break;
+        // after the island has closed, so it isn't in the picture
+        case "shot": later(() => Capture.shot("area")); break;
+        case "shotscreen": later(() => Capture.shot("screen")); break;
+        case "rec": if (Recorder.recording) Recorder.stop(); else later(() => Capture.record("screen", false)); break;
+        case "pick": later(() => Capture.pickColour()); break;
+        case "restart": Quickshell.execDetached(["bead", "restart"]); break;
+        case "vault": Quickshell.execDetached(["xdg-open", "obsidian://open?vault=brain"]); break;
         default: Session.run(a);
         }
     }
+    Timer { id: laterTimer; interval: 450; property var fn: null; onTriggered: if (fn) fn() }
+    function later(fn: var): void { laterTimer.fn = fn; laterTimer.restart(); }
     Process { id: islandToggle; command: ["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "island", "toggle"] }
 
     // ── results ──
