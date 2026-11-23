@@ -71,7 +71,10 @@ Item {
         height: parent.height - y
         flow: GridView.FlowTopToBottom
         cellHeight: height / 2
-        cellWidth: Math.round(cellHeight * 16 / 9) + 2
+        // whole columns only: as many ~16:9 columns as fit, sharing the width
+        // exactly, so no column is ever cut at an edge
+        readonly property int cols: Math.max(1, Math.round(width / (cellHeight * 16 / 9 + 2)))
+        cellWidth: width / cols
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: root.shown
@@ -80,14 +83,25 @@ Item {
         function showCurrent(): void {
             const i = root.shown.findIndex(w => Wallpaper.isCurrent(w));
             if (i >= 0) positionViewAtIndex(i, GridView.Center);
+            contentX = snapped(contentX);
         }
+        function snapped(x: real): real {
+            const max = Math.max(0, contentWidth - width);
+            return Math.max(0, Math.min(max, Math.round(x / cellWidth) * cellWidth));
+        }
+        // a flick or drag settles on a whole column
+        onMovementEnded: { slide.to = snapped(contentX); slide.restart(); }
+        NumberAnimation { id: slide; target: grid; property: "contentX"; duration: 220; easing.type: Easing.OutCubic }
         onCountChanged: showCurrent()
         onVisibleChanged: if (visible) showCurrent()
 
         WheelHandler {
             onWheel: e => {
+                // a column per notch
                 const d = e.angleDelta.y || e.angleDelta.x;
-                grid.contentX = Math.max(0, Math.min(grid.contentWidth - grid.width, grid.contentX - d));
+                const from = slide.running ? slide.to : grid.contentX;
+                slide.to = grid.snapped(from + (d > 0 ? -1 : 1) * grid.cellWidth);
+                slide.restart();
             }
         }
 
