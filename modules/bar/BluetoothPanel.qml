@@ -8,7 +8,7 @@ import qs.config
 // Bluetooth: on/off, scanning, devices (connected, then paired, then nearby
 // ones with a name). Click connects / disconnects; a new device pairs, is
 // trusted and connects.
-Column {
+PanelColumn {
     id: root
     property bool active: false // shown: scan while open
     width: 272

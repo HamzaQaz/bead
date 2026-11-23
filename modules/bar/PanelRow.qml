@@ -24,6 +24,9 @@ Rectangle {
     color: lit ? Qt.alpha(Theme.tone("action"), ma.containsMouse ? 0.24 : 0.16)
         : Qt.alpha(Theme.text, ma.containsMouse ? 0.07 : 0)
     Behavior on color { ColorAnimation { duration: 150 } }
+    // press: the row gives a little; release springs it back
+    scale: ma.pressed ? 0.97 : 1
+    Behavior on scale { SpringAnimation { spring: 6; damping: 0.32; epsilon: 0.002 } }
 
     MouseArea {
         id: ma
@@ -40,6 +43,14 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         width: 28; height: 28; radius: 14
         color: row.lit ? Qt.alpha(Theme.tone("action"), 0.2) : Qt.alpha(Theme.text, 0.06)
+        Behavior on color { ColorAnimation { duration: 200 } }
+        // turning on (connected, playing…): the badge pops
+        SequentialAnimation {
+            id: pop
+            NumberAnimation { target: badge; property: "scale"; to: 1.22; duration: 120; easing.type: Easing.OutQuad }
+            NumberAnimation { target: badge; property: "scale"; to: 1; duration: 340; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+        }
+        Connections { target: row; function onLitChanged() { if (row.lit) pop.restart(); } }
         Icon {
             anchors.centerIn: parent
             visible: !row.image

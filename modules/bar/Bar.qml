@@ -218,6 +218,7 @@ Scope {
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
                 readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel, battery: batteryPanel })[win.shownPanel] ?? trayPanel
+                panel: cur
                 contentW: cur.width
                 contentH: cur.implicitHeight
                 Keys.onEscapePressed: win.panel = ""

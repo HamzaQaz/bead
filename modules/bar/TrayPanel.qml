@@ -8,7 +8,7 @@ import qs.services
 
 // Every tray app. Click opens it, right click its menu, the pin keeps it in
 // the bar.
-Column {
+PanelColumn {
     id: root
     width: 248
     spacing: 4

@@ -8,7 +8,7 @@ import qs.config
 // Wi-Fi: on/off, the networks in range (connected, then known, then by
 // signal). Click to connect or disconnect; a secured network you haven't
 // joined asks for its password inline.
-Column {
+PanelColumn {
     id: root
     property bool active: false // shown: scan while open
     width: 272

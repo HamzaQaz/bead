@@ -8,10 +8,10 @@ import qs.components
 import qs.config
 import qs.services
 
-// Utilities: screenshots (area, window, screen) with the latest few to
-// reopen, screen recording (screen or area, optionally with sound; stop while
-// running), and quick toggles: do not disturb, keep awake, mic, colour picker.
-Column {
+// Utilities: capture (a screenshot, a video or a GIF of an area, a window or
+// the screen; the latest screenshots to reopen; stop a running recording) and
+// a row of quick toggles: do not disturb, keep awake, mic, colour picker.
+PanelColumn {
     id: root
     property bool active: false
     signal done()   // close the panel (before a capture)
@@ -54,20 +54,136 @@ Column {
         }
         MouseArea { id: tma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: tile.hit() }
     }
-    component Section: Label {
-        x: 4
-        topPadding: 4
-        font.pixelSize: 11
-        font.weight: Font.DemiBold
-        font.capitalization: Font.AllUppercase
-        font.letterSpacing: 0.6
+    // what a capture makes; remembered while bead runs
+    property string kind: "shot" // shot | video | gif
+
+    // a small pill toggle for the quick row
+    component Chip: Rectangle {
+        id: chip
+        property string glyph: ""
+        property string label: ""
+        property bool on: false
+        signal hit()
+        height: 34
+        radius: 17
+        color: on ? Theme.tone("action") : Qt.alpha(Theme.text, cma.pressed ? 0.15 : cma.containsMouse ? 0.1 : 0.055)
+        scale: cma.pressed ? 0.94 : 1
+        Behavior on color { ColorAnimation { duration: 160 } }
+        Behavior on scale { SpringAnimation { spring: 6; damping: 0.3 } }
+        Row {
+            anchors.centerIn: parent
+            spacing: 5
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: chip.glyph
+                size: 16
+                fill: chip.on ? 1 : 0
+                color: chip.on ? Theme.frame : Theme.text
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                font.family: Theme.font
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+                color: chip.on ? Theme.frame : Theme.subtext
+                text: chip.label
+            }
+        }
+        MouseArea { id: cma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: chip.hit() }
     }
 
-    PanelHeader { icon: "widgets"; title: "Utilities" }
+    PanelHeader {
+        icon: "widgets"
+        title: "Utilities"
+        // video only: record what's playing too
+        Rectangle {
+            visible: root.kind === "video" && !Recorder.recording
+            width: 30; height: 30; radius: 15
+            color: Capture.withSound ? Qt.alpha(Theme.tone("action"), 0.2) : Qt.alpha(Theme.text, sma.containsMouse ? 0.1 : 0.055)
+            Behavior on color { ColorAnimation { duration: 160 } }
+            Icon {
+                anchors.centerIn: parent
+                name: Capture.withSound ? "volume_up" : "volume_off"
+                size: 16
+                fill: 1
+                color: Capture.withSound ? Theme.tone("action") : Theme.subtext
+            }
+            MouseArea { id: sma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Capture.withSound = !Capture.withSound }
+        }
+    }
 
-    // ── screenshot ──
-    Section { text: "Screenshot" }
+    // ── a recording running: one big stop ──
+    Tile {
+        visible: Recorder.recording
+        width: root.width
+        height: 52
+        on: true
+        tone: Theme.tone("error")
+        glyph: "stop_circle"
+        label: "Stop recording · " + Recorder.label
+        onHit: Recorder.stop()
+    }
+
+    // ── capture: what (shot / video / GIF), then where ──
+    Rectangle {
+        visible: !Recorder.recording
+        width: root.width
+        height: 34
+        radius: 17
+        color: Qt.alpha(Theme.text, 0.055)
+        readonly property var kinds: [{ k: "shot", t: "Screenshot", g: "photo_camera" }, { k: "video", t: "Video", g: "videocam" }, { k: "gif", t: "GIF", g: "gif_box" }]
+        // the lit segment slides between choices
+        Rectangle {
+            id: seg
+            readonly property int i: Math.max(0, parent.kinds.findIndex(o => o.k === root.kind))
+            x: 3 + i * (parent.width - 6) / 3
+            y: 3
+            width: (parent.width - 6) / 3
+            height: parent.height - 6
+            radius: height / 2
+            color: Theme.tone("action")
+            Behavior on x { SpringAnimation { spring: 4.5; damping: 0.32; epsilon: 0.2 } }
+        }
+        Row {
+            x: 3
+            y: 3
+            Repeater {
+                model: parent.parent.kinds
+                Item {
+                    id: kb
+                    required property var modelData
+                    required property int index
+                    readonly property bool on: root.kind === modelData.k
+                    width: (root.width - 6) / 3
+                    height: 28
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 5
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: kb.modelData.g
+                            size: 15
+                            fill: kb.on ? 1 : 0
+                            color: kb.on ? Theme.frame : Theme.subtext
+                            Behavior on color { ColorAnimation { duration: 160 } }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                            color: kb.on ? Theme.frame : Theme.subtext
+                            Behavior on color { ColorAnimation { duration: 160 } }
+                            text: kb.modelData.t
+                        }
+                    }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.kind = kb.modelData.k }
+                }
+            }
+        }
+    }
     Row {
+        visible: !Recorder.recording
         width: root.width
         spacing: 8
         Repeater {
@@ -79,13 +195,18 @@ Column {
             Tile {
                 required property var modelData
                 width: (root.width - 16) / 3
+                height: 58
                 glyph: modelData.g
                 label: modelData.t
-                onHit: { root.done(); Capture.shot(modelData.m); }
+                onHit: {
+                    root.done();
+                    if (root.kind === "shot") Capture.shot(modelData.m);
+                    else Capture.record(modelData.m, root.kind === "video" ? undefined : false, root.kind === "gif");
+                }
             }
         }
     }
-    // the latest few: click to edit
+    // screenshots only: the latest few, click to edit
     FolderListModel {
         id: shots
         folder: "file://" + (Quickshell.env("XDG_PICTURES_DIR") || Quickshell.env("HOME") + "/Pictures") + "/Screenshots"
@@ -94,7 +215,7 @@ Column {
         showDirs: false
     }
     Row {
-        visible: shots.count > 0
+        visible: shots.count > 0 && root.kind === "shot" && !Recorder.recording
         width: root.width
         spacing: 8
         Repeater {
@@ -143,41 +264,15 @@ Column {
         }
     }
 
-    // ── record ──
-    Section { text: "Record" }
-    Tile {
-        visible: Recorder.recording
-        width: root.width
-        height: 52
-        on: true
-        tone: Theme.tone("error")
-        glyph: "stop_circle"
-        label: "Stop recording · " + Recorder.label
-        onHit: Recorder.stop()
-    }
+    // ── quick toggles: one compact row ──
+    Rectangle { width: root.width; height: 1; color: Qt.alpha(Theme.text, 0.08) }
     Row {
-        visible: !Recorder.recording
         width: root.width
-        spacing: 8
-        Tile { width: (root.width - 16) / 3; glyph: "screen_record"; label: "Screen"; onHit: { root.done(); Capture.record("screen"); } }
-        Tile { width: (root.width - 16) / 3; glyph: "crop_free"; label: "Area"; onHit: { root.done(); Capture.record("area"); } }
-        Tile {
-            width: (root.width - 16) / 3
-            glyph: Capture.withSound ? "volume_up" : "volume_off"
-            label: "Sound"
-            on: Capture.withSound
-            onHit: Capture.withSound = !Capture.withSound
-        }
-    }
-
-    // ── quick toggles ──
-    Section { text: "Quick" }
-    Grid {
-        columns: 4
-        spacing: 8
-        Tile { width: (root.width - 24) / 4; glyph: "do_not_disturb_on"; label: "Quiet"; on: Notifs.dnd; onHit: Notifs.dnd = !Notifs.dnd }
-        Tile { width: (root.width - 24) / 4; glyph: "coffee"; label: "Awake"; on: Idle.keepAwake; onHit: Idle.keepAwake = !Idle.keepAwake }
-        Tile { width: (root.width - 24) / 4; glyph: Audio.micMuted ? "mic_off" : "mic"; label: "Mic"; on: !Audio.micMuted; onHit: Audio.toggleMicMute() }
-        Tile { width: (root.width - 24) / 4; glyph: "colorize"; label: "Picker"; onHit: { root.done(); Capture.pickColour(); } }
+        spacing: 6
+        readonly property real w: (root.width - 18) / 4
+        Chip { width: parent.w; glyph: "do_not_disturb_on"; label: "Quiet"; on: Notifs.dnd; onHit: Notifs.dnd = !Notifs.dnd }
+        Chip { width: parent.w; glyph: "coffee"; label: "Awake"; on: Idle.keepAwake; onHit: Idle.keepAwake = !Idle.keepAwake }
+        Chip { width: parent.w; glyph: Audio.micMuted ? "mic_off" : "mic"; label: "Mic"; on: !Audio.micMuted; onHit: Audio.toggleMicMute() }
+        Chip { width: parent.w; glyph: "colorize"; label: "Pick"; onHit: { root.done(); Capture.pickColour(); } }
     }
 }

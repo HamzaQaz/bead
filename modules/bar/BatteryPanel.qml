@@ -7,7 +7,7 @@ import qs.services
 
 // Wireless devices' batteries (UPower): one row each with its level, state and
 // a small gauge. Opened from the side bar's battery button.
-Column {
+PanelColumn {
     id: root
     width: 292
     spacing: 6

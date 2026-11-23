@@ -9,7 +9,7 @@ import qs.services
 
 // Sound: output and mic level (click the icon to mute, scroll anywhere on a
 // slider), which device plays and which records, and a level per app.
-Column {
+PanelColumn {
     id: root
     width: 292
     spacing: 8

@@ -8,7 +8,7 @@ import qs.services
 // The power button's panel: who and how long up, then lock, suspend, log out,
 // reboot, shut down. The last three ask for a second click (it lights red and
 // counts down 4 s before giving up).
-Column {
+PanelColumn {
     id: root
     property bool active: false
     signal done()

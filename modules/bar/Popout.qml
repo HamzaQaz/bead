@@ -31,6 +31,41 @@ Item {
     readonly property real topExt: dockTop ? 0 : r
     readonly property real botExt: dockBottom ? 0 : r
 
+    // the panel showing (set by the bar): its lines slide up into place one
+    // after another when it opens or another panel takes its place
+    property Item panel: null
+    // a frame later: until the popout shows, every child reads as invisible
+    onPanelChanged: if (open) staggerSoon.restart()
+    onOpenChanged: if (open) staggerSoon.restart()
+    Timer { id: staggerSoon; interval: 40; onTriggered: root.stagger() }
+    Component { id: slideC; Translate {} }
+    Component {
+        id: slideAnimC
+        SequentialAnimation {
+            id: sa
+            property Translate t
+            property int delay
+            PauseAnimation { duration: sa.delay }
+            NumberAnimation { target: sa.t; property: "y"; to: 0; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 1.2 }
+            onFinished: destroy()
+        }
+    }
+    function stagger(): void {
+        const p = panel;
+        if (!p) return;
+        let n = 0;
+        for (let i = 0; i < p.children.length; i++) {
+            const c = p.children[i];
+            if (!c.visible || c.height <= 0 || c.transform === undefined) continue;
+            let t = null;
+            for (let j = 0; j < c.transform.length; j++) if (c.transform[j].objectName === "slide") t = c.transform[j];
+            if (!t) { t = slideC.createObject(c, { objectName: "slide" }); c.transform = [t]; }
+            t.y = 14 + Math.min(n, 8) * 2;
+            slideAnimC.createObject(root, { t: t, delay: Math.min(n, 10) * 28 }).start();
+            n++;
+        }
+    }
+
     property real progress: open ? 1 : 0
     Behavior on progress { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
 
