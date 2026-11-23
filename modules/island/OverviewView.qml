@@ -17,9 +17,15 @@ Item {
     id: root
     signal close()
 
-    readonly property real cardW: 236
     readonly property real gap: 12
     readonly property real pad: 18
+    // the island's window clips: stay inside it (passed in). Cards shrink to fit
+    // every workspace in view (to 150; past that the strip scrolls)
+    property real maxW: 940
+    readonly property real cardW: {
+        const n = Math.max(1, spaces.length);
+        return Math.round(Math.max(150, Math.min(236, (maxW - pad * 2 - (n - 1) * gap) / n)));
+    }
     // workspaces that have windows, plus the one you're on; special ones left out
     readonly property list<var> spaces: Hyprland.workspaces.values
         .filter(w => w.id > 0 && (w.toplevels.values.length > 0 || w.focused))
@@ -45,7 +51,7 @@ Item {
         for (const w of spaces) { const m = mon(w); if (m.w > 0) r = Math.max(r, m.h / m.w); }
         return Math.round(cardW * Math.min(r, 0.75));
     }
-    readonly property real wantW: Math.min(pad * 2 + spaces.length * cardW + Math.max(0, spaces.length - 1) * gap, 1500)
+    readonly property real wantW: Math.min(pad * 2 + spaces.length * cardW + Math.max(0, spaces.length - 1) * gap, maxW)
     readonly property real wantH: pad + 22 + 8 + cardH + 10 + 18 + pad
 
     // a workspace's monitor, in logical pixels

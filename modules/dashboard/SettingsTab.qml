@@ -204,7 +204,7 @@ Row {
         }
         Line {
             label: "Claude model"
-            hint: "For ? in the launcher"
+            hint: "Launcher ? asks"
             Choice {
                 options: [{ v: "haiku", t: "Haiku" }, { v: "sonnet", t: "Sonnet" }, { v: "opus", t: "Opus" }]
                 value: Settings.askModel

@@ -1046,6 +1046,7 @@ Scope {
                 // ── workspace overview ──
                 OverviewView {
                     id: overviewView
+                    maxW: win.width - 40
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: wantW
                     height: wantH

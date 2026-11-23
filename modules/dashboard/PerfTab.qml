@@ -26,11 +26,14 @@ Row {
         Behavior on shown { SpringAnimation { spring: 3; damping: 0.32; epsilon: 0.001 } }
         readonly property color tone: v > 0.85 ? Theme.tone("error") : Theme.tone("action")
 
+        // dial and labels as one group, centred in the card
+        Column {
+            anchors.centerIn: parent
+            spacing: 14
         Item {
             id: dial
-            width: 96; height: 96
+            width: 112; height: 112
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 20
             Shape {
                 anchors.fill: parent
                 preferredRendererType: Shape.CurveRenderer
@@ -39,21 +42,21 @@ Row {
                     strokeWidth: 9
                     fillColor: "transparent"
                     capStyle: ShapePath.RoundCap
-                    PathAngleArc { centerX: 48; centerY: 48; radiusX: 42; radiusY: 42; startAngle: 135; sweepAngle: 270 }
+                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 50; radiusY: 50; startAngle: 135; sweepAngle: 270 }
                 }
                 ShapePath {
                     strokeColor: ring.tone
                     strokeWidth: 9
                     fillColor: "transparent"
                     capStyle: ShapePath.RoundCap
-                    PathAngleArc { centerX: 48; centerY: 48; radiusX: 42; radiusY: 42; startAngle: 135; sweepAngle: Math.max(0.5, 270 * ring.shown) }
+                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 50; radiusY: 50; startAngle: 135; sweepAngle: Math.max(0.5, 270 * ring.shown) }
                 }
             }
             Text {
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: -2
                 font.family: Theme.font
-                font.pixelSize: 20
+                font.pixelSize: 22
                 font.weight: Font.DemiBold
                 font.features: { "tnum": 1 }
                 color: Theme.text
@@ -71,8 +74,6 @@ Row {
         }
         Column {
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 18
             spacing: 2
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -88,6 +89,7 @@ Row {
                 font.features: { "tnum": 1 }
                 text: ring.sub
             }
+        }
         }
     }
 
