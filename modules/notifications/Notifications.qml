@@ -253,7 +253,7 @@ Scope {
                     onClicked: {
                         if (spec && buttons.length > 0) return; // answer with a button
                         if (notif) Notifs.invoke(modelData.key, "default");
-                        dismiss("dismissed");
+                        dismiss(spec ? "clicked" : "dismissed"); // toast --wait exits 0 on a click
                     }
                     onAnswered: id => {
                         if (id === "__reply") { pill.startReply(); return; }
