@@ -5,5 +5,9 @@ import Quickshell
 import qs.modules.notifications
 
 ShellRoot {
+    // Live reloads break module imports and icon loading mid-session, and would
+    // drop the notification name; `make install` restarts bead instead.
+    settings.watchFiles: false
+
     Notifications {}
 }

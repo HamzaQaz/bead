@@ -29,7 +29,8 @@ Singleton {
     readonly property var tones: ({
         success: c("success", "#3ac530"), loading: c("outline", "#737373"), error: c("error", "#fb2c36"),
         warning: c("term2", "#f0b100"), info: c("tertiary", "#00a6f4"),
-        action: c("primary", "#2b7fff"), notify: c("primary", "#2b7fff")
+        action: c("primary", "#2b7fff"), notify: c("primary", "#2b7fff"),
+        confirm: c("primary", "#2b7fff"), choose: c("primary", "#2b7fff")
     })
     function tone(kind: string): color { return tones[kind] || tones.info; }
 

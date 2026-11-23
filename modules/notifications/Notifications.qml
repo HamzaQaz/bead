@@ -3,11 +3,15 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import qs.components
 import qs.config
 
+// Also shows `toast` CLI toasts (IPC target "toast"), e.g. Claude Code prompts:
+// they join the same stack, and questions stay pinned open at the top.
+//
 // The desktop notification server (org.freedesktop.Notifications), shown as a
 // stack of sileo pills that grow out of the right edge of Caelestia's screen
 // frame, top-right of the focused monitor.
@@ -34,6 +38,7 @@ Scope {
             image: n.image,
             appIcon: n.appIcon,
             urgency: n.urgency,
+            sticky: n.urgency === NotificationUrgency.Critical,
             timeout: n.expireTimeout,
             actions: n.actions.map(a => ({ id: a.identifier, label: a.text }))
         };
@@ -43,7 +48,51 @@ Scope {
     readonly property int maxShown: 4
     function trim(): void {
         for (const c of stack.children)
-            if (c.pillRect !== undefined && c.index >= maxShown) c.dismiss("timeout");
+            if (c.pillRect !== undefined && c.index >= maxShown && !c.sticky) c.dismiss("timeout");
+    }
+
+    // Newest first, but interactive ones (questions, prompts) stay above the rest.
+    function add(entry: var): void {
+        if (popups.length === 0) win.held = win.focused; // stay put while shown
+        const pinned = popups.filter(p => p.sticky);
+        const rest = popups.filter(p => !p.sticky);
+        popups = entry.sticky ? [entry, ...pinned, ...rest] : [...pinned, entry, ...rest];
+        Qt.callLater(trim);
+    }
+
+    // ── toasts from the `toast` CLI ──
+    // push(spec JSON) puts one in the stack; the outcome (button id, "dismissed",
+    // "timeout") is written to $XDG_RUNTIME_DIR/bead/toast/<id>.result.
+    readonly property string toastDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/bead/toast"
+    property var reported: ({})
+    function report(id: string, name: string, text: string): void {
+        if (name === "result") {
+            if (reported[id]) return;
+            reported[id] = true;
+        }
+        writer.createObject(root, { path: toastDir + "/" + id + "." + name, text: text });
+    }
+    Component {
+        id: writer
+        Process {
+            property string path
+            property string text
+            command: ["sh", "-c", 'mkdir -p "${1%/*}" && printf %s "$2" > "$1.tmp" && mv "$1.tmp" "$1"', "sh", path, text]
+            running: true
+            onExited: destroy()
+        }
+    }
+    IpcHandler {
+        target: "toast"
+        function push(spec: string): string {
+            let s;
+            try { s = JSON.parse(spec); } catch (e) { return "error: bad json"; }
+            s.id = String(s.id || Date.now());
+            const interactive = s.type === "confirm" || s.type === "choose" || s.type === "loading";
+            root.add({ key: ++root.serial, spec: s, sticky: interactive || s.duration === 0 });
+            return s.id;
+        }
+        function ping(): string { return "pong"; }
     }
 
     function remove(key: int): void {
@@ -62,9 +111,7 @@ Scope {
 
         onNotification: n => {
             n.tracked = true;
-            if (root.popups.length === 0) win.held = win.focused; // stay put while shown
-            root.popups = [root.snapshot(n), ...root.popups];
-            Qt.callLater(root.trim);
+            root.add(root.snapshot(n));
         }
     }
 
@@ -143,25 +190,34 @@ Scope {
 
                     required property var modelData
                     required property int index
-                    readonly property Notification notif: modelData.notif
+                    readonly property Notification notif: modelData.notif ?? null
+                    readonly property var spec: modelData.spec ?? null // a `toast` CLI toast
                     property Region hitRegion: Region { item: pill.hitItem }
 
-                    kind: modelData.urgency === NotificationUrgency.Critical ? "error" : "notify"
-                    title: modelData.summary || modelData.appName || "Notification"
-                    desc: modelData.body
-                    iconSource: modelData.image ? modelData.image
+                    readonly property bool critical: !spec && modelData.urgency === NotificationUrgency.Critical
+                    readonly property string icon: spec?.icon ?? ""
+                    readonly property bool iconIsPath: icon.startsWith("/") || /\.(svg|png|jpe?g|webp)$/i.test(icon)
+
+                    kind: spec ? spec.type : critical ? "error" : "notify"
+                    title: spec ? spec.title : modelData.summary || modelData.appName || "Notification"
+                    desc: spec ? spec.desc ?? "" : modelData.body
+                    iconSource: spec ? (iconIsPath ? "file://" + icon : "")
+                        : modelData.image ? modelData.image
                         : modelData.appIcon ? Quickshell.iconPath(modelData.appIcon, true) : ""
-                    buttons: modelData.actions.filter(a => a.id !== "default" && a.label)
-                    duration: modelData.urgency === NotificationUrgency.Critical ? 0
+                    iconGlyph: spec && !iconIsPath ? icon : ""
+                    buttons: spec ? spec.buttons ?? []
+                        : modelData.actions.filter(a => a.id !== "default" && a.label)
+                    duration: spec ? spec.duration ?? 6000 : critical ? 0
                         : modelData.timeout > 0 ? modelData.timeout : 6000
-                    sticky: modelData.urgency === NotificationUrgency.Critical
+                    sticky: modelData.sticky
+                    autopilot: spec ? spec.autopilot !== false : true
                     align: "right"
                     edge: true
                     drawShape: false // the blob above draws it
                     gap: 6           // close enough to melt into each other
                     calm: true
-                    autoExpand: index === 0 // only the newest opens by itself
-                    compact: index > 0      // older ones are just their icon
+                    autoExpand: index === 0 || sticky // only the newest opens by itself
+                    compact: index > 0 && !sticky      // older ones are just their icon
                     wallW: win.wallW
                     fill: Theme.frame
 
@@ -182,12 +238,36 @@ Scope {
                     }
 
                     onClicked: {
+                        if (spec && buttons.length > 0) return; // answer with a button
                         const def = notif?.actions.find(a => a.identifier === "default");
                         if (def) def.invoke();
                         dismiss("dismissed");
                     }
-                    onAnswered: id => notif?.actions.find(a => a.identifier === id)?.invoke()
+                    onAnswered: id => {
+                        if (spec) root.report(spec.id, "result", id);
+                        else notif?.actions.find(a => a.identifier === id)?.invoke();
+                    }
+                    // promise toasts: the CLI rewrites this file when its command ends
+                    FileView {
+                        path: pill.spec?.state ?? ""
+                        watchChanges: path !== ""
+                        printErrors: false
+                        onFileChanged: reload()
+                        onLoaded: pill.applyState(text())
+                    }
+                    function applyState(t: string): void {
+                        if (!t || !t.trim()) return;
+                        let u;
+                        try { u = JSON.parse(t); } catch (e) { return; }
+                        if (u.type) kind = u.type;
+                        if (u.title !== undefined) title = u.title;
+                        if (u.desc !== undefined) desc = u.desc;
+                        if (u.duration !== undefined) duration = u.duration;
+                        root.report(spec.id, "ack", "1");
+                        refresh();
+                    }
                     onFinished: reason => {
+                        if (spec) root.report(spec.id, "result", reason);
                         if (notif) {
                             if (reason === "timeout") notif.expire();
                             else if (reason !== "closed") notif.dismiss();
