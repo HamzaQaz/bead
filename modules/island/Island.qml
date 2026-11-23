@@ -385,7 +385,10 @@ Scope {
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
             readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard ? "media" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
             onStateChanged: {
-                if (state === "tucked") tuckW = sw.value; // see tuckW
+                // see tuckW: keep a small state's width; a big one (dashboard,
+                // launcher…) tucks at the resting width, not as a wide strip
+                if (state === "tucked") tuckW = prevState === "activity" || prevState === "rest" ? sw.value : restW;
+                prevState = state;
                 if (state === "launcher") { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; grabTimer.restart(); }
                 else if (state === "overview") { overviewView.reset(); grabTimer.restart(); }
                 else { grabTimer.stop(); grabbing = false; }
@@ -497,6 +500,7 @@ Scope {
             // tucking keeps the width it had, so it only retracts upwards (it used to
             // take the resting width and spread out on its way up)
             property real tuckW: restW
+            property string prevState: "rest"
             Spring {
                 id: sw
                 to: win.state === "passkey" ? passkeyView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
@@ -1028,6 +1032,7 @@ Scope {
                     height: wantH
                     player: root.player
                     active: win.state === "media"
+                    pointerIn: win.pointerIn
                     opacity: active ? 1 : 0
                     visible: opacity > 0.01
                     SwapFade on opacity {}

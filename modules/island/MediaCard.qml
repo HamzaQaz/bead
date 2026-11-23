@@ -18,20 +18,20 @@ Item {
     readonly property real wantW: 460
     readonly property real wantH: 84
 
-    // resting still on the music (art, title, artist) goes on to the
-    // dashboard; the controls and the bar never do. Clicking it does at once
-    Item {
-        id: music
-        width: controls.x - 6
-        height: bar.y - 6
-        HoverHandler {
-            id: musicHover
-            onHoveredChanged: hovered ? still.restart() : still.stop()
-            onPointChanged: if (hovered) still.restart() // moved: start counting again
-        }
-        TapHandler { onTapped: root.expand() }
+    // the island is hovered (passed in): after a moment the card goes on to the
+    // dashboard, but never while you're using the controls or the seek bar
+    property bool pointerIn: false
+    readonly property bool usingControls: controlsHover.hovered || seekHover.hovered || seek.pressed
+    Timer {
+        interval: 800
+        running: root.active && root.pointerIn && !root.usingControls // restarts when you leave them
+        onTriggered: root.expand()
     }
-    Timer { id: still; interval: 800; onTriggered: if (musicHover.hovered && root.active) root.expand() }
+    MouseArea { // clicking the card itself: at once
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.expand()
+    }
 
     Art {
         id: art
@@ -63,6 +63,7 @@ Item {
     }
     Row {
         id: controls
+        HoverHandler { id: controlsHover }
         anchors.right: parent.right
         anchors.rightMargin: 14
         y: 18
@@ -133,6 +134,7 @@ Item {
         radius: height / 2
         color: Qt.alpha(Theme.text, 0.12)
         Behavior on height { NumberAnimation { duration: 120 } }
+        HoverHandler { id: seekHover; margin: 10 }
         Rectangle {
             height: parent.height
             radius: parent.radius
