@@ -383,7 +383,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard ? "media" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
             onStateChanged: {
                 if (state === "tucked") tuckW = sw.value; // see tuckW
                 if (state === "launcher") { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; grabTimer.restart(); }
@@ -430,14 +430,25 @@ Scope {
             onOpenChanged: root.openCount += open ? 1 : -1
 
             // hover a moment before it grows (passing by doesn't open it)
-            Timer { id: openTimer; interval: 220; onTriggered: win.expanded = true }
+            // while something plays, hover first grows the media card; staying on
+            // (or clicking it) goes on to the dashboard
+            property bool mediaCard: false
+            Timer {
+                id: openTimer
+                interval: 220
+                onTriggered: {
+                    if (root.playing) win.mediaCard = true; // the card opens the dashboard itself
+                    else win.expanded = true;
+                }
+            }
             Timer {
                 id: leaveTimer
                 interval: 300
                 onTriggered: {
                     win.hovered = false;
-                    if (win.expanded) win.closedAt = Date.now();
+                    if (win.expanded || win.mediaCard) win.closedAt = Date.now();
                     win.expanded = false;
+                    win.mediaCard = false;
                     if (!activityTimer.running && win.showsActivity) root.activity = "";
                 }
             }
@@ -488,13 +499,13 @@ Scope {
             property real tuckW: restW
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "passkey" ? passkeyView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
                     : win.state === "activity" ? (root.activity === "notif" ? 58 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
@@ -1007,6 +1018,20 @@ Scope {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: win.state === "launcher" ? 240 : 110 } }
                     onClose: root.launcherOpen = false
+                }
+
+                // ── media card (hover while playing) ──
+                MediaCard {
+                    id: mediaView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    player: root.player
+                    active: win.state === "media"
+                    opacity: active ? 1 : 0
+                    visible: opacity > 0.01
+                    SwapFade on opacity {}
+                    onExpand: win.expanded = true
                 }
 
                 // ── workspace overview ──
