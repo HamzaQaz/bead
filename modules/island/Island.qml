@@ -396,6 +396,19 @@ Scope {
                 onCleared: if (win.grabbing) { win.grabbing = false; root.launcherOpen = false; }
             }
             readonly property bool showMedia: root.playing && (root.peek || hovered)
+            // clock ↔ track: fade the old one out, swap at the low point, let the
+            // pill reshape, then fade the new one in (a cut used to jump, and the
+            // wider row spilled past the pill while it caught up)
+            property bool mediaShown: showMedia
+            property real mediaSwapOp: 1
+            onShowMediaChanged: { mediaSwap.stop(); mediaSwap.start(); }
+            SequentialAnimation {
+                id: mediaSwap
+                NumberAnimation { target: win; property: "mediaSwapOp"; to: 0; duration: 110; easing.type: Easing.OutCubic }
+                ScriptAction { script: win.mediaShown = win.showMedia }
+                PauseAnimation { duration: 140 }
+                NumberAnimation { target: win; property: "mediaSwapOp"; to: 1; duration: 220; easing.type: Easing.OutCubic }
+            }
             onOpenChanged: root.openCount += open ? 1 : -1
 
             // hover a moment before it grows (passing by doesn't open it)
@@ -678,13 +691,15 @@ Scope {
 
                     // playing: art, title, a little equaliser
                     Art {
-                        visible: win.showMedia
+                        visible: win.mediaShown
+                        opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         width: 22; height: 22; radius: 7
                         source: root.player?.trackArtUrl ?? ""
                     }
                     Text {
-                        visible: win.showMedia
+                        visible: win.mediaShown
+                        opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.min(implicitWidth, 190)
                         elide: Text.ElideRight
@@ -723,7 +738,8 @@ Scope {
 
                     // idle: time and weather
                     Text {
-                        visible: !win.showMedia
+                        visible: !win.mediaShown
+                        opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         font.family: Theme.font
                         font.pixelSize: 14
@@ -733,7 +749,8 @@ Scope {
                         text: Qt.formatTime(clock.date, "hh:mm")
                     }
                     Row {
-                        visible: !win.showMedia && Weather.ready
+                        visible: !win.mediaShown && Weather.ready
+                        opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 4
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: Weather.icon(Weather.code, Weather.isDay); size: 16; fill: 1; color: Theme.subtext }
