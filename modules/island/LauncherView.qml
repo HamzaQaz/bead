@@ -17,7 +17,8 @@ import qs.services
 // shut down, do not disturb, hide island, clear notifications, "timer 10m",
 // stopwatch), ";" for clipboard history (Enter pastes it where you were,
 // Shift+Enter only copies, Shift+Delete forgets it), ":" for emoji and
-// symbols (Enter types it, Shift+Enter copies), or "?" to ask Claude (services/Ask.qml): the answer streams in
+// symbols (Enter types it, Shift+Enter copies), "/" for files (fd; Enter opens,
+// Shift+Enter copies the path), or "?" to ask Pearl (services/Ask.qml): the answer streams in
 // below; Enter on an edited question asks a follow-up. Log out / reboot /
 // shut down need a second Enter.
 // Keys: Up/Down (Tab, Ctrl+J/K/N/P), Enter, Esc.
@@ -47,7 +48,8 @@ Item {
         "?": { label: "Ask Claude", hint: "Ask anything" },
         ">": { label: "Actions", hint: "Lock, timer, Wi-Fi, screenshot…" },
         ";": { label: "Clipboard", hint: "Search what you copied" },
-        ":": { label: "Emoji", hint: "Search emoji and symbols" }
+        ":": { label: "Emoji", hint: "Search emoji and symbols" },
+        "/": { label: "Files", hint: "Search your home folder" }
     })
     function absorb(text: string): void {
         if (!mode && text.length && modes[text[0]]) {
@@ -129,6 +131,53 @@ Item {
     function focusWindow(w: var): void {
         const a = String(w.t.address);
         Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.focus({ window = "address:${a.startsWith("0x") ? a : "0x" + a}" })`]);
+    }
+
+    // ── files: "/" searches your home with fd (hidden and junk folders skipped) ──
+    readonly property bool filing: query.startsWith("/")
+    readonly property string fileQ: filing ? query.slice(1).trim() : ""
+    property list<var> files: []
+    property bool fileBusy: false
+    onFileQChanged: { if (fileQ.length >= 2) fileTimer.restart(); else { files = []; fd.running = false; } }
+    Timer {
+        id: fileTimer
+        interval: 160
+        onTriggered: {
+            fd.running = false;
+            fd.command = ["fd", "--ignore-case", "--max-results", "40", "--max-depth", "8",
+                "--exclude", "node_modules", "--exclude", ".git", "--exclude", "go", "--exclude", "target",
+                "--", root.fileQ.replace(/\s+/g, ".*"), Quickshell.env("HOME")];
+            root.fileBusy = true;
+            fd.running = true;
+        }
+    }
+    Process {
+        id: fd
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const home = Quickshell.env("HOME");
+                root.files = text.split("\n").filter(l => l).map(l => {
+                    const dir = l.endsWith("/");
+                    const path = dir ? l.slice(0, -1) : l;
+                    const i = path.lastIndexOf("/");
+                    return { path: path, name: path.slice(i + 1), dir: path.slice(0, i).replace(home, "~"), isDir: dir };
+                })
+                // shallower first: what you mean is rarely ten folders down
+                .sort((a, b) => a.path.split("/").length - b.path.split("/").length);
+                root.fileBusy = false;
+            }
+        }
+    }
+    function fileGlyph(f: var): string {
+        if (f.isDir) return "folder";
+        const x = (f.name.split(".").pop() ?? "").toLowerCase();
+        if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(x)) return "image";
+        if (["mp4", "mkv", "webm", "mov"].includes(x)) return "movie";
+        if (["mp3", "flac", "ogg", "wav", "m4a"].includes(x)) return "music_note";
+        if (["pdf"].includes(x)) return "picture_as_pdf";
+        if (["zip", "tar", "gz", "xz", "zst", "7z"].includes(x)) return "folder_zip";
+        if (["qml", "js", "ts", "py", "go", "rs", "c", "h", "cpp", "lua", "sh", "json", "toml", "yaml", "yml"].includes(x)) return "code";
+        return "description";
     }
 
     // ── maths ──
@@ -252,6 +301,7 @@ Item {
             return Clipboard.entries.filter(hit).slice(0, 80).map(e => ({ kind: "clip", c: e }));
         }
         if (emojiing) return Emoji.search(q.slice(1)).map(e => ({ kind: "emoji", m: e }));
+        if (filing) return files.map(f => ({ kind: "file", f: f }));
         if (q.startsWith("?")) return askText ? [{ kind: "ask", q: askText }] : [];
         if (q.startsWith(">")) {
             const a = q.slice(1).trim().toLowerCase();
@@ -296,6 +346,11 @@ Item {
         else if (r.kind === "ask") Ask.ask(r.q);
         else if (r.kind === "app") { Apps.launch(r.e); close(); }
         else if (r.kind === "win") { close(); focusWindow(r.w); }
+        else if (r.kind === "file") {
+            close();
+            if (copyOnly) Quickshell.execDetached(["wl-copy", r.f.path]);
+            else Quickshell.execDetached(["xdg-open", r.f.path]);
+        }
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
         else {
             if (r.a.id === "timermenu") { root.mode = ">"; field.text = "timer "; return; } // stay open: pick a length
@@ -320,7 +375,7 @@ Item {
         Icon {
             x: 14
             anchors.verticalCenter: parent.verticalCenter
-            name: root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
+            name: root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
             color: root.asking ? Theme.tone("action") : Theme.subtext
             size: 20
         }
@@ -508,7 +563,8 @@ Item {
                         color: row.confirm ? Theme.tone("error") : Theme.tone("action")
                         name: row.modelData.kind === "calc" ? "calculate" : row.modelData.kind === "action" ? row.a.glyph
                             : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? root.clipGlyph(row.modelData.c.type)
-                            : row.modelData.kind === "win" ? "select_window" : "apps"
+                            : row.modelData.kind === "win" ? "select_window"
+                            : row.modelData.kind === "file" ? root.fileGlyph(row.modelData.f) : "apps"
                     }
                 }
             }
@@ -532,6 +588,7 @@ Item {
                             : row.modelData.c.type === "secret" ? "•".repeat(12) + "  hidden"
                             : row.modelData.c.text.replace(/\s+/g, " ").trim())
                         : row.modelData.kind === "emoji" ? row.modelData.m.name
+                        : row.modelData.kind === "file" ? row.modelData.f.name
                         : row.confirm ? "Press Enter again to " + row.a.title.toLowerCase() : row.a.title
                 }
                 Label {
@@ -545,6 +602,7 @@ Item {
                         : row.modelData.kind === "ask" ? "Ask Claude  ·  Enter"
                         : row.modelData.kind === "clip" ? (row.sel ? "Enter pastes  ·  Shift+Enter copies  ·  Shift+Del forgets" : root.clipHint(row.modelData.c))
                         : row.modelData.kind === "emoji" ? (row.sel ? "Enter types it  ·  Shift+Enter copies" : "")
+                        : row.modelData.kind === "file" ? (row.sel ? "Enter opens  ·  Shift+Enter copies the path" : row.modelData.f.dir)
                         : row.a.sub
                 }
             }
@@ -664,7 +722,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 66
         visible: root.results.length === 0 && !root.answering
-        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : Clipboard.entries.length ? "No matches" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.mathy ? "Working it out…" : "Nothing found" }
+        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : Clipboard.entries.length ? "No matches" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.filing ? (root.fileQ.length < 2 ? "Type a file or folder name" : root.fileBusy ? "Searching…" : "No files found") : root.mathy ? "Working it out…" : "Nothing found" }
     }
 
     // ── Claude's answer ──

@@ -14,6 +14,7 @@ Singleton {
         .filter(e => !e.noDisplay)
         .filter((e, i, a) => a.findIndex(x => x.id === e.id) === i)
     property var counts: ({})
+    property var last: ({})   // app id -> when it was last launched
 
     // fuzzy score of query q against text t (both lower case); 0 = no match
     // The desktop entry for a window's app id / class. An app's own
@@ -57,7 +58,12 @@ Singleton {
     function search(query: string): list<var> {
         const q = query.trim().toLowerCase();
         const used = e => counts[e.id] ?? 0;
-        if (!q) return all.slice().sort((a, b) => used(b) - used(a) || a.name.localeCompare(b.name));
+        if (!q) {
+            // the five you opened last, then the rest by how often
+            const recent = all.filter(e => last[e.id]).sort((a, b) => last[b.id] - last[a.id]).slice(0, 5);
+            const rest = all.filter(e => !recent.includes(e)).sort((a, b) => used(b) - used(a) || a.name.localeCompare(b.name));
+            return recent.concat(rest);
+        }
         const out = [];
         for (const e of all) {
             const s = Math.max(
@@ -74,19 +80,21 @@ Singleton {
         const c = Object.assign({}, counts);
         c[e.id] = (c[e.id] ?? 0) + 1;
         counts = c;
+        last = Object.assign({}, last, { [e.id]: Date.now() });
         e.execute();
     }
 
     property bool loaded: false
     onCountsChanged: if (loaded) saveTimer.restart()
-    Timer { id: saveTimer; interval: 500; onTriggered: store.setText(JSON.stringify({ counts: root.counts })) }
+    onLastChanged: if (loaded) saveTimer.restart()
+    Timer { id: saveTimer; interval: 500; onTriggered: store.setText(JSON.stringify({ counts: root.counts, last: root.last })) }
     FileView {
         id: store
         path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/bead/launcher.json"
         blockLoading: true
         printErrors: false
         atomicWrites: true
-        onLoaded: { try { root.counts = JSON.parse(text()).counts ?? {}; } catch (e) {} root.loaded = true; }
+        onLoaded: { try { const d = JSON.parse(text()); root.counts = d.counts ?? {}; root.last = d.last ?? {}; } catch (e) {} root.loaded = true; }
         onLoadFailed: root.loaded = true
     }
 }
