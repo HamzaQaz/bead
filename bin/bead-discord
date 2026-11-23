@@ -107,6 +107,19 @@ class Rpc:
         self.mute = False
         self.deaf = False
         self.guilds = {}  # id -> name
+        self.timers = []  # (due time.monotonic(), fn)
+
+    def later(self, seconds, fn):
+        self.timers.append((time.monotonic() + seconds, fn))
+
+    def run_due(self):
+        """Run due timers; returns seconds until the next one (or None)."""
+        now = time.monotonic()
+        due = [t for t in self.timers if t[0] <= now]
+        self.timers = [t for t in self.timers if t[0] > now]
+        for _, fn in due:
+            fn()
+        return min((t[0] for t in self.timers), default=now + 30) - time.monotonic()
 
     # ── transport ──
     def connect(self):
@@ -213,6 +226,12 @@ class Rpc:
         self.cmd("SUBSCRIBE", evt="VOICE_SETTINGS_UPDATE")
         self.cmd("GET_VOICE_SETTINGS", then=lambda d, e: e or self.settings(d))
         self.load_channel()
+        self.reconcile()
+
+    def reconcile(self):
+        # a safety net: a missed or early event can't leave the call display stuck
+        self.load_channel()
+        self.later(20, self.reconcile)
 
     def settings(self, d):
         self.mute, self.deaf = bool(d.get("mute")), bool(d.get("deaf"))
@@ -222,10 +241,15 @@ class Rpc:
         for evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"):
             self.cmd("SUBSCRIBE" if sub else "UNSUBSCRIBE", {"channel_id": cid}, evt=evt)
 
-    def load_channel(self):
+    def load_channel(self, expect=False, tries=0):
+        """expect: the channel id an event announced (None: left), False: unknown."""
         def got(data, err):
             old = self.channel["id"] if self.channel else None
             new = data.get("id") if (data and not err) else None
+            if expect is not False and new != expect and tries < 6:
+                # Discord sent the event before its own state caught up: ask again
+                self.later(0.5, lambda: self.load_channel(expect, tries + 1))
+                return
             if old and old != new:
                 self.channel_events(False, old)
             if not new:
@@ -274,7 +298,7 @@ class Rpc:
         if evt == "READY":
             self.ready(data)
         elif evt == "VOICE_CHANNEL_SELECT":
-            self.load_channel()
+            self.load_channel(expect=data.get("channel_id"))
         elif evt == "VOICE_SETTINGS_UPDATE":
             self.settings(data)
         elif evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE"):
@@ -283,7 +307,8 @@ class Rpc:
         elif evt == "VOICE_STATE_DELETE":
             uid = (data.get("user") or {}).get("id")
             if uid == self.me:
-                return  # VOICE_CHANNEL_SELECT follows
+                self.later(1, self.load_channel)  # VOICE_CHANNEL_SELECT should follow; check anyway
+                return
             self.members.pop(uid, None)
             self.publish()
         elif evt in ("SPEAKING_START", "SPEAKING_STOP"):
@@ -293,6 +318,8 @@ class Rpc:
                 self.publish()
 
     def handle(self, op, msg):
+        if os.environ.get("BEAD_DISCORD_DEBUG"):
+            print("<<", op, json.dumps(msg)[:300], file=sys.stderr)
         if op == OP_PING:
             self.send(OP_PONG, msg)
             return
@@ -337,7 +364,8 @@ def main():
         try:
             while True:
                 fds = [rpc.sock, sys.stdin]
-                ready, _, _ = select.select(fds, [], [], 30)
+                wait = max(0.0, rpc.run_due())
+                ready, _, _ = select.select(fds, [], [], wait)
                 if sys.stdin in ready:
                     line = sys.stdin.readline()
                     if not line:

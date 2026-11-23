@@ -10,7 +10,7 @@ shaders/%.frag.qsb: shaders/%.frag
 
 install: build
 	install -d $(SHARE)
-	cp -r shell.qml config components modules services pam.d data $(SHARE)/
+	cp -r shell.qml config components modules services pam.d data hold $(SHARE)/
 	install -Dm644 -t $(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb
 	install -Dm755 bin/bead $(PREFIX)/bin/bead
 	install -Dm755 bin/bead-resume $(PREFIX)/bin/bead-resume

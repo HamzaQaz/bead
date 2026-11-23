@@ -9,7 +9,35 @@ start)
 	qs -p "$share" kill >/dev/null 2>&1
 	QT_SCALE_FACTOR=${BEAD_SCALE:-1.35} exec qs -p "$share" -n -d ;;
 stop) exec qs -p "$share" kill ;;
-restart) "$0" stop; "$0" start; sleep 1; exec "$0" claim ;;
+restart)
+	# Hold a still of the screen over everything (hold/shell.qml) while the
+	# old bead stops and the new one starts, then fade it away once the new
+	# one answers and windows have settled: one crossfade, no popping.
+	# BEAD_NO_HOLD=1 skips it.
+	hold=${XDG_RUNTIME_DIR:-/tmp}/bead-hold
+	held=
+	if [ -z "$BEAD_NO_HOLD" ] && [ -f "$share/hold/shell.qml" ] && command -v grim >/dev/null && pgrep -f "qs -p $share -n" >/dev/null; then
+		rm -rf "$hold" && mkdir -p "$hold"
+		for m in $(hyprctl monitors -j 2>/dev/null | jq -r '.[].name'); do grim -l 1 -o "$m" "$hold/$m.png" & done
+		wait
+		qs -p "$share/hold" kill >/dev/null 2>&1
+		BEAD_HOLD_DIR=$hold qs -p "$share/hold" -n -d >/dev/null 2>&1
+		for _ in $(seq 40); do
+			[ "$(qs -p "$share/hold" ipc call hold ready 2>/dev/null)" = yes ] && { held=1; break; }
+			sleep 0.05
+		done
+	fi
+	"$0" stop >/dev/null 2>&1; "$0" start >/dev/null 2>&1
+	if [ -n "$held" ]; then
+		for _ in $(seq 60); do
+			[ "$(qs -p "$share" ipc call toast ping 2>/dev/null)" = pong ] && break
+			sleep 0.1
+		done
+		sleep 0.6 # the bar's space comes back and windows resize under the still
+		qs -p "$share/hold" ipc call hold release >/dev/null 2>&1
+		(sleep 2; rm -rf "$hold") &
+	fi
+	sleep 0.5; exec "$0" claim ;;
 claim)
 	owner=$(busctl --user status org.freedesktop.Notifications 2>/dev/null | sed -n 's/^CommandLine=//p')
 	case $owner in

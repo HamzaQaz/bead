@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import qs.components
@@ -28,8 +29,10 @@ Item {
     readonly property bool asking: query.trim().startsWith("?")
     readonly property string askText: query.trim().slice(1).trim()
     readonly property bool answering: asking && Ask.active
-    readonly property real wantW: answering ? 640 : 600
-    readonly property real wantH: 58 + (answering ? answer.height + 16 : results.length ? shown * rowH + 14 : 52)
+    readonly property real wantW: answering ? 640 : clipping && results.length ? 780 : 600
+    readonly property int previewW: 280 // clipboard mode: the selected entry in full
+    // clipboard mode keeps room for the preview even with few results
+    readonly property real wantH: 58 + (answering ? answer.height + 16 : results.length ? (clipping ? Math.max(shown, 4) : shown) * rowH + 14 : 52)
 
     property string query: ""
     property int current: 0
@@ -174,7 +177,9 @@ Item {
         const q = query.trim();
         if (clipping) {
             const words = q.slice(1).trim().toLowerCase().split(/\s+/).filter(w => w);
-            const hit = e => !words.length || words.every(w => e.image ? ("image " + e.image.fmt).includes(w) : e.text.toLowerCase().includes(w));
+            // secrets match only by kind, so typing part of one doesn't find it
+            const hay = e => e.image ? `image ${e.image.fmt} ${e.image.w}x${e.image.h} ${e.image.w}×${e.image.h}` : e.type === "secret" ? "secret hidden" : e.text.toLowerCase();
+            const hit = e => !words.length || words.every(w => hay(e).includes(w));
             return Clipboard.entries.filter(hit).slice(0, 80).map(e => ({ kind: "clip", c: e }));
         }
         if (emojiing) return Emoji.search(q.slice(1)).map(e => ({ kind: "emoji", m: e }));
@@ -293,7 +298,7 @@ Item {
         visible: !root.answering
         x: 10
         y: 58
-        width: parent.width - 20
+        width: parent.width - 20 - (root.clipping && root.results.length ? root.previewW + 10 : 0)
         height: root.shown * root.rowH
         clip: true
         model: root.results
@@ -344,28 +349,45 @@ Item {
                     color: Theme.text
                     text: row.modelData.m?.c ?? ""
                 }
+                Rectangle { // clipboard colour: the colour itself
+                    anchors.fill: parent
+                    radius: 15
+                    visible: row.modelData.c?.type === "colour"
+                    color: visible ? Clipboard.colourOf(row.modelData.c.text) : "transparent"
+                    border.width: 1
+                    border.color: Qt.alpha(Theme.text, 0.18)
+                }
                 Rectangle { // clipboard image
                     id: clipThumb
                     readonly property var img: row.modelData.c?.image ?? null
                     readonly property string src: img ? (Clipboard.thumbs[row.modelData.c.id] ?? "") : ""
                     anchors.fill: parent
                     radius: 7
-                    clip: true
                     visible: !!img
                     color: Qt.alpha(Theme.text, 0.08)
                     Component.onCompleted: if (img) Clipboard.ensureThumb(row.modelData.c)
                     Image {
+                        id: clipImg
                         anchors.fill: parent
                         source: clipThumb.src
                         sourceSize: Qt.size(96, 96)
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
+                        visible: false
+                    }
+                    Rectangle { id: clipMask; anchors.fill: parent; radius: 7; visible: false; layer.enabled: true }
+                    MultiEffect { // rounded (clip ignores radius)
+                        anchors.fill: parent
+                        source: clipImg
+                        maskEnabled: true
+                        maskSource: clipMask
+                        visible: clipImg.status === Image.Ready
                     }
                 }
                 Rectangle {
                     anchors.fill: parent
                     radius: 15
-                    visible: appImg.status !== Image.Ready && row.modelData.kind !== "emoji" && !clipThumb.img
+                    visible: appImg.status !== Image.Ready && row.modelData.kind !== "emoji" && !clipThumb.img && row.modelData.c?.type !== "colour"
                     color: row.confirm ? Qt.alpha(Theme.tone("error"), 0.2) : Qt.alpha(Theme.tone("action"), 0.14)
                     Icon {
                         anchors.centerIn: parent
@@ -373,7 +395,7 @@ Item {
                         fill: 1
                         color: row.confirm ? Theme.tone("error") : Theme.tone("action")
                         name: row.modelData.kind === "calc" ? "calculate" : row.modelData.kind === "action" ? row.a.glyph
-                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? "content_paste" : "apps"
+                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? root.clipGlyph(row.modelData.c.type) : "apps"
                     }
                 }
             }
@@ -392,7 +414,9 @@ Item {
                     text: row.modelData.kind === "app" ? row.modelData.e.name
                         : row.modelData.kind === "calc" ? calc.result
                         : row.modelData.kind === "ask" ? row.modelData.q
-                        : row.modelData.kind === "clip" ? (row.modelData.c.image ? "Image · " + row.modelData.c.image.w + "×" + row.modelData.c.image.h : row.modelData.c.text.replace(/\s+/g, " ").trim())
+                        : row.modelData.kind === "clip" ? (row.modelData.c.image ? "Image · " + row.modelData.c.image.w + "×" + row.modelData.c.image.h
+                            : row.modelData.c.type === "secret" ? "•".repeat(12) + "  hidden"
+                            : row.modelData.c.text.replace(/\s+/g, " ").trim())
                         : row.modelData.kind === "emoji" ? row.modelData.m.name
                         : row.confirm ? "Press Enter again to " + row.a.title.toLowerCase() : row.a.title
                 }
@@ -404,7 +428,7 @@ Item {
                     text: row.modelData.kind === "app" ? (row.modelData.e.comment || row.modelData.e.genericName || "")
                         : row.modelData.kind === "calc" ? "= " + root.expr + "  ·  Enter copies"
                         : row.modelData.kind === "ask" ? "Ask Claude  ·  Enter"
-                        : row.modelData.kind === "clip" ? (row.sel ? "Enter pastes  ·  Shift+Enter copies  ·  Shift+Del forgets" : "")
+                        : row.modelData.kind === "clip" ? (row.sel ? "Enter pastes  ·  Shift+Enter copies  ·  Shift+Del forgets" : root.clipHint(row.modelData.c))
                         : row.modelData.kind === "emoji" ? (row.sel ? "Enter types it  ·  Shift+Enter copies" : "")
                         : row.a.sub
                 }
@@ -419,11 +443,113 @@ Item {
         }
     }
 
+    function clipGlyph(t: string): string {
+        return ({ secret: "key", link: "link", path: "folder", command: "terminal", code: "code", number: "tag", text: "notes" })[t] ?? "content_paste";
+    }
+    function clipHint(c: var): string {
+        if (c.type === "link") { const m = /^\w+:\/\/([^/]+)/.exec(c.text.trim()); return m ? m[1] : "Link"; }
+        return ({ secret: "Looks like a key or token", path: "Path", command: "Command", code: "Code", colour: "Colour" })[c.type] ?? "";
+    }
+
+    // ── clipboard: the selected entry in full ──
+    readonly property var clipSel: clipping ? (results[current]?.c ?? null) : null
+    onClipSelChanged: if (clipSel) { if (clipSel.image) Clipboard.ensureThumb(clipSel); else if (clipSel.type !== "secret") Clipboard.loadFull(clipSel); }
+    Rectangle {
+        id: preview
+        visible: root.clipping && !!root.clipSel && !root.answering
+        x: list.x + list.width + 10
+        y: 58
+        width: root.previewW
+        height: Math.max(list.height, 4 * root.rowH)
+        radius: 14
+        color: Qt.alpha(Theme.text, 0.05)
+        clip: true
+        readonly property var e: root.clipSel
+        readonly property string body: e && !e.image && e.type !== "secret" ? (Clipboard.full[e.id] ?? e.text) : ""
+        readonly property bool mono: !!e && ["code", "command", "path"].includes(e.type)
+
+        // image
+        Image {
+            visible: !!preview.e?.image
+            anchors.fill: parent
+            anchors.margins: 10
+            anchors.bottomMargin: 34
+            source: preview.e?.image ? (Clipboard.thumbs[preview.e.id] ?? "") : ""
+            sourceSize: Qt.size(560, 560)
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+        }
+        // secret
+        Column {
+            visible: preview.e?.type === "secret"
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -12
+            spacing: 8
+            Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "key"; size: 34; fill: 1; color: Theme.subtext }
+            Label { anchors.horizontalCenter: parent.horizontalCenter; text: "Hidden: looks like a key or token" }
+            Label { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: 11; text: "Enter still pastes it  ·  Shift+Del forgets it" }
+        }
+        // colour
+        Column {
+            visible: preview.e?.type === "colour"
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: -12
+            spacing: 10
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 120; height: 120; radius: 22
+                color: preview.e?.type === "colour" ? Clipboard.colourOf(preview.e.text) : "transparent"
+                border.width: 1
+                border.color: Qt.alpha(Theme.text, 0.18)
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                font.family: "monospace"
+                font.pixelSize: 15
+                color: Theme.text
+                text: preview.e?.text.trim() ?? ""
+            }
+        }
+        // text
+        Text {
+            visible: !!preview.e && !preview.e.image && preview.e.type !== "colour" && preview.e.type !== "secret"
+            x: 14; y: 12
+            width: parent.width - 28
+            height: parent.height - 12 - 34
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+            elide: Text.ElideRight
+            textFormat: Text.PlainText
+            font.family: preview.mono ? "monospace" : Theme.font
+            font.pixelSize: preview.mono ? 12 : 13
+            lineHeight: 1.15
+            color: Theme.text
+            text: preview.body
+        }
+        // what it is
+        Label {
+            anchors.left: parent.left
+            anchors.leftMargin: 14
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 10
+            font.pixelSize: 11
+            text: {
+                const e = preview.e;
+                if (!e) return "";
+                if (e.image) return e.image.fmt.toUpperCase() + "  ·  " + e.image.w + " × " + e.image.h;
+                if (e.type === "secret") return "Secret  ·  " + e.text.trim().length + " characters";
+                const t = preview.body;
+                const lines = t.replace(/\n$/, "").split("\n").length;
+                const kind = ({ link: "Link", path: "Path", command: "Command", code: "Code", colour: "Colour", number: "Number" })[e.type] ?? "Text";
+                return kind + "  ·  " + t.length.toLocaleString() + (t.length >= 20000 ? "+" : "") + " characters" + (lines > 1 ? "  ·  " + lines + " lines" : "");
+            }
+        }
+    }
+
     Column {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 66
         visible: root.results.length === 0 && !root.answering
-        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.mathy ? "Working it out…" : "Nothing found" }
+        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : Clipboard.entries.length ? "No matches" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.mathy ? "Working it out…" : "Nothing found" }
     }
 
     // ── Claude's answer ──

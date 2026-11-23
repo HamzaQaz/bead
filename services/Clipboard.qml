@@ -11,7 +11,8 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    // each: { id, line (as cliphist printed it), text, image: { fmt, w, h } | null }
+    // each: { id, line (as cliphist printed it), text, image: { fmt, w, h } | null,
+    //         type: image | secret | colour | link | path | command | code | number | text }
     property list<var> entries: []
     property bool loading: false
     readonly property string cacheDir: (Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache") + "/bead/clip"
@@ -20,7 +21,7 @@ Singleton {
 
     Process {
         id: lister
-        command: ["cliphist", "list"]
+        command: ["cliphist", "list", "-preview-width", "400"] // longer previews: search sees more
         onExited: root.loading = false   // even if it failed
         stdout: StdioCollector {
             onStreamFinished: {
@@ -30,7 +31,9 @@ Singleton {
                     if (tab < 0) continue;
                     const id = line.slice(0, tab), body = line.slice(tab + 1);
                     const m = /^\[\[ binary data .* (png|jpe?g|webp|gif|bmp) (\d+)x(\d+) \]\]$/.exec(body);
-                    out.push({ id, line, text: m ? "" : body, image: m ? { fmt: m[1], w: +m[2], h: +m[3] } : null });
+                    if (m && (+m[2] < 8 || +m[3] < 8)) continue; // 2×1 slivers browsers copy along with text
+                    const image = m ? { fmt: m[1], w: +m[2], h: +m[3] } : null;
+                    out.push({ id, line, text: m ? "" : body, image, type: image ? "image" : root.typeOf(body) });
                 }
                 root.entries = out;
                 root.loading = false;
@@ -39,6 +42,47 @@ Singleton {
                 Quickshell.execDetached(["sh", "-c", 'cd "$1" 2>/dev/null || exit 0; for f in *; do [ -e "$f" ] || continue; case " $2 " in *" ${f%.*} "*) ;; *) rm -f -- "$f" ;; esac; done', "sh", root.cacheDir, keep]);
             }
         }
+    }
+
+    function typeOf(t: string): string {
+        const s = t.trim();
+        if (root.looksSecret(s)) return "secret";
+        if (/^(#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})|(rgb|hsl)a?\([\d\s.,%\/deg]+\))$/i.test(s)) return "colour";
+        if (/^(https?|ftp|file):\/\/\S+$/i.test(s) || /^www\.\S+\.\S+$/i.test(s)) return "link";
+        if (/^(~|\/)[^\s]*$/.test(s) && s.length > 1) return "path";
+        if (/^-?[\d\s.,_]+$/.test(s)) return "number";
+        if (/^(sudo|git|cd|ls|paru|pacman|yay|npm|pnpm|bun|cargo|make|systemctl|journalctl|hyprctl|qs|bead|cp|mv|rm|mkdir|curl|wget|ssh|docker|python3?|chmod|echo|cat|grep|sed|jq|kill|pkill|tar|uv|pip)\s/.test(s) || / (&&|\|\|) /.test(s)) return "command";
+        if (/[{};]\s*$|=>|\bfunction\b|\bconst |\bimport |\bdef |<\/?[a-z]+[ >]/.test(s)) return "code";
+        return "text";
+    }
+    // API keys, tokens, client secrets: one long random-looking word. Shown
+    // hidden (still pasteable), so they don't sit in plain sight in the picker.
+    function looksSecret(s: string): bool {
+        if (/\s/.test(s) || s.length < 20 || s.length > 400) return false;
+        if (/^(ghp_|gho_|ghs_|github_pat_|glpat-|sk-|sk_live_|rk_live_|pk_live_|xox[abprs]-|AKIA|AIza|eyJ[\w-]+\.)/.test(s)) return true;
+        if (/^[a-z]+:\/\/|[\/~]/.test(s)) return false;        // links and paths
+        return /[a-z]/.test(s) && /[A-Z]/.test(s) && /\d/.test(s) // mixed like a random token
+            && !/^[A-Za-z]+[A-Z][a-z]+\d*$/.test(s);            // not a CamelCase word
+    }
+    // a CSS-ish colour string, for the swatch
+    function colourOf(t: string): string {
+        const s = t.trim();
+        if (s.startsWith("#") && (s.length === 5 || s.length === 9)) // #rgba / #rrggbbaa -> Qt's #aarrggbb
+            return s.length === 5 ? "#" + s[4] + s.slice(1, 4) : "#" + s.slice(7) + s.slice(1, 7);
+        return s;
+    }
+
+    // the whole text of an entry (the list only has a 400-character preview)
+    property var full: ({}) // id -> text
+    function loadFull(e: var): void {
+        if (!e || e.image || full[e.id] !== undefined) return;
+        const p = Qt.createQmlObject('import Quickshell.Io; Process { stdout: StdioCollector {} }', root);
+        p.command = ["sh", "-c", 'printf "%s\\n" "$1" | cliphist decode | head -c 20000', "sh", e.line];
+        p.stdout.streamFinished.connect(() => {
+            root.full = Object.assign({}, root.full, { [e.id]: p.stdout.text });
+            Qt.callLater(() => p.destroy());
+        });
+        p.running = true;
     }
 
     function thumbPath(e: var): string { return `${cacheDir}/${e.id}.${e.image?.fmt ?? "png"}`; }

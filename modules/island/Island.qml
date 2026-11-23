@@ -90,7 +90,11 @@ Scope {
     readonly property real zoneHalfW: 170 * uiScale
     readonly property real zoneBottom: Theme.frameThickness + 34 * uiScale + 4
     property bool covered: false
+    // false until the first check: a freshly started island stays tucked
+    // rather than popping out for a moment over a window that covers it
+    property bool settled: false
     function checkCovered(): void {
+        settled = true;
         const m = homeMonitor;
         if (!m) { covered = false; return; }
         const mo = m.lastIpcObject ?? {};
@@ -115,7 +119,7 @@ Scope {
         onTriggered: { Hyprland.refreshMonitors(); Hyprland.refreshToplevels(); settleTimer.restart(); }
     }
     Timer { id: settleTimer; interval: 120; onTriggered: root.checkCovered() }
-    Timer { interval: 1500; repeat: true; running: true; onTriggered: geometryTimer.restart() }
+    Timer { interval: 1500; repeat: true; running: true; triggeredOnStart: true; onTriggered: geometryTimer.restart() }
 
     // ── launcher ──
     property bool launcherOpen: false
@@ -357,7 +361,7 @@ Scope {
             property bool expanded: false       // hovered long enough
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
-            readonly property bool tucked: root.hidden || root.fullscreen || root.covered
+            readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
             readonly property string state: Passkey.active ? "passkey" : root.launcherOpen ? "launcher" : open ? "open" : showsActivity ? "activity" : tucked ? "tucked" : "rest"
             onStateChanged: {
                 if (state === "launcher") { launcherView.reset(root.launcherSeed); root.launcherSeed = ""; grabTimer.restart(); }
