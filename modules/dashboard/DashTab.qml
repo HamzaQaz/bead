@@ -80,6 +80,102 @@ Row {
             }
         }
         Label { text: SysStats.uptime ? "up " + SysStats.uptime : "" }
+
+        // live activities (the island's chips, which the open dashboard covers)
+        Item { width: 1; height: 8; visible: liveRow.visible }
+        Flow {
+            id: liveRow
+            width: parent.width
+            spacing: 6
+            visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall
+            LiveChip {
+                visible: Discord.inCall
+                icon: Discord.deaf ? "headset_off" : Discord.mute ? "mic_off" : "headset_mic"
+                tone: Discord.mute || Discord.deaf ? "error" : "action"
+                pulse: Discord.speaking.length > 0
+                text: (Discord.channel?.name ?? "") + " · " + Discord.members.length
+                hint: "Click to mute, right-click to deafen"
+                onClicked: Discord.toggleMute()
+                onRightClicked: Discord.toggleDeaf()
+            }
+            LiveChip {
+                visible: Recorder.recording
+                icon: "radio_button_checked"
+                tone: "error"
+                pulse: true
+                text: Recorder.label
+                hint: "Click to stop"
+                onClicked: Recorder.stop()
+            }
+            LiveChip {
+                visible: Countdown.mode !== ""
+                icon: Countdown.mode === "stopwatch" ? "timer" : "hourglass_top"
+                tone: "action"
+                dim: !Countdown.running
+                progress: Countdown.mode === "timer" ? 1 - Countdown.progress : -1
+                text: Countdown.label
+                hint: "Click to pause, right-click to stop"
+                onClicked: Countdown.toggle()
+                onRightClicked: Countdown.stop()
+            }
+        }
+    }
+
+    component LiveChip: Rectangle {
+        id: chip
+        property string icon
+        property string tone
+        property string text
+        property string hint
+        property bool pulse: false
+        property bool dim: false
+        property real progress: -1 // 0..1 fills the chip; -1: none
+        signal clicked
+        signal rightClicked
+        implicitWidth: chipRow.implicitWidth + 20
+        implicitHeight: 30
+        radius: 15
+        color: hover.hovered ? Qt.alpha(Theme.tone(tone), 0.22) : Qt.alpha(Theme.tone(tone), 0.13)
+        opacity: dim ? 0.6 : 1
+        clip: true
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Rectangle { // time left
+            visible: chip.progress >= 0
+            width: parent.width * Math.max(0, Math.min(1, chip.progress))
+            height: parent.height
+            color: Qt.alpha(Theme.tone(chip.tone), 0.14)
+            Behavior on width { NumberAnimation { duration: 150 } }
+        }
+        Row {
+            id: chipRow
+            anchors.centerIn: parent
+            spacing: 6
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: chip.icon
+                size: 16
+                fill: 1
+                color: Theme.tone(chip.tone)
+                SequentialAnimation on opacity {
+                    running: chip.pulse && chip.visible
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
+                    NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
+                }
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                font.family: Theme.font
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+                font.features: { "tnum": 1 }
+                color: Theme.text
+                text: chip.text
+            }
+        }
+        HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
+        TapHandler { acceptedButtons: Qt.LeftButton; onTapped: chip.clicked() }
+        TapHandler { acceptedButtons: Qt.RightButton; onTapped: chip.rightClicked() }
     }
 
     // ── calendar ──

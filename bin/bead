@@ -57,6 +57,27 @@ timer) # bead timer <25m|90s|1h30m> | stopwatch | toggle | stop
 	"") echo "usage: bead timer <25m|90s|1h30m>|stopwatch|toggle|stop" >&2; exit 2 ;;
 	*) exec qs -p "$share" ipc call timer start "$2" ;;
 	esac ;;
+discord) # bead discord [status|mute|deafen|leave|setup]: voice calls via Discord's local RPC
+	case "${2:-status}" in
+	setup)
+		cfg="${XDG_CONFIG_HOME:-$HOME/.config}/bead/discord.json"
+		if [ ! -f "$cfg" ]; then
+			mkdir -p "${cfg%/*}"
+			(umask 077; printf '{\n  "client_id": "PASTE_CLIENT_ID",\n  "client_secret": "PASTE_CLIENT_SECRET"\n}\n' > "$cfg")
+		fi
+		chmod 600 "$cfg"
+		cat <<EOT
+1. Open https://discord.com/developers/applications and click "New Application" (any name, e.g. bead).
+2. OAuth2 page: copy the Client ID and Client Secret (Reset Secret if needed),
+   and under Redirects add exactly: http://localhost   then Save.
+3. Paste both into $cfg (private to you, mode 600).
+4. bead picks it up by itself: Discord asks once to authorize the app. Click Authorize.
+Then: bead discord status
+EOT
+		;;
+	status|mute|deafen|leave) exec qs -p "$share" ipc call discord "${2:-status}" ;;
+	*) echo "bead discord [status|mute|deafen|leave|setup]" >&2; exit 1 ;;
+	esac ;;
 log) exec qs -p "$share" log -f ;;
 *) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]" >&2; exit 2 ;;
 esac

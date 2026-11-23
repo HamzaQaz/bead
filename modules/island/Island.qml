@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Hyprland
@@ -240,6 +241,49 @@ Scope {
         }
     }
     property real doneTotal: 0
+
+    // ── toasts: a short line with an icon (Caps Lock, config reload, `bead toast`) ──
+    property string toastIcon: ""
+    property string toastText: ""
+    property string toastTone: "info"
+    function toast(icon: string, text: string, tone: string, ms: int): void {
+        if (activity === "timerdone") return; // its own alarm is showing
+        toastIcon = icon;
+        toastText = text;
+        toastTone = tone || "info";
+        flash("toast", "", ms || 1600);
+    }
+    Connections {
+        target: CapsLock
+        function onToggled(on: bool) {
+            root.toast("keyboard_capslock", on ? "Caps Lock on" : "Caps Lock off", on ? "action" : "loading", 1300);
+        }
+    }
+    Connections {
+        target: Discord
+        function onJoined(name: string) { root.toast("headset_mic", "Joined " + name, "action", 1800); }
+        function onLeft() { root.toast("call_end", "Left the call", "loading", 1500); }
+        function onMuteToggled(mute: bool) { root.toast(mute ? "mic_off" : "mic", mute ? "Discord muted" : "Discord unmuted", mute ? "error" : "action", 1300); }
+    }
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name === "configreloaded") configErrors.running = true;
+        }
+    }
+    Process {
+        id: configErrors
+        command: ["hyprctl", "configerrors"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const errs = text.split("\n").map(l => l.trim()).filter(l => l);
+                if (errs.length)
+                    root.toast("error", errs.length === 1 ? "Config error: " + errs[0].slice(0, 60) : errs.length + " config errors", "error", 4000);
+                else
+                    root.toast("check_circle", "Config reloaded", "success", 1800);
+            }
+        }
+    }
     Connections {
         target: Countdown
         function onFinished(t: real) { root.doneTotal = t; root.flash("timerdone", "", 5000); }
@@ -280,14 +324,19 @@ Scope {
         target: "osd"
         function brightnessUp(): void { Brightness.change(root.focused, 5); }
         function brightnessDown(): void { Brightness.change(root.focused, -5); }
+        // a one-line toast in the island: `bead toast TEXT [ICON] [TONE]`
+        function toast(text: string, icon: string, tone: string): void { root.toast(icon || "info", text, tone || "info", 2200); }
     }
 
-    readonly property real activityLevel: activity === "brightness" ? (Brightness.values[activityOn] ?? 0.5)
-        : activity === "mic" ? (Audio.micMuted ? 0 : 1)
+    // which level the pill shows, kept while it fades out (activity is "" by then)
+    property string levelKind: "volume"
+    onActivityChanged: if (["volume", "mic", "brightness"].includes(activity)) levelKind = activity
+    readonly property real activityLevel: levelKind === "brightness" ? (Brightness.values[activityOn] ?? 0.5)
+        : levelKind === "mic" ? (Audio.micMuted ? 0 : 1)
         : (Audio.muted ? 0 : Audio.volume)
-    readonly property bool activityDim: activity === "mic" ? Audio.micMuted : activity === "volume" && Audio.muted
-    readonly property string activityIcon: activity === "brightness" ? "light_mode"
-        : activity === "mic" ? (Audio.micMuted ? "mic_off" : "mic")
+    readonly property bool activityDim: levelKind === "mic" ? Audio.micMuted : levelKind === "volume" && Audio.muted
+    readonly property string activityIcon: levelKind === "brightness" ? "light_mode"
+        : levelKind === "mic" ? (Audio.micMuted ? "mic_off" : "mic")
         : Audio.muted || Audio.volume <= 0 ? "volume_off" : Audio.volume < 0.5 ? "volume_down" : "volume_up"
 
     readonly property ShellScreen activityScreen: Quickshell.screens.find(s => s.name === activityOn) ?? home
@@ -387,7 +436,7 @@ Scope {
             readonly property real restW: Math.max(132, restRow.implicitWidth + 36)
             readonly property real activityW: root.activity === "workspace" ? Math.max(120, wsRow.implicitWidth + 44)
                 : root.activity === "notif" ? 400
-                : root.activity === "timerdone" || root.activity === "recstart" ? eventRow.implicitWidth + 48
+                : root.activity === "timerdone" || root.activity === "recstart" || root.activity === "toast" ? eventRow.implicitWidth + 48
                 : 330
             Spring {
                 id: sw
@@ -462,6 +511,55 @@ Scope {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
+                    // live: Discord call (click mutes, right-click deafens); who's talking
+                    Row {
+                        visible: Discord.inCall
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: Discord.deaf ? "headset_off" : Discord.mute ? "mic_off" : "headset_mic"
+                            size: 17
+                            fill: 1
+                            color: Discord.mute || Discord.deaf ? Theme.tone("error") : Theme.tone("action")
+                        }
+                        Row { // the speakers' faces, else how many are in the call
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: -6
+                            visible: Discord.speaking.length > 0
+                            Repeater {
+                                model: Discord.speaking.slice(0, 3)
+                                Item {
+                                    id: face
+                                    required property var modelData
+                                    width: 20; height: 20
+                                    Rectangle { anchors.fill: parent; radius: 10; color: Theme.tone("success") }
+                                    Image {
+                                        id: faceImg
+                                        anchors.fill: parent
+                                        anchors.margins: 1.5
+                                        source: face.modelData.avatar
+                                        sourceSize: Qt.size(40, 40)
+                                        visible: false
+                                    }
+                                    Rectangle { id: faceMask; anchors.fill: faceImg; radius: width / 2; visible: false; layer.enabled: true }
+                                    MultiEffect { anchors.fill: faceImg; source: faceImg; maskEnabled: true; maskSource: faceMask }
+                                }
+                            }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: Discord.speaking.length === 0
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                            color: Theme.text
+                            text: Discord.members.length
+                        }
+                        TapHandler { acceptedButtons: Qt.LeftButton; onTapped: Discord.toggleMute() }
+                        TapHandler { acceptedButtons: Qt.RightButton; onTapped: Discord.toggleDeaf() }
+                    }
                     // live: screen recording (click stops it)
                     Row {
                         visible: Recorder.recording
@@ -533,7 +631,7 @@ Scope {
                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
                     }
                     Rectangle { // between live chips and the rest
-                        visible: Recorder.recording || Countdown.mode !== ""
+                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall
                         anchors.verticalCenter: parent.verticalCenter
                         width: 1; height: 14
                         color: Qt.alpha(Theme.text, 0.15)
@@ -717,7 +815,7 @@ Scope {
                         font.weight: Font.DemiBold
                         font.features: { "tnum": 1 }
                         color: parent.tone
-                        text: root.activity === "mic" ? (Audio.micMuted ? "off" : "on")
+                        text: root.levelKind === "mic" ? (Audio.micMuted ? "off" : "on")
                             : root.activityDim ? "off" : Math.round(root.activityLevel * 100)
                     }
                 }
@@ -784,17 +882,26 @@ Scope {
                     id: eventRow
                     anchors.centerIn: parent
                     spacing: 10
-                    opacity: win.state === "activity" && (root.activity === "timerdone" || root.activity === "recstart") ? 1 : 0
+                    opacity: win.state === "activity" && ["timerdone", "recstart", "toast"].includes(root.activity) ? 1 : 0
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: 200 } }
-                    readonly property bool done: root.activity === "timerdone"
+                    // the kind being shown, kept while the row fades out (activity is "" by then)
+                    property string kind: ""
+                    readonly property bool done: kind === "timerdone"
+                    readonly property bool isToast: kind === "toast"
+                    Connections {
+                        target: root
+                        function onActivityChanged() {
+                            if (["timerdone", "recstart", "toast"].includes(root.activity)) eventRow.kind = root.activity;
+                        }
+                    }
                     Icon {
                         id: eventIcon
                         anchors.verticalCenter: parent.verticalCenter
-                        name: eventRow.done ? "alarm" : "radio_button_checked"
+                        name: eventRow.isToast ? root.toastIcon : eventRow.done ? "alarm" : "radio_button_checked"
                         size: 20
                         fill: 1
-                        color: eventRow.done ? Theme.tone("action") : Theme.tone("error")
+                        color: eventRow.isToast ? Theme.tone(root.toastTone) : eventRow.done ? Theme.tone("action") : Theme.tone("error")
                         SequentialAnimation on scale {
                             running: eventRow.visible && eventRow.done
                             loops: Animation.Infinite
@@ -808,7 +915,7 @@ Scope {
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                         color: Theme.text
-                        text: eventRow.done ? "Timer done · " + Countdown.fmtTotal(root.doneTotal) : "Recording"
+                        text: eventRow.isToast ? root.toastText : eventRow.done ? "Timer done · " + Countdown.fmtTotal(root.doneTotal) : "Recording"
                     }
                 }
 

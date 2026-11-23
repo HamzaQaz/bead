@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""Discord voice state for bead, over Discord's local RPC socket.
+
+Run by services/Discord.qml. Writes one JSON object per line on stdout:
+  {"type": "status", "state": "setup|offline|authorizing|ready|error", "detail": "..."}
+  {"type": "voice", "channel": null | {"id", "name", "guild"},
+   "members": [{"id", "name", "avatar", "mute", "deaf", "speaking", "me"}],
+   "mute": bool, "deaf": bool}
+Reads commands on stdin, one per line: mute, unmute, toggle-mute, deaf, undeaf,
+toggle-deaf, leave.
+
+Config (yours, chmod 600): ~/.config/bead/discord.json
+  {"client_id": "...", "client_secret": "..."}   from discord.com/developers
+Tokens (written here, chmod 600): ~/.local/state/bead/discord-token.json
+
+Standard library only.
+"""
+import glob
+import json
+import os
+import select
+import socket
+import struct
+import sys
+import time
+import urllib.parse
+import urllib.request
+import uuid
+
+HOME = os.path.expanduser("~")
+CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", HOME + "/.config"), "bead/discord.json")
+TOKEN = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "bead/discord-token.json")
+RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+SCOPES = ["rpc", "rpc.voice.read", "rpc.voice.write"]
+REDIRECT = "http://localhost"
+API = "https://discord.com/api/v10"
+UA = "bead (local desktop shell, 1.0)"
+
+OP_HANDSHAKE, OP_FRAME, OP_CLOSE, OP_PING, OP_PONG = 0, 1, 2, 3, 4
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.flush()
+
+
+def status(state, detail=""):
+    emit({"type": "status", "state": state, "detail": detail})
+
+
+def read_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def write_private(path, obj):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(obj, f)
+    os.replace(tmp, path)
+
+
+def oauth(cfg, **fields):
+    """POST to Discord's token endpoint; returns the token dict (with expires_at)."""
+    data = dict(client_id=cfg["client_id"], client_secret=cfg["client_secret"], **fields)
+    req = urllib.request.Request(
+        API + "/oauth2/token",
+        data=urllib.parse.urlencode(data).encode(),
+        headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA},
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        tok = json.load(r)
+    tok["expires_at"] = time.time() + tok.get("expires_in", 0)
+    return tok
+
+
+def sockets():
+    paths = []
+    for i in range(10):
+        paths.append(f"{RUNTIME}/discord-ipc-{i}")
+    # Flatpak / snap builds put it in a subdirectory
+    paths += sorted(glob.glob(f"{RUNTIME}/app/*/discord-ipc-*")) + sorted(glob.glob(f"{RUNTIME}/snap.*/discord-ipc-*"))
+    return [p for p in paths if os.path.exists(p)]
+
+
+def avatar(user):
+    uid = user.get("id", "0")
+    if user.get("avatar"):
+        return f"https://cdn.discordapp.com/avatars/{uid}/{user['avatar']}.png?size=64"
+    return f"https://cdn.discordapp.com/embed/avatars/{(int(uid) >> 22) % 6}.png"
+
+
+class Rpc:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.sock = None
+        self.buf = b""
+        self.pending = {}  # nonce -> callback(data, error)
+        self.me = None
+        self.channel = None  # {"id", "name", "guild"}
+        self.members = {}  # user id -> member dict
+        self.mute = False
+        self.deaf = False
+        self.guilds = {}  # id -> name
+
+    # ── transport ──
+    def connect(self):
+        for path in sockets():
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                s.connect(path)
+            except OSError:
+                s.close()
+                continue
+            self.sock = s
+            self.send(OP_HANDSHAKE, {"v": 1, "client_id": self.cfg["client_id"]})
+            return True
+        return False
+
+    def send(self, op, obj):
+        body = json.dumps(obj).encode()
+        self.sock.sendall(struct.pack("<II", op, len(body)) + body)
+
+    def cmd(self, name, args=None, evt=None, then=None):
+        nonce = str(uuid.uuid4())
+        msg = {"cmd": name, "args": args or {}, "nonce": nonce}
+        if evt:
+            msg["evt"] = evt
+        if then:
+            self.pending[nonce] = then
+        self.send(OP_FRAME, msg)
+
+    def frames(self):
+        chunk = self.sock.recv(65536)
+        if not chunk:
+            raise ConnectionError("Discord closed the connection")
+        self.buf += chunk
+        while len(self.buf) >= 8:
+            op, n = struct.unpack("<II", self.buf[:8])
+            if len(self.buf) < 8 + n:
+                break
+            body, self.buf = self.buf[8:8 + n], self.buf[8 + n:]
+            yield op, json.loads(body or b"{}")
+
+    # ── state out ──
+    def publish(self):
+        members = sorted(self.members.values(), key=lambda m: (not m["me"], m["name"].lower()))
+        emit({"type": "voice", "channel": self.channel, "members": members, "mute": self.mute, "deaf": self.deaf})
+
+    # ── auth ──
+    def ready(self, data):
+        self.me = (data.get("user") or {}).get("id")
+        tok = read_json(TOKEN)
+        if tok and tok.get("access_token"):
+            if tok.get("expires_at", 0) < time.time() + 3600 and tok.get("refresh_token"):
+                tok = self.refresh(tok)
+            if tok:
+                self.authenticate(tok, retry=True)
+                return
+        self.authorize()
+
+    def refresh(self, tok):
+        try:
+            new = oauth(self.cfg, grant_type="refresh_token", refresh_token=tok["refresh_token"])
+            write_private(TOKEN, new)
+            return new
+        except Exception:
+            return None
+
+    def authorize(self):
+        status("authorizing", "Approve bead in Discord")
+
+        def got(data, err):
+            if err:
+                status("error", "Authorization refused: " + err.get("message", ""))
+                return
+            try:
+                tok = oauth(self.cfg, grant_type="authorization_code", code=data["code"], redirect_uri=REDIRECT)
+            except Exception as e:
+                status("error", f"Token exchange failed: {e}")
+                return
+            write_private(TOKEN, tok)
+            self.authenticate(tok, retry=False)
+
+        self.cmd("AUTHORIZE", {"client_id": self.cfg["client_id"], "scopes": SCOPES}, then=got)
+
+    def authenticate(self, tok, retry):
+        def got(data, err):
+            if err:
+                if retry:
+                    new = self.refresh(tok) if tok.get("refresh_token") else None
+                    if new:
+                        self.authenticate(new, retry=False)
+                    else:
+                        self.authorize()
+                else:
+                    status("error", "Discord rejected the token: " + err.get("message", ""))
+                return
+            self.me = (data.get("user") or {}).get("id") or self.me
+            status("ready")
+            self.start()
+
+        self.cmd("AUTHENTICATE", {"access_token": tok["access_token"]}, then=got)
+
+    # ── voice ──
+    def start(self):
+        self.cmd("SUBSCRIBE", evt="VOICE_CHANNEL_SELECT")
+        self.cmd("SUBSCRIBE", evt="VOICE_SETTINGS_UPDATE")
+        self.cmd("GET_VOICE_SETTINGS", then=lambda d, e: e or self.settings(d))
+        self.load_channel()
+
+    def settings(self, d):
+        self.mute, self.deaf = bool(d.get("mute")), bool(d.get("deaf"))
+        self.publish()
+
+    def channel_events(self, sub, cid):
+        for evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE", "VOICE_STATE_DELETE", "SPEAKING_START", "SPEAKING_STOP"):
+            self.cmd("SUBSCRIBE" if sub else "UNSUBSCRIBE", {"channel_id": cid}, evt=evt)
+
+    def load_channel(self):
+        def got(data, err):
+            old = self.channel["id"] if self.channel else None
+            new = data.get("id") if (data and not err) else None
+            if old and old != new:
+                self.channel_events(False, old)
+            if not new:
+                self.channel, self.members = None, {}
+                self.publish()
+                return
+            gid = data.get("guild_id")
+            self.channel = {"id": new, "name": data.get("name") or "Call", "guild": self.guilds.get(gid, "") if gid else "Direct call"}
+            self.members = {}
+            for vs in data.get("voice_states") or []:
+                self.member(vs)
+            if old != new:
+                self.channel_events(True, new)
+            if gid and gid not in self.guilds:
+                self.cmd("GET_GUILD", {"guild_id": gid}, then=lambda d, e: self.guild(gid, d, e))
+            self.publish()
+
+        self.cmd("GET_SELECTED_VOICE_CHANNEL", then=got)
+
+    def guild(self, gid, d, err):
+        if err or not d:
+            return
+        self.guilds[gid] = d.get("name", "")
+        if self.channel:
+            self.channel["guild"] = self.guilds[gid]
+            self.publish()
+
+    def member(self, vs):
+        user = vs.get("user") or {}
+        uid = user.get("id")
+        if not uid:
+            return
+        st = vs.get("voice_state") or {}
+        prev = self.members.get(uid, {})
+        self.members[uid] = {
+            "id": uid,
+            "name": vs.get("nick") or user.get("global_name") or user.get("username") or "?",
+            "avatar": avatar(user),
+            "mute": bool(st.get("mute") or st.get("self_mute") or vs.get("mute")),
+            "deaf": bool(st.get("deaf") or st.get("self_deaf")),
+            "speaking": prev.get("speaking", False),
+            "me": uid == self.me,
+        }
+
+    def dispatch(self, evt, data):
+        if evt == "READY":
+            self.ready(data)
+        elif evt == "VOICE_CHANNEL_SELECT":
+            self.load_channel()
+        elif evt == "VOICE_SETTINGS_UPDATE":
+            self.settings(data)
+        elif evt in ("VOICE_STATE_CREATE", "VOICE_STATE_UPDATE"):
+            self.member(data)
+            self.publish()
+        elif evt == "VOICE_STATE_DELETE":
+            uid = (data.get("user") or {}).get("id")
+            if uid == self.me:
+                return  # VOICE_CHANNEL_SELECT follows
+            self.members.pop(uid, None)
+            self.publish()
+        elif evt in ("SPEAKING_START", "SPEAKING_STOP"):
+            m = self.members.get(data.get("user_id"))
+            if m:
+                m["speaking"] = evt == "SPEAKING_START"
+                self.publish()
+
+    def handle(self, op, msg):
+        if op == OP_PING:
+            self.send(OP_PONG, msg)
+            return
+        if op == OP_CLOSE:
+            raise ConnectionError(msg.get("message", "closed"))
+        if msg.get("cmd") == "DISPATCH":
+            self.dispatch(msg.get("evt"), msg.get("data") or {})
+            return
+        cb = self.pending.pop(msg.get("nonce"), None)
+        if cb:
+            err = msg.get("data") if msg.get("evt") == "ERROR" else None
+            cb(msg.get("data") or {}, err)
+
+    # ── commands from bead ──
+    def command(self, line):
+        c = line.strip()
+        if c in ("mute", "unmute", "toggle-mute"):
+            v = (not self.mute) if c == "toggle-mute" else c == "mute"
+            self.cmd("SET_VOICE_SETTINGS", {"mute": v})
+        elif c in ("deaf", "undeaf", "toggle-deaf"):
+            v = (not self.deaf) if c == "toggle-deaf" else c == "deaf"
+            self.cmd("SET_VOICE_SETTINGS", {"deaf": v})
+        elif c == "leave":
+            self.cmd("SELECT_VOICE_CHANNEL", {"channel_id": None, "force": True})
+
+
+def main():
+    cfg = read_json(CONFIG)
+    if not cfg or not cfg.get("client_id") or not cfg.get("client_secret") or "PASTE" in str(cfg.values()):
+        status("setup", f"Add your app's client_id and client_secret to {CONFIG}")
+        # stay alive quietly so bead doesn't respawn us; it restarts us when the file changes
+        for _ in sys.stdin:
+            pass
+        return
+    while True:
+        rpc = Rpc(cfg)
+        if not rpc.connect():
+            status("offline", "Discord isn't running")
+            emit({"type": "voice", "channel": None, "members": [], "mute": False, "deaf": False})
+            time.sleep(5)
+            continue
+        try:
+            while True:
+                fds = [rpc.sock, sys.stdin]
+                ready, _, _ = select.select(fds, [], [], 30)
+                if sys.stdin in ready:
+                    line = sys.stdin.readline()
+                    if not line:
+                        return  # bead went away
+                    rpc.command(line)
+                if rpc.sock in ready:
+                    for op, msg in rpc.frames():
+                        rpc.handle(op, msg)
+        except (ConnectionError, OSError, ValueError) as e:
+            bad_id = "client id" in str(e).lower()  # Discord refused the app: a config problem
+            status("error" if bad_id else "offline", str(e))
+            emit({"type": "voice", "channel": None, "members": [], "mute": False, "deaf": False})
+            try:
+                rpc.sock.close()
+            except OSError:
+                pass
+            time.sleep(60 if bad_id else 3)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
