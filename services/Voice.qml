@@ -92,6 +92,8 @@ Singleton {
     function cancel(): void { if (helper.running) helper.write("cancel\n"); }
 
     // ── the model server ──
+    readonly property bool warm: server.running || whisper.running // models in memory
+    function unload(): void { if (!active) { server.running = false; whisper.running = false; } }
     function ensureServer(): void {
         idle.restart();
         if (!server.running) { serverReady = false; server.running = true; }

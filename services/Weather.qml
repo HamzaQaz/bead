@@ -23,7 +23,10 @@ Singleton {
     property bool isDay: true
     property real high: 0
     property real low: 0
-    property list<var> hourly: []   // [{ time: Date, temp, code, isDay }]
+    property list<var> hourly: []   // [{ time: Date, temp, code, isDay, rain (%) }]
+    property list<var> daily: []    // [{ date: Date, max, min, code, rain (%) }], today first
+    property var sunrise: null      // Date (today)
+    property var sunset: null
     property real lastFetch: 0
     property var coords: null
 
@@ -45,8 +48,9 @@ Singleton {
         const u = fahrenheit ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "";
         get(`https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}`
             + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day"
-            + "&hourly=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min"
-            + "&timezone=auto&forecast_days=2" + u, r => {
+            + "&hourly=temperature_2m,weather_code,is_day,precipitation_probability"
+            + "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset"
+            + "&timezone=auto&forecast_days=6" + u, r => {
             const c = r.current;
             if (!c) return;
             temp = c.temperature_2m;
@@ -58,12 +62,20 @@ Singleton {
             high = r.daily.temperature_2m_max[0];
             low = r.daily.temperature_2m_min[0];
             const now = Date.now(), out = [];
-            for (let i = 0; i < r.hourly.time.length && out.length < 8; i++) {
+            for (let i = 0; i < r.hourly.time.length && out.length < 12; i++) {
                 const t = new Date(r.hourly.time[i]);
                 if (t.getTime() < now - 3600000) continue;
-                out.push({ time: t, temp: r.hourly.temperature_2m[i], code: r.hourly.weather_code[i], isDay: r.hourly.is_day[i] === 1 });
+                out.push({ time: t, temp: r.hourly.temperature_2m[i], code: r.hourly.weather_code[i], isDay: r.hourly.is_day[i] === 1,
+                    rain: r.hourly.precipitation_probability?.[i] ?? 0 });
             }
             hourly = out;
+            const d = r.daily, days = [];
+            for (let i = 0; i < d.time.length; i++)
+                days.push({ date: new Date(d.time[i] + "T12:00"), max: d.temperature_2m_max[i], min: d.temperature_2m_min[i],
+                    code: d.weather_code?.[i] ?? 0, rain: d.precipitation_probability_max?.[i] ?? 0 });
+            daily = days;
+            sunrise = d.sunrise?.[0] ? new Date(d.sunrise[0]) : null;
+            sunset = d.sunset?.[0] ? new Date(d.sunset[0]) : null;
             ready = true;
         });
     }

@@ -25,33 +25,9 @@ Row {
         width: 196
         height: parent.height
         spacing: 3
-        Row {
-            spacing: 10
-            Item {
-                width: 38; height: 38
-                Image {
-                    id: face
-                    anchors.fill: parent
-                    source: "file://" + Quickshell.env("HOME") + "/.face"
-                    sourceSize: Qt.size(96, 96)
-                    fillMode: Image.PreserveAspectCrop
-                    visible: false
-                }
-                Rectangle { id: faceMask; anchors.fill: parent; radius: 19; visible: false; layer.enabled: true }
-                MultiEffect { anchors.fill: parent; source: face; maskEnabled: true; maskSource: faceMask; visible: face.status === Image.Ready }
-                Icon { anchors.centerIn: parent; visible: face.status !== Image.Ready; name: "person"; fill: 1; color: Theme.subtext }
-            }
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                Label { text: root.greeting(); font.pixelSize: 11 }
-                Text {
-                    font.family: Theme.font
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                    color: Theme.text
-                    text: Quickshell.env("USER")
-                }
-            }
+        Label {
+            text: root.greeting() + ", " + Quickshell.env("USER")
+            font.pixelSize: 12
         }
         Item { width: 1; height: 8 }
         Text {
@@ -72,14 +48,13 @@ Row {
         Row {
             spacing: 6
             visible: Weather.ready
-            Icon { name: Weather.icon(Weather.code, Weather.isDay); size: 18; fill: 1; color: Theme.tone("action"); anchors.verticalCenter: parent.verticalCenter }
+            Icon { name: Weather.icon(Weather.code, Weather.isDay); size: 18; fill: 0; color: Theme.tone("action"); anchors.verticalCenter: parent.verticalCenter }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Math.round(Weather.temp) + "°  " + Weather.describe(Weather.code)
                 color: Theme.text
             }
         }
-        Label { text: SysStats.uptime ? "up " + SysStats.uptime : "" }
 
         // live activities (the island's chips, which the open dashboard covers)
         Item { width: 1; height: 8; visible: liveRow.visible }
@@ -160,14 +135,17 @@ Row {
         height: parent.height
         readonly property MprisPlayer p: root.player
         Column {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 12
+            // fills the card: track, progress, controls, then the volume
+            x: 14
+            y: 14
+            width: parent.width - 28
+            height: parent.height - 28
+            spacing: Math.max(10, (height - 76 - 34 - 50 - 20) / 3)
             Row {
                 spacing: 12
-                Art { width: 64; height: 64; radius: 12; source: media.p?.trackArtUrl ?? "" }
+                Art { width: 76; height: 76; radius: 14; source: media.p?.trackArtUrl ?? "" }
                 Column {
-                    width: 122
+                    width: 110
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
                     Text {
@@ -185,6 +163,37 @@ Row {
             }
             Progress { width: parent.width; player: media.p; visible: (media.p?.length ?? 0) > 0 }
             Controls { anchors.horizontalCenter: parent.horizontalCenter; player: media.p; visible: media.p !== null }
+            // the player's volume (its own when it has one, else the system's)
+            Row {
+                width: parent.width
+                height: 20
+                spacing: 8
+                readonly property bool own: media.p?.volumeSupported ?? false
+                readonly property real v: own ? media.p.volume : Audio.volume
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: parent.v <= 0.001 ? "volume_off" : parent.v < 0.5 ? "volume_down" : "volume_up"
+                    ref: "volume_up"
+                    size: 16
+                    fill: 1
+                    color: Theme.subtext
+                }
+                Slider {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - 24 - 34
+                    value: parent.v
+                    onMoved: v => { if (parent.own) media.p.volume = v; else Audio.setVolume(v); }
+                    onNudged: d => { const n = Math.max(0, Math.min(1, parent.v + d * 0.05)); if (parent.own) media.p.volume = n; else Audio.setVolume(n); }
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 26
+                    horizontalAlignment: Text.AlignRight
+                    font.pixelSize: 10
+                    font.features: { "tnum": 1 }
+                    text: Math.round(parent.v * 100) + "%"
+                }
+            }
         }
     }
 
@@ -194,8 +203,9 @@ Row {
         height: parent.height
         Column {
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 9
+            anchors.margins: 16
+            // spread over the card's height
+            spacing: Math.max(9, (height - 5 * 25) / 4)
             Gauge { label: "CPU"; value: Math.round(SysStats.cpu * 100) + "%"; level: SysStats.cpu }
             Gauge { label: "Memory"; value: SysStats.memUsedGb.toFixed(1) + " / " + Math.round(SysStats.memTotalGb) + " GB"; level: SysStats.mem }
             Gauge { label: "GPU"; value: Math.round(SysStats.gpu * 100) + "%"; level: SysStats.gpu }

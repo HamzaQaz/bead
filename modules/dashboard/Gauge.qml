@@ -32,6 +32,7 @@ Column {
             height: parent.height
             radius: 3
             width: Math.max(height, parent.width * Math.max(0, Math.min(1, gg.level)))
+            Behavior on width { SpringAnimation { spring: 3; damping: 0.4; epsilon: 0.3 } }
             color: gg.level > 0.85 ? Theme.tone("error") : Theme.tone("action")
             Behavior on width { SpringAnimation { spring: 4; damping: 0.3; epsilon: 0.2 } }
             Behavior on color { ColorAnimation { duration: 300 } }
