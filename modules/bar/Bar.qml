@@ -106,7 +106,7 @@ Scope {
 
     SystemClock { id: clock; precision: SystemClock.Minutes }
 
-    // `qs ipc call bar panel wifi|bt|tray|sound|power|close` on the focused monitor
+    // `qs ipc call bar panel wifi|bt|tray|sound|utils|power|close` on the focused monitor
     signal panelRequested(string name, string screen)
     IpcHandler {
         target: "bar"
@@ -191,7 +191,7 @@ Scope {
                 target: root
                 function onPanelRequested(name, screen) {
                     if (screen !== scope.modelData.name) return;
-                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn }[name];
+                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn }[name];
                     if (from) win.toggle(name, from); else win.panel = "";
                 }
             }
@@ -210,7 +210,7 @@ Scope {
                 anchorY: win.panelY
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
-                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel })[win.shownPanel] ?? trayPanel
+                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel })[win.shownPanel] ?? trayPanel
                 contentW: cur.width
                 contentH: cur.implicitHeight
                 Keys.onEscapePressed: win.panel = ""
@@ -218,6 +218,7 @@ Scope {
                 WifiPanel { id: wifiPanel; visible: win.shownPanel === "wifi"; active: win.panel === "wifi" }
                 BluetoothPanel { id: btPanel; visible: win.shownPanel === "bt"; active: win.panel === "bt" }
                 SoundPanel { id: soundPanel; visible: win.shownPanel === "sound" }
+                UtilitiesPanel { id: utilsPanel; visible: win.shownPanel === "utils"; active: win.panel === "utils"; onDone: win.panel = "" }
                 PowerPanel { id: powerPanel; visible: win.shownPanel === "power"; active: win.panel === "power"; onDone: win.panel = "" }
                 TrayPanel {
                     id: trayPanel
@@ -515,6 +516,15 @@ Scope {
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 2
+                    // utilities: screenshots, recording, quick toggles
+                    BarButton {
+                        id: utilsBtn
+                        icon: Recorder.recording ? "radio_button_checked" : "widgets"
+                        tone: Recorder.recording ? Theme.tone("error") : Theme.text
+                        pulsing: Recorder.recording
+                        lit: win.panel === "utils"
+                        onClicked: win.toggle("utils", utilsBtn)
+                    }
                     // the tray panel: every app, pin some to the bar
                     BarButton {
                         id: trayBtn
