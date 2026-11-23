@@ -264,6 +264,10 @@ Scope {
         }
     }
     Connections {
+        target: Osd // batteries, Bluetooth, Do Not Disturb, keyboard layout
+        function onToast(icon: string, text: string, tone: string, ms: int) { root.toast(icon, text, tone, ms); }
+    }
+    Connections {
         target: Discord
         function onJoined(name: string) { root.toast("headset_mic", "Joined " + name, "action", 1800); }
         function onLeft() { root.toast("call_end", "Left the call", "loading", 1500); }

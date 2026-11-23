@@ -15,7 +15,7 @@ import qs.services
 //
 // The desktop notification server (org.freedesktop.Notifications), shown as a
 // stack of sileo pills that grow out of the right edge of Caelestia's screen
-// frame, top-right of the focused monitor.
+// frame, top-right of the primary monitor (the island's, Settings.home).
 //
 // Only one server can own the name. If another (Caelestia) holds it, Quickshell
 // waits and takes over as soon as it is released, and the other does the same
@@ -116,8 +116,8 @@ Scope {
     PanelWindow {
         id: win
 
-        // the focused monitor when the first popup arrives; the stack stays there
-        readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
+        // always the primary monitor (Settings.home: the island's screen, DP-1 by default)
+        readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
         property ShellScreen held: focused
         screen: held
         visible: root.popups.length > 0
