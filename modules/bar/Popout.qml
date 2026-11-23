@@ -68,10 +68,13 @@ Item {
 
     Item {
         id: slot
-        x: root.pad
+        // the content travels in with the shape (from a little behind it) and
+        // shows once most of the shape is out, so nothing sits cut off at its
+        // moving edge
+        x: root.pad - 22 * (1 - root.progress)
         y: root.topExt + root.pad
         width: root.contentW
         height: root.contentH
-        opacity: Math.max(0, root.progress * 1.6 - 0.6)
+        opacity: Math.max(0, root.progress * 2.2 - 1.2)
     }
 }

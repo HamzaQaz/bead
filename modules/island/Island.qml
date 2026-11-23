@@ -590,61 +590,62 @@ Scope {
                             fill: 1
                             color: Discord.mute || Discord.deaf ? Theme.tone("error") : Theme.tone("action")
                         }
-                        // everyone in the call has a slot; a face springs in (with a bounce)
-                        // while they talk and shrinks away after, so nothing pops
-                        Row {
+                        // who's in the call: the first three as a small overlapping stack,
+                        // "+N" for the rest. Talking lights a face's ring and pulses it in
+                        // place: the width only changes when someone joins or leaves, so
+                        // the island doesn't spring about while people talk
+                        Item {
+                            id: faces
                             anchors.verticalCenter: parent.verticalCenter
+                            readonly property int shown: Math.min(3, Discord.members.length)
+                            readonly property real step: 13
+                            width: shown > 0 ? 22 + (shown - 1) * step : 0
+                            height: 22
+                            Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                             Repeater {
-                                model: Discord.members.length
+                                model: faces.shown
                                 Item {
                                     id: face
                                     required property int index
                                     readonly property var m: Discord.members[index] ?? null
-                                    readonly property bool on: !!m?.speaking
-                                    width: on ? 16 : 0 // 20 px faces, overlapping a little
-                                    height: 20
-                                    z: -index
-                                    Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
-                                    Item {
-                                        width: 20; height: 20
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        scale: face.on ? 1 : 0.2
-                                        opacity: face.on ? 1 : 0
-                                        Behavior on scale { NumberAnimation { duration: face.on ? 420 : 200; easing.type: face.on ? Easing.OutBack : Easing.InCubic; easing.overshoot: 2.4 } }
-                                        Behavior on opacity { NumberAnimation { duration: face.on ? 160 : 220 } }
-                                        Rectangle { anchors.fill: parent; radius: 10; color: Theme.tone("success") }
-                                        Image {
-                                            id: faceImg
-                                            anchors.fill: parent
-                                            anchors.margins: 1.5
-                                            source: face.m?.avatar ?? ""
-                                            sourceSize: Qt.size(40, 40)
-                                            visible: false
-                                        }
-                                        Rectangle { id: faceMask; anchors.fill: faceImg; radius: width / 2; visible: false; layer.enabled: true }
-                                        MultiEffect { anchors.fill: faceImg; source: faceImg; maskEnabled: true; maskSource: faceMask }
+                                    readonly property bool talking: !!m?.speaking
+                                    x: index * faces.step
+                                    z: faces.shown - index
+                                    width: 22; height: 22
+                                    scale: talking ? 1.12 : 1
+                                    Behavior on scale { NumberAnimation { duration: talking ? 260 : 220; easing.type: talking ? Easing.OutBack : Easing.OutCubic; easing.overshoot: 2 } }
+                                    // the ring: the island's colour (separates the stack), green while talking
+                                    Rectangle { anchors.fill: parent; radius: 11; color: Theme.frame }
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 11
+                                        color: Theme.tone("success")
+                                        opacity: face.talking ? 1 : 0
+                                        Behavior on opacity { NumberAnimation { duration: 180 } }
                                     }
+                                    Image {
+                                        id: faceImg
+                                        anchors.fill: parent
+                                        anchors.margins: 2
+                                        source: face.m?.avatar ?? ""
+                                        sourceSize: Qt.size(40, 40)
+                                        visible: false
+                                    }
+                                    Rectangle { id: faceMask; anchors.fill: faceImg; radius: width / 2; visible: false; layer.enabled: true }
+                                    MultiEffect { anchors.fill: faceImg; source: faceImg; maskEnabled: true; maskSource: faceMask }
                                 }
                             }
                         }
-                        Item { // how many are in the call, while nobody talks
+                        Text { // more than three: how many more (green if one of them talks)
+                            visible: Discord.members.length > 3
                             anchors.verticalCenter: parent.verticalCenter
-                            readonly property bool on: Discord.speaking.length === 0
-                            width: on ? countLabel.implicitWidth : 0
-                            height: countLabel.implicitHeight
-                            clip: true
-                            Behavior on width { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
-                            Text {
-                                id: countLabel
-                                opacity: parent.on ? 1 : 0
-                                Behavior on opacity { NumberAnimation { duration: 200 } }
-                                font.family: Theme.font
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                font.features: { "tnum": 1 }
-                                color: Theme.text
-                                text: Discord.members.length
-                            }
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                            color: Discord.members.slice(3).some(m => m.speaking) ? Theme.tone("success") : Theme.subtext
+                            Behavior on color { ColorAnimation { duration: 180 } }
+                            text: "+" + (Discord.members.length - 3)
                         }
                         TapHandler { acceptedButtons: Qt.LeftButton; onTapped: Discord.toggleMute() }
                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: Discord.toggleDeaf() }
