@@ -37,12 +37,32 @@ Item {
     // clipboard mode keeps room for the preview even with few results
     readonly property real wantH: 58 + (answering ? answer.height + 16 : results.length ? (clipping ? Math.max(shown, 4) : shown) * rowH + 14 : 52)
 
-    property string query: ""
+    // a mode's symbol (? > ; :) doesn't stay in the field: it becomes a chip
+    // before it, and Backspace at the start of the field takes it away again.
+    // `query` still reads as before ("?question"), so the rest is unchanged
+    property string mode: ""
+    property string fieldText: ""
+    readonly property string query: mode + fieldText
+    readonly property var modes: ({
+        "?": { label: "Ask Claude", hint: "Ask anything" },
+        ">": { label: "Actions", hint: "Lock, timer, Wi-Fi, screenshot…" },
+        ";": { label: "Clipboard", hint: "Search what you copied" },
+        ":": { label: "Emoji", hint: "Search emoji and symbols" }
+    })
+    function absorb(text: string): void {
+        if (!mode && text.length && modes[text[0]]) {
+            mode = text[0];
+            field.text = text.slice(1).replace(/^ +/, ""); // comes straight back here
+            return;
+        }
+        fieldText = text;
+    }
     property int current: 0
     property string confirming: ""   // action id waiting for a second Enter
 
     function reset(seed: string): void {
         Ask.clear();
+        mode = "";
         field.text = seed ?? "";
         current = 0;
         confirming = "";
@@ -278,7 +298,7 @@ Item {
         else if (r.kind === "win") { close(); focusWindow(r.w); }
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
         else {
-            if (r.a.id === "timermenu") { field.text = "> timer "; return; } // stay open: pick a length
+            if (r.a.id === "timermenu") { root.mode = ">"; field.text = "timer "; return; } // stay open: pick a length
             if (r.a.confirm && confirming !== r.a.id) { current = i; confirming = r.a.id; return; }
             close();
             runAction(r.a);
@@ -304,19 +324,50 @@ Item {
             color: root.asking ? Theme.tone("action") : Theme.subtext
             size: 20
         }
+        Rectangle {
+            id: modeChip
+            x: 40
+            anchors.verticalCenter: parent.verticalCenter
+            height: 26
+            radius: 13
+            readonly property var m: root.modes[root.mode] ?? null
+            property string shownLabel: ""
+            onMChanged: if (m) shownLabel = m.label // keeps its text while it fades out
+            width: m ? chipLabel.implicitWidth + 22 : 0
+            opacity: m ? 1 : 0
+            visible: width > 1
+            clip: true
+            color: Qt.alpha(Theme.tone("action"), 0.18)
+            Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+            Behavior on opacity { NumberAnimation { duration: 140 } }
+            Text {
+                id: chipLabel
+                anchors.centerIn: parent
+                font.family: Theme.font
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+                color: Theme.tone("action")
+                text: modeChip.shownLabel
+            }
+            TapHandler { onTapped: { root.mode = ""; field.forceActiveFocus(); } }
+        }
         TextInput {
             id: field
-            x: 44
-            width: parent.width - 44 - 16
+            x: modeChip.width > 1 ? modeChip.x + modeChip.width + 10 : 44
+            width: parent.width - x - 16
             anchors.verticalCenter: parent.verticalCenter
             font.family: Theme.font
             font.pixelSize: 15
             color: Theme.text
             selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
             clip: true
-            onTextChanged: root.query = text
+            onTextChanged: root.absorb(text)
             Keys.onPressed: e => {
                 const ctrl = e.modifiers & Qt.ControlModifier;
+                // Backspace at the very start leaves the mode
+                if (e.key === Qt.Key_Backspace && root.mode && field.cursorPosition === 0 && !field.selectedText) {
+                    root.mode = ""; e.accepted = true; return;
+                }
                 if (root.answering) { // the answer is showing: arrows scroll it, Enter asks again
                     if (e.key === Qt.Key_Down || e.key === Qt.Key_Up) { answer.scroll(e.key === Qt.Key_Down ? 60 : -60); e.accepted = true; return; }
                     if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
@@ -339,7 +390,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !field.text && !field.preeditText
                 font.pixelSize: 15
-                text: "Search apps, = maths, > actions, ; clipboard, : emoji, ? ask Claude"
+                text: root.modes[root.mode]?.hint ?? "Search apps, = maths, > actions, ; clipboard, : emoji, ? ask Claude"
             }
         }
     }

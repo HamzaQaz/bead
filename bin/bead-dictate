@@ -6,11 +6,16 @@ and prints `level <0..1>` lines about 20 times a second. Writing `stop` to
 stdin ends the recording, transcribes it with whisper.cpp (local, on the GPU
 via Vulkan when ggml-vulkan is installed) and types the text into whatever
 has keyboard focus with wtype. `cancel`, a press shorter than 0.3 s or a
-recording with no speech in it types nothing. BEAD_DICTATE_DRY=1 prints the
-text without typing it.
+recording with no speech in it types nothing. BEAD_DICTATE_DRY=1 or --no-type
+prints the text without typing it (voice commands use that).
 
-Out (JSON lines): {"level": x} | {"state": "transcribing"} |
+Out (JSON lines): {"level": x} | {"partial": "..."} | {"state": "transcribing"} |
                   {"text": "..."} | {"error": "..."}
+
+--server URL     transcribe through a running whisper-server (fast, warm) instead
+                 of starting whisper-cli; falls back to whisper-cli if it fails
+--partials       while recording, transcribe what's been said so far about twice
+                 a second and print it as {"partial": ...} (needs --server)
 Only the Python standard library is used.
 """
 import array
@@ -21,9 +26,12 @@ import re
 import shutil
 import subprocess
 import sys
+import io
 import tempfile
 import threading
 import time
+import urllib.request
+import uuid
 import wave
 
 RATE = 16000
@@ -51,9 +59,41 @@ def clean(text: str) -> str:
     return text
 
 
+def arg(name):
+    a = sys.argv
+    return a[a.index(name) + 1] if name in a and a.index(name) + 1 < len(a) else None
+
+
+def wav_bytes(pcm: bytes) -> bytes:
+    b = io.BytesIO()
+    with wave.open(b, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(pcm)
+    return b.getvalue()
+
+
+def via_server(url: str, pcm: bytes, timeout=10) -> str:
+    """POST a WAV to whisper-server's /inference (multipart, stdlib only)."""
+    k = uuid.uuid4().hex
+    parts = []
+    for name, val in (("response_format", "json"), ("temperature", "0")):
+        parts.append(f'--{k}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{val}\r\n'.encode())
+    parts.append(f'--{k}\r\nContent-Disposition: form-data; name="file"; filename="a.wav"\r\n'
+                 f'Content-Type: audio/wav\r\n\r\n'.encode() + wav_bytes(pcm) + b"\r\n")
+    parts.append(f"--{k}--\r\n".encode())
+    req = urllib.request.Request(url.rstrip("/") + "/inference", b"".join(parts),
+                                 {"Content-Type": f"multipart/form-data; boundary={k}"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r).get("text", "")
+
+
 def main():
+    server = arg("--server")
+    partials = server and "--partials" in sys.argv
     wbin = whisper_bin()
-    if not wbin:
+    if not wbin and not server:
         say(error="whisper.cpp isn't installed (pacman -S whisper-cpp ggml-vulkan)")
         return 1
     if not os.path.exists(MODEL):
@@ -84,22 +124,50 @@ def main():
     threading.Thread(target=commands, daemon=True).start()
 
     frames = bytearray()
+    lock = threading.Lock()
+    heard_speech = threading.Event()
+
+    def partial_loop():
+        last = 0
+        while not stop.is_set():
+            time.sleep(0.45)
+            if stop.is_set() or not heard_speech.is_set():
+                continue
+            with lock:
+                n = len(frames)
+                if n == last:
+                    continue
+                pcm = bytes(frames[-RATE * 2 * 30:])  # the last 30 s is plenty
+            last = n
+            try:
+                t = clean(via_server(server, pcm, timeout=5))
+            except Exception:
+                continue
+            if t and not stop.is_set():
+                say(partial=t)
+    if partials:
+        threading.Thread(target=partial_loop, daemon=True).start()
     chunk = RATE // 20 * 2  # 50 ms of s16
     smooth = 0.0
+    peak = 0.0
     loud = 0  # 50 ms chunks at speech level: silence alone makes whisper invent words ("you")
     while not stop.is_set():
         b = rec.stdout.read(chunk)
         if not b:
             break
-        frames += b
+        with lock:
+            frames += b
         a = array.array("h", b[: len(b) // 2 * 2])
         if a:
             rms = math.sqrt(sum(s * s for s in a) / len(a)) / 32768
             # speech sits around 0.02-0.2 rms: map to 0..1 on a log scale
             lvl = max(0.0, min(1.0, (math.log10(max(rms, 1e-4)) + 3) / 2.2))
             smooth = max(lvl, smooth * 0.75)
-            if lvl > 0.3:
+            peak = max(peak, lvl)
+            if lvl > 0.18:  # quiet headset mics sit around 0.2-0.4 when you talk
                 loud += 1
+                if loud >= 3:
+                    heard_speech.set()
             say(level=round(smooth, 3))
     rec.terminate()
     try:
@@ -110,23 +178,33 @@ def main():
     try:
         if (cancelled.is_set() or time.monotonic() - started < MIN_SECONDS
                 or len(frames) < RATE * 2 * MIN_SECONDS or loud < 3):
-            say(text="")
+            say(text="", peak=round(peak, 3), loud=loud)
             return 0
-        with wave.open(wav_path, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(RATE)
-            w.writeframes(bytes(frames))
         say(state="transcribing")
-        r = subprocess.run(
-            [wbin, "-m", MODEL, "-f", wav_path, "-l", "en", "-nt", "-np",
-             "-t", str(min(4, os.cpu_count() or 4))],
-            capture_output=True, text=True, timeout=60)
-        if r.returncode != 0:
-            say(error=(r.stderr.strip().splitlines() or ["whisper failed"])[-1][:200])
-            return 1
-        text = clean(r.stdout)
-        if text and not os.environ.get("BEAD_DICTATE_DRY"):
+        text = None
+        if server:
+            try:
+                text = clean(via_server(server, bytes(frames), timeout=30))
+            except Exception:
+                text = None  # fall back to whisper-cli
+        if text is None:
+            if not wbin:
+                say(error="whisper.cpp isn't installed (pacman -S whisper-cpp ggml-vulkan)")
+                return 1
+            with wave.open(wav_path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(RATE)
+                w.writeframes(bytes(frames))
+            r = subprocess.run(
+                [wbin, "-m", MODEL, "-f", wav_path, "-l", "en", "-nt", "-np",
+                 "-t", str(min(4, os.cpu_count() or 4))],
+                capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                say(error=(r.stderr.strip().splitlines() or ["whisper failed"])[-1][:200])
+                return 1
+            text = clean(r.stdout)
+        if text and not os.environ.get("BEAD_DICTATE_DRY") and "--no-type" not in sys.argv:
             # type into whatever has focus; a trailing space lets the next
             # dictation carry on the sentence
             subprocess.run(["wtype", "--", text + " "], timeout=30)

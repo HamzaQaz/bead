@@ -174,7 +174,7 @@ Scope {
     }
 
     // bound in Hyprland as hl.dsp.global("bead:overview") on Super+Tab
-    // push-to-talk dictation: hold, speak, release (Super+H)
+    // push-to-talk dictation: hold, speak, release (Super+A)
     GlobalShortcut {
         appid: "bead"
         name: "dictate"
@@ -185,6 +185,82 @@ Scope {
     Connections {
         target: Dictation
         function onFailed(why) { root.toast("mic_off", why, "error", 3500); }
+    }
+    // voice commands: hold, say what you want, release (Super+Space)
+    GlobalShortcut {
+        appid: "bead"
+        name: "voice"
+        description: "Hold to give a voice command"
+        onPressed: Voice.start()
+        onReleased: Voice.stop()
+    }
+    Connections {
+        target: Voice
+        function onFailed(why) { root.toast("mic_off", why, "error", 3500); }
+        function onDecided(a, heard) { root.runVoice(a, heard); }
+    }
+    // "1 hour and thirty seconds", "an hour and a half", "90 seconds" -> ms (0 if none)
+    function spokenDuration(text: string): real {
+        const words = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+            eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, "forty-five": 45, fifty: 50, sixty: 60, ninety: 90 };
+        const unit = { h: 3600, m: 60, s: 1 };
+        const t = text.toLowerCase().replace(/-(?!five)/g, " ")
+            .replace(/\bhalf (an|a) hour\b/g, "30 minutes").replace(/\bhalf (a|an) minute\b/g, "30 seconds");
+        let total = 0;
+        const re = /(\d+(?:\.\d+)?|[a-z-]+)\s+(hour|hr|minute|min|second|sec)s?\b(\s+and\s+a\s+half)?/g;
+        let m;
+        while ((m = re.exec(t)) !== null) {
+            const n = /^\d/.test(m[1]) ? parseFloat(m[1]) : words[m[1]];
+            if (n === undefined) continue;
+            const u = unit[m[2][0]];
+            total += (n + (m[3] ? 0.5 : 0)) * u;
+        }
+        return Math.round(total) * 1000;
+    }
+    // run what the voice model picked; each says what it did on the island
+    function runVoice(a: var, heard: string): void {
+        const say = (icon, text) => root.toast(icon, text, "action", 2200);
+        const dispatch = lua => Quickshell.execDetached(["hyprctl", "dispatch", lua]);
+        switch (a.action) {
+        case "timer": {
+            // the words themselves first: small models mix up units
+            const ms = root.spokenDuration(heard) || (((a.hours ?? 0) * 60 + (a.minutes ?? 0)) * 60 + (a.seconds ?? 0)) * 1000;
+            if (!(ms > 0)) break;
+            Countdown.startTimer(ms, "");
+            return say("timer", "Timer \u00b7 " + Countdown.fmtTotal(ms));
+        }
+        case "stopwatch": Countdown.startStopwatch(); return say("timer", "Stopwatch started");
+        case "stop_timers": Countdown.stopAll(); return say("timer_off", "Timers stopped");
+        case "play_pause": if (root.player?.canTogglePlaying) { root.player.togglePlaying(); return say(root.player.isPlaying ? "pause" : "play_arrow", root.player.isPlaying ? "Paused" : "Playing"); } break;
+        case "next_track": if (root.player?.canGoNext) { root.player.next(); return say("skip_next", "Next track"); } break;
+        case "previous_track": if (root.player?.canGoPrevious) { root.player.previous(); return say("skip_previous", "Previous track"); } break;
+        case "volume_set": if (a.level === undefined) break; Audio.setVolume(a.level / 100); root.flash("volume", ""); return;
+        case "volume_up": Audio.setVolume(Audio.volume + 0.1); root.flash("volume", ""); return;
+        case "volume_down": Audio.setVolume(Audio.volume - 0.1); root.flash("volume", ""); return;
+        case "mute": Audio.toggleMute(); root.flash("volume", ""); return;
+        case "mic_mute": Audio.toggleMicMute(); root.flash("mic", ""); return;
+        case "open_app": {
+            const e = a.app ? Apps.search(a.app)[0] : null;
+            if (!e) return root.toast("search_off", "No app called \u201c" + (a.app ?? heard) + "\u201d", "error", 2600);
+            Apps.launch(e);
+            return say("open_in_new", "Opening " + e.name);
+        }
+        case "workspace": if (!(a.workspace > 0)) break; dispatch(`hl.dsp.focus({ workspace = "${a.workspace}" })`); return;
+        case "overview": root.overviewOpen = true; return;
+        case "wallpaper": Wallpaper.random(""); return say("wallpaper", "New wallpaper");
+        case "dnd": Notifs.dnd = !Notifs.dnd; return say(Notifs.dnd ? "do_not_disturb_on" : "notifications", Notifs.dnd ? "Do not disturb on" : "Do not disturb off");
+        case "screenshot_area": Capture.shot("area"); return;
+        case "screenshot_screen": Capture.shot("screen"); return;
+        case "ask": {
+            const q = a.text || heard;
+            root.launcherSeed = "?" + q;
+            if (root.launcherOpen) root.launcherSeedChanged();
+            root.launcherOpen = true;
+            Ask.ask(q);
+            return;
+        }
+        }
+        root.toast("help", "Not a command: \u201c" + heard + "\u201d", "info", 2800);
     }
     GlobalShortcut {
         appid: "bead"
@@ -398,7 +474,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
                 // launcher…) tucks at the resting width, not as a wide strip
@@ -518,13 +594,13 @@ Scope {
             property string prevState: "rest"
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "voice" ? voiceView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "passkey" ? passkeyView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
                     : win.state === "activity" ? (root.activity === "notif" ? 58 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
@@ -593,18 +669,23 @@ Scope {
                     // live: dictation. The mic and your level while you hold the key,
                     // then pulsing dots while whisper works (click: stop / cancel)
                     Row {
-                        visible: Dictation.active
+                        id: voiceChip
+                        visible: Dictation.active || Voice.active
+                        // the command one shows a different glyph and "thinks" after transcribing
+                        readonly property bool cmd: Voice.active
+                        readonly property string phase: cmd ? Voice.state : Dictation.state
+                        readonly property real level: cmd ? Voice.level : Dictation.level
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 6
                         Icon {
                             anchors.verticalCenter: parent.verticalCenter
-                            name: "mic"
+                            name: voiceChip.cmd ? "graphic_eq" : "mic"
                             size: 17
                             fill: 1
                             color: Theme.tone("action")
                         }
                         Row {
-                            visible: Dictation.state === "listening"
+                            visible: voiceChip.phase === "listening"
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
                             Repeater {
@@ -617,13 +698,13 @@ Scope {
                                     color: Theme.text
                                     // the middle bars reach highest
                                     readonly property real shape: [0.55, 0.8, 1, 0.8, 0.55][index]
-                                    height: 4 + 12 * Math.min(1, Dictation.level * shape * 1.3)
+                                    height: 4 + 12 * Math.min(1, voiceChip.level * shape * 1.3)
                                     Behavior on height { NumberAnimation { duration: 70 } }
                                 }
                             }
                         }
                         Row {
-                            visible: Dictation.state === "transcribing"
+                            visible: voiceChip.phase === "transcribing" || voiceChip.phase === "thinking"
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 3
                             Repeater {
@@ -635,7 +716,7 @@ Scope {
                                     color: Theme.text
                                     opacity: 0.3
                                     SequentialAnimation on opacity {
-                                        running: Dictation.state === "transcribing"
+                                        running: voiceChip.visible && voiceChip.phase !== "listening"
                                         loops: Animation.Infinite
                                         PauseAnimation { duration: dot.index * 140 }
                                         NumberAnimation { to: 1; duration: 260 }
@@ -645,7 +726,7 @@ Scope {
                                 }
                             }
                         }
-                        TapHandler { onTapped: Dictation.state === "listening" ? Dictation.stop() : Dictation.cancel() }
+                        TapHandler { onTapped: voiceChip.cmd ? (Voice.state === "listening" ? Voice.stop() : Voice.cancel()) : Dictation.state === "listening" ? Dictation.stop() : Dictation.cancel() }
                     }
                     // live: Discord call (click mutes, right-click deafens); who's talking
                     Row {
@@ -790,7 +871,7 @@ Scope {
                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
                     }
                     Rectangle { // between live chips and the rest
-                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Dictation.active
+                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Dictation.active || Voice.active
                         anchors.verticalCenter: parent.verticalCenter
                         width: 1; height: 14
                         color: Qt.alpha(Theme.text, 0.15)
@@ -1113,6 +1194,16 @@ Scope {
                 }
 
                 // ── workspace overview ──
+                VoiceView {
+                    id: voiceView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    active: win.state === "voice"
+                    opacity: active ? 1 : 0
+                    visible: opacity > 0.01
+                    SwapFade on opacity {}
+                }
                 OverviewView {
                     id: overviewView
                     maxW: win.width - 40

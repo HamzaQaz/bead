@@ -20,6 +20,8 @@ Singleton {
 
     function start(): void {
         if (helper.running) return;
+        // a muted mic records silence, which then does nothing: say so instead
+        if (Audio.micMuted) { root.failed("Your mic is muted"); return; }
         level = 0;
         state = "listening";
         helper.running = true;
