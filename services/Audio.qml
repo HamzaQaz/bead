@@ -3,9 +3,12 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.Pipewire
+import "autosink.js" as AutoSink
 
 // PipeWire: the default speaker and microphone (volume, mute), the output
 // and input devices to choose from, and the apps playing or recording.
+// Bluetooth headphones are followed: when they connect, sound moves to them;
+// when they go, it moves back to what was playing before (autosink.js).
 Singleton {
     id: root
 
@@ -23,6 +26,28 @@ Singleton {
     readonly property list<PwNode> playing: audioNodes.filter(n => n.isStream && mediaClass(n) === "Stream/Output/Audio")
     readonly property list<PwNode> recording: audioNodes.filter(n => n.isStream && mediaClass(n) === "Stream/Input/Audio"
         && !/^(cava|pipewire|wireplumber|quickshell|qs)/i.test(appName(n)))
+
+    // ── following Bluetooth headphones ──
+    readonly property var sinkNames: sinks.map(n => n.name).filter(Boolean)
+    property var lastNames: []
+    property string switchedTo: ""
+    property string before: ""
+    property bool settled: false       // what's there at start was already chosen
+    Timer { running: true; interval: 4000; onTriggered: { root.lastNames = root.sinkNames; root.settled = true; } }
+    onSinkNamesChanged: {
+        if (!settled) return;
+        const was = lastNames;
+        lastNames = sinkNames;
+        const d = AutoSink.decide(was, sinkNames, sink?.name ?? "", switchedTo, before);
+        if (!d) return;
+        const to = sinks.find(n => n.name === d.use);
+        const onto = /^bluez_output\./.test(d.use);   // onto the headphones, or back from them
+        switchedTo = onto ? d.use : "";
+        before = onto ? d.before : "";
+        if (!to) return;
+        useSink(to);
+        Osd.toast(switchedTo ? "headphones" : deviceGlyph(to, false), "Sound on " + deviceName(to), "info", 2600);
+    }
 
     readonly property real volume: sink?.audio?.volume ?? 0
     readonly property bool muted: sink?.audio?.muted ?? false
