@@ -17,6 +17,10 @@ Singleton {
     property bool locked: false
     property bool preview: false
     readonly property bool shown: locked || preview
+    // where each screen's bar clock is (screen name → rect, screen coords),
+    // published by the bar as the lock appears: unlocking, the lock clock
+    // flies there
+    property var barClocks: ({})
     property string password: ""
     property string st: "idle"      // idle | checking | error | success
     property string errorText: ""

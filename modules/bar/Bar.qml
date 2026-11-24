@@ -670,6 +670,18 @@ Scope {
 
                 // clock: hours, a sideways colon that fades with the seconds, minutes
                 Rectangle {
+                    id: barClock
+                    // where it is, for the lock's clock to fly to on unlock
+                    Connections {
+                        target: Lock
+                        function onShownChanged(): void {
+                            if (!Lock.shown) return;
+                            const p = barClock.mapToItem(null, 0, 0);
+                            const m = Object.assign({}, Lock.barClocks);
+                            m[scope.modelData.name] = Qt.rect(p.x, p.y, barClock.width, barClock.height);
+                            Lock.barClocks = m;
+                        }
+                    }
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 32
                     height: clockCol.height + 16

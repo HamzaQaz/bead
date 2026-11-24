@@ -136,11 +136,21 @@ Item {
         // ── clock and date ──
         Column {
             id: clockCol
-            readonly property real t: root.stage(0.08, 0.75)
+            // unlocking, it flies to the bar's clock and shrinks into it (the
+            // bar is under the lock, so they meet as the lock clears); with no
+            // bar to go to it just fades with the rest
+            readonly property rect to: Lock.barClocks[root.screen?.name ?? ""] ?? Qt.rect(0, 0, 0, 0)
+            readonly property bool hands: root.main && to.width > 0 && Lock.st === "success"
+            readonly property real fly: hands ? root.ease(root.leave * 1.05) : 0
+            readonly property real t: hands ? root.ease((root.enter - 0.08) / 0.67) : root.stage(0.08, 0.75)
             anchors.horizontalCenter: parent.horizontalCenter
             y: parent.height * 0.22 - 28 * (1 - t)
-            opacity: t
-            scale: 0.94 + 0.06 * t
+            opacity: t * (1 - Math.max(0, (fly - 0.55) / 0.45))
+            scale: (0.94 + 0.06 * t) * (1 - fly * (1 - to.height / Math.max(1, height) * 0.9))
+            transform: Translate {
+                x: clockCol.fly * (clockCol.to.x + clockCol.to.width / 2 - (clockCol.x + clockCol.width / 2))
+                y: clockCol.fly * (clockCol.to.y + clockCol.to.height / 2 - (clockCol.y + clockCol.height / 2))
+            }
             spacing: 2
             // each digit rolls up to the next when it changes
             Row {
