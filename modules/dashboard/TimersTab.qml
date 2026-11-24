@@ -30,6 +30,10 @@ Row {
 
         Item {
             id: dial
+            // a keyboard stop: Left/Right turn it, Return starts
+            readonly property bool focusStop: true
+            function focusAdjust(dir: int): void { quick.nudge(dir); }
+            function focusPress(): void { quick.start(); }
             x: 18
             anchors.verticalCenter: parent.verticalCenter
             width: 172; height: 172

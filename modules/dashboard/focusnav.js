@@ -64,3 +64,17 @@ function action(key, ctx) {
     if (key === "Up" || key === "Down") return { type: "move", dir: key.toLowerCase() };
     return { type: "none" };
 }
+
+// The hint strip's text for the focused control: what it can do
+// ({press, adjust, calendar}), or null when nothing has the ring yet.
+function hints(can) {
+    var bits = [];
+    if (!can) bits.push("←↑↓→ move", "1–7 tabs");
+    else if (can.calendar) bits.push("←↑↓→ day", "[ ] month", "t today");
+    else {
+        if (can.adjust) bits.push("←→ adjust");
+        if (can.press) bits.push("⏎ press");
+    }
+    bits.push("esc close");
+    return bits.join(" · ");
+}

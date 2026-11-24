@@ -7,6 +7,7 @@ import Quickshell.Services.Mpris
 import qs.components
 import qs.config
 import qs.services
+import "calendar.js" as Cal
 
 // Overview: greeting + clock + weather, calendar, now playing, system gauges.
 Row {
@@ -69,25 +70,29 @@ Row {
         width: 236
         height: parent.height
         readonly property date today: root.clock.date
-        readonly property int year: today.getFullYear()
-        readonly property int month: today.getMonth()
-        readonly property var days: {
-            const first = new Date(year, month, 1);
-            const offset = (first.getDay() + 6) % 7; // Monday first
-            const out = [];
-            for (let i = 0; i < 42; i++) {
-                const d = new Date(year, month, 1 - offset + i);
-                out.push({ n: d.getDate(), inMonth: d.getMonth() === month, today: d.toDateString() === today.toDateString() });
-            }
-            return out;
+        readonly property var now: ({ y: today.getFullYear(), m: today.getMonth(), d: today.getDate() })
+        // the selected day (its month is the one shown); null: today
+        property var picked: null
+        readonly property var sel: picked ?? now
+        readonly property var days: Cal.grid(sel, now)
+        // a keyboard stop with keys of its own (calendar.js): arrows move the
+        // day, [ ] page months, t goes back to today; off an edge the ring moves on
+        readonly property bool focusStop: true
+        readonly property bool focusCalendar: true
+        function focusKey(name: string): bool {
+            const r = Cal.key(sel, name, now);
+            if (r) picked = r.day;
+            return !!r;
         }
+        onVisibleChanged: if (!visible) picked = null
+        WheelHandler { onWheel: e => cal.picked = Cal.page(cal.sel, e.angleDelta.y > 0 ? -1 : 1) }
         Text {
             x: 16; y: 12
             font.family: Theme.font
             font.pixelSize: 13
             font.weight: Font.Medium
             color: Theme.text
-            text: Qt.formatDate(cal.today, "MMMM yyyy")
+            text: Qt.formatDate(new Date(cal.sel.y, cal.sel.m, 1), "MMMM yyyy")
         }
         Grid {
             x: 12; y: 38
@@ -103,16 +108,29 @@ Row {
                 }
             }
             Repeater {
-                model: cal.days.slice(0, cal.days[35].inMonth ? 42 : 35)
+                // a fixed set of cells that only change what they show: cells
+                // rebuilt while the dashboard is up render their digits with
+                // colour fringes, so paging must not rebuild them
+                model: 42
                 Item {
                     id: day
-                    required property var modelData
+                    required property int index
+                    readonly property var modelData: cal.days[index] ?? cal.days[0]
+                    visible: index < cal.days.length
                     width: 30; height: 26
                     Rectangle {
                         anchors.centerIn: parent
                         width: 24; height: 24; radius: 12
                         visible: day.modelData.today
                         color: Theme.tone("action")
+                    }
+                    Rectangle { // the selected day, once one is picked
+                        anchors.centerIn: parent
+                        width: 24; height: 24; radius: 12
+                        visible: cal.picked !== null && day.modelData.selected && !day.modelData.today
+                        color: "transparent"
+                        border.width: 1.5
+                        border.color: Theme.tone("action")
                     }
                     Text {
                         anchors.centerIn: parent

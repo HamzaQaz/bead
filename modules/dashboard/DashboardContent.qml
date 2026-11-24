@@ -63,21 +63,28 @@ Item {
     Keys.onPressed: e => {
         const field = root.Window.activeFocusItem;
         const editing = !!field && field !== root && field.cursorPosition !== undefined;
-        const name = keyNames[e.key] ?? (/^[1-9]$/.test(e.text) ? e.text : "");
+        const name = keyNames[e.key] ?? (/^[1-9\[\]t]$/.test(e.text) ? e.text : "");
+        if (root.handle(name, editing, !!(e.modifiers & Qt.ControlModifier), !!(e.modifiers & Qt.ShiftModifier) || e.key === Qt.Key_Backtab))
+            e.accepted = true;
+    }
+    // one key, by name ("Down", "Return", "3", "]"…): what a real key press does,
+    // and what `qs ipc call dashboard key <name>` sends. True when it was used.
+    function handle(name: string, editing: bool, ctrl: bool, shift: bool): bool {
+        // a control with keys of its own (the calendar) gets the first go
+        if (!editing && keys && cur && typeof cur.focusKey === "function" && cur.focusKey(name)) { ring.place(); return true; }
         const a = Nav.action(name, { tabs: tabs.length, tab: tab, editing: editing,
-            adjustable: !!cur && typeof cur.focusAdjust === "function",
-            ctrl: !!(e.modifiers & Qt.ControlModifier), shift: !!(e.modifiers & Qt.ShiftModifier) || e.key === Qt.Key_Backtab });
+            adjustable: !!cur && typeof cur.focusAdjust === "function", ctrl: ctrl, shift: shift });
         switch (a.type) {
         case "tab": root.select(a.index); break;
         case "move": go((all, from) => Nav.nearest(all, from, a.dir)); break;
         case "step": go((all, from) => Nav.step(all, from, a.dir)); break;
         case "adjust": keys = true; cur.focusAdjust(a.dir); break;
-        case "press": if (cur && keys) cur.focusPress(); break;
+        case "press": if (cur && keys && typeof cur.focusPress === "function") cur.focusPress(); break;
         case "leave": root.forceActiveFocus(); break;
         case "close": root.close(); break;
-        default: return;
+        default: return false;
         }
-        e.accepted = true;
+        return true;
     }
     HoverHandler { onPointChanged: if (root.keys) root.keys = false } // the mouse takes over: no ring
     Rectangle {
@@ -354,6 +361,23 @@ Item {
         Page {
             index: 6
             SettingsTab { anchors.fill: parent }
+        }
+    }
+
+    // ── the hint strip: while the ring shows, the keys its control takes,
+    // in the margin under the pages ──
+    Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: root.height - 17
+        font.family: Theme.font
+        font.pixelSize: 10
+        color: Qt.alpha(Theme.text, 0.45)
+        opacity: root.keys ? 1 : 0
+        visible: opacity > 0.01
+        Behavior on opacity { NumberAnimation { duration: 160 } }
+        text: {
+            const c = root.cur;
+            return Nav.hints(c ? { press: typeof c.focusPress === "function", adjust: typeof c.focusAdjust === "function", calendar: !!c.focusCalendar } : null);
         }
     }
 }

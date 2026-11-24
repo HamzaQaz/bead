@@ -72,4 +72,10 @@ TestCase {
         compare(key("Space", { editing: true }), { type: "none" });
     }
     function test_any_other_key_does_nothing() { compare(key("Q"), { type: "none" }); }
+
+    // ── the hint strip: the keys that work on the focused control ──
+    function test_hints_for_a_button() { compare(Nav.hints({ press: true }), "⏎ press · esc close"); }
+    function test_hints_for_a_slider() { compare(Nav.hints({ press: true, adjust: true }), "←→ adjust · ⏎ press · esc close"); }
+    function test_hints_for_the_calendar() { compare(Nav.hints({ calendar: true }), "←↑↓→ day · [ ] month · t today · esc close"); }
+    function test_hints_with_nothing_focused() { compare(Nav.hints(null), "←↑↓→ move · 1–7 tabs · esc close"); }
 }
