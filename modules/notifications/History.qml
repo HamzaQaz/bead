@@ -54,14 +54,21 @@ Scope {
         const d = new Date(now);
         const today = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
         const section = t => t >= today ? "Today" : t >= today - 86400000 ? "Yesterday" : "Earlier";
-        const sections = [];
+        // the DND digest comes first; in it, people (Discord) lead, then the busiest apps
+        const sections = Notifs.awayFrom ? [{ title: "While you were away", order: [], by: {} }] : [];
         for (const e of Notifs.entries) { // newest first
-            const title = section(e.time);
+            const title = Notifs.away(e) ? "While you were away" : section(e.time);
             let sec = sections.find(x => x.title === title);
             if (!sec) { sec = { title, order: [], by: {} }; sections.push(sec); }
             const app = e.appName || "Notification";
             if (!sec.by[app]) { sec.by[app] = []; sec.order.push(app); }
             sec.by[app].push(e);
+        }
+        const away = sections.find(x => x.title === "While you were away");
+        if (away) {
+            const people = app => /discord|vesktop|vencord|telegram|signal|whatsapp|slack|element/i.test(app) ? 1 : 0;
+            away.order.sort((a, b) => people(b) - people(a) || away.by[b].length - away.by[a].length);
+            if (!away.order.length) sections.shift();
         }
         // headings only once there's more than today
         const headings = sections.length > 1 || (sections.length === 1 && sections[0].title !== "Today");

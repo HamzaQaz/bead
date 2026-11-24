@@ -715,6 +715,7 @@ Scope {
     property string toastTone: "info"
     function toast(icon: string, text: string, tone: string, ms: int): void {
         if (activity === "timerdone") return; // its own alarm is showing
+        toastTap = null; // set again after this by a toast that leads somewhere
         toastIcon = icon;
         toastText = text;
         toastTone = tone || "info";
@@ -724,6 +725,19 @@ Scope {
         target: CapsLock
         function onToggled(on: bool) {
             root.toast("keyboard_capslock", on ? "Caps Lock on" : "Caps Lock off", on ? "action" : "loading", 1300);
+        }
+    }
+    // a toast you can tap (the DND digest opens the history)
+    property var toastTap: null
+    Connections {
+        target: Notifs
+        function onMissed(list) {
+            // "12 while you were away · Discord 5, Firefox 2"
+            const by = {};
+            for (const e of list) { const a = e.appName || "Other"; by[a] = (by[a] ?? 0) + 1; }
+            const top = Object.keys(by).sort((a, b) => by[b] - by[a]).slice(0, 2).map(a => a + " " + by[a]).join(", ");
+            root.toast("notifications", list.length + " while you were away \u00b7 " + top, "action", 6000);
+            root.toastTap = () => { Notifs.panelOpen = true; };
         }
     }
     Connections {
@@ -801,7 +815,10 @@ Scope {
 
     // which level the pill shows, kept while it fades out (activity is "" by then)
     property string levelKind: "volume"
-    onActivityChanged: if (["volume", "mic", "brightness"].includes(activity)) levelKind = activity
+    onActivityChanged: {
+        if (["volume", "mic", "brightness"].includes(activity)) levelKind = activity;
+        if (activity !== "toast") toastTap = null; // a tappable toast ends with its toast
+    }
     readonly property real activityLevel: levelKind === "brightness" ? (Brightness.values[activityOn] ?? 0.5)
         : levelKind === "mic" ? (Audio.micMuted ? 0 : 1)
         : (Audio.muted ? 0 : Audio.volume)
@@ -1620,6 +1637,14 @@ Scope {
                     }
                 }
 
+                // a toast that leads somewhere (the DND digest)
+                MouseArea {
+                    anchors.fill: parent
+                    visible: root.toastTap !== null && root.pendingRun === null && win.state === "activity"
+                    z: 5
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: { const f = root.toastTap; root.toastTap = null; root.activity = ""; if (f) f(); }
+                }
                 // a pending close: tap to stop it, and a bar running out
                 MouseArea {
                     anchors.fill: parent

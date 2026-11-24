@@ -24,6 +24,28 @@ Singleton {
     // a new notification popped up (not held by DND or the open panel)
     signal posted(var entry)
 
+    // ── the digest: what came in while Do Not Disturb was on. When it ends,
+    // `missed` says what arrived (the island offers it), and the history shows
+    // them first, under "While you were away", until the panel's next closed ──
+    property real dndSince: 0     // when DND went on (saved: a restart keeps it)
+    property real awayFrom: 0     // the stretch the history shows first
+    property real awayTo: 0
+    signal missed(var list)
+    function away(e: var): bool { return awayFrom > 0 && e.time >= awayFrom && e.time <= awayTo; }
+    onDndChanged: {
+        if (!loaded) return;
+        saveTimer.restart();
+        if (dnd) { dndSince = Date.now(); return; }
+        const from = dndSince;
+        dndSince = 0;
+        const list = from ? entries.filter(e => e.time >= from) : [];
+        if (!list.length) return;
+        awayFrom = from;
+        awayTo = Date.now();
+        missed(list);
+    }
+    onPanelOpenChanged: if (!panelOpen && awayFrom) { awayFrom = 0; awayTo = 0; }
+
     // live notification objects by entry key (not saved)
     property var live: ({})
 
@@ -89,12 +111,12 @@ Singleton {
     // ── persistence ──
     property bool loaded: false
     onEntriesChanged: if (loaded) saveTimer.restart()
-    onDndChanged: if (loaded) saveTimer.restart()
     Timer {
         id: saveTimer
         interval: 800
         onTriggered: store.setText(JSON.stringify({
             dnd: root.dnd,
+            dndSince: root.dndSince,
             // images from image-data hints don't survive a restart
             entries: root.entries.map(e => Object.assign({}, e, {
                 image: /^(\/|file:)/.test(e.image ?? "") ? e.image : "",
@@ -113,6 +135,7 @@ Singleton {
                 const d = JSON.parse(text());
                 root.entries = d.entries ?? [];
                 root.dnd = !!d.dnd;
+                root.dndSince = root.dnd ? (d.dndSince || Date.now()) : 0;
             } catch (e) {}
             root.loaded = true;
         }
