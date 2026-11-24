@@ -208,9 +208,10 @@ Scope {
     // ── a moment to change your mind: things that can't be undone (closing
     // windows) wait ~1.4 s on the island first; tap it to stop them ──
     property var pendingRun: null
-    function confirmThen(icon: string, text: string, run: var): void {
+    function confirmThen(icon: string, text: string, run: var, ms: int): void {
         if (root.pendingRun) pendingTimer.triggered(); // the one before goes ahead
         root.pendingRun = run;
+        pendingTimer.interval = ms || 1400;
         root.toast(icon, text + " \u00b7 tap to stop", "error", pendingTimer.interval + 200);
         pendingTimer.restart();
     }
@@ -220,6 +221,39 @@ Scope {
         pendingTimer.stop();
         root.toast("block", "Stopped", "info", 1200);
     }
+    // which windows on workspace WS are terminals with something running in
+    // them (closing those asks first, and would lose what's running): their
+    // addresses, to THEN. "Something": a program other than a bare shell
+    // (kitty running `htop` directly), or anything a shell is running.
+    Process {
+        id: busyCheck
+        property var then: null
+        stderr: StdioCollector { onStreamFinished: if (text) console.warn("voice: busy check:", text) }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const f = busyCheck.then;
+                busyCheck.then = null;
+                if (f) f(text.split(/\s+/).filter(x => x));
+            }
+        }
+    }
+    function busyOn(ws: int, then: var): void {
+        busyCheck.then = then;
+        busyCheck.command = ["sh", "-c", `hyprctl clients -j | jq -r --argjson ws "$1" '.[] | select(.workspace.id == $ws) | select(.class | test("^(kitty|foot|footclient|alacritty|Alacritty|org[.]wezfurlong[.]wezterm|com[.]mitchellh[.]ghostty|konsole|org[.]kde[.]konsole|xterm|bead-.*)$")) | "\\(.address) \\(.pid)"' |
+            while read -r a p; do for c in $(pgrep -P "$p"); do
+                case $(ps -o comm= -p "$c") in
+                kitten) continue ;; # kitty's own helpers
+                sh|bash|zsh|fish|dash|nu|ksh|tcsh|elvish|xonsh) pgrep -P "$c" >/dev/null || continue ;;
+                esac
+                echo "$a"; break
+            done; done`, "sh", String(ws)];
+        busyCheck.running = true;
+    }
+    function names(ts: var): string {
+        const n = ts.map(t => root.winName(t)).filter((x, i, all) => all.indexOf(x) === i);
+        return n.length > 3 ? n.slice(0, 2).join(", ") + " and " + (n.length - 2) + " more" : n.join(n.length === 2 ? " and " : ", ");
+    }
+
     Timer {
         id: pendingTimer
         interval: 1400
@@ -415,15 +449,39 @@ Scope {
                 if (ws && wasOn) dispatch(`hl.dsp.focus({ workspace = "${wasOn}" })`);
             });
             if (!ws) { Apps.launch(e); return say("open_in_new", "Opening " + e.name); }
-            const doomed = alone ? Hyprland.toplevels.values.filter(t => t.workspace?.id === ws).map(t => root.addr(t)) : [];
-            const go = () => {
-                for (const ad of doomed) dispatch(`hl.dsp.window.close({ window = "address:${ad}" })`);
+            const there = alone ? Hyprland.toplevels.values.filter(t => t.workspace?.id === ws) : [];
+            if (!there.length) {
                 Apps.launchOn(e, ws);
                 dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
-            };
-            if (doomed.length) return root.confirmThen("close", "Closing " + doomed.length + " on " + ws + ", opening " + e.name, go);
-            go();
-            return say("open_in_new", "Opening " + e.name + " on " + ws);
+                return say("open_in_new", "Opening " + e.name + " on " + ws);
+            }
+            // "close the rest": what's there closes, except terminals with
+            // something running in them, which move to a free workspace (their
+            // close would ask, and lose what's running). Shown first, with time
+            // to stop it.
+            const moved = []; // [address, from] once moved, for undo
+            remember("making room", () => { for (const [ad, from] of moved) dispatch(`hl.dsp.window.move({ workspace = "${from}", window = "address:${ad}", follow = false })`); });
+            root.busyOn(ws, busy => {
+                const moving = there.filter(t => busy.includes(root.addr(t)));
+                const closing = there.filter(t => !busy.includes(root.addr(t)));
+                let spare = 0;
+                for (let i = 1; !spare && i <= 20; i++)
+                    if (i !== ws && !Hyprland.toplevels.values.some(t => t.workspace?.id === i)) spare = i;
+                const parts = [];
+                if (closing.length) parts.push("Closing " + root.names(closing));
+                if (moving.length) parts.push(spare ? "moving " + root.names(moving) + " to " + spare + " (busy)" : "leaving " + root.names(moving) + " (busy)");
+                parts.push("then " + e.name + " on " + ws);
+                root.confirmThen(closing.length ? "close" : "move_item", parts.join(" \u00b7 "), () => {
+                    for (const t of closing) dispatch(`hl.dsp.window.close({ window = "address:${root.addr(t)}" })`);
+                    if (spare) for (const t of moving) {
+                        dispatch(`hl.dsp.window.move({ workspace = "${spare}", window = "address:${root.addr(t)}", follow = false })`);
+                        moved.push([root.addr(t), String(ws)]);
+                    }
+                    Apps.launchOn(e, ws);
+                    dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
+                }, 2600);
+            });
+            return;
         }
         case "window": {
             // something done to an open window, found by its app's name ("this": the focused one)
