@@ -32,69 +32,56 @@ Item {
         Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "close"]);
     }
 
-    Column {
-        anchors.centerIn: parent
-        width: Math.min(parent.width - 40, 760)
-        spacing: 18
-
-        Row {
-            spacing: 14
+    // 14 tiles, 7 by 2, filling the tab: the pages, and the window itself
+    readonly property var all: [{ id: "", t: "All settings", g: "settings", main: true }, ...tiles]
+    Grid {
+        id: grid
+        anchors.fill: parent
+        anchors.margins: 4
+        columns: 7
+        columnSpacing: 10
+        rowSpacing: 10
+        readonly property real cw: (width - columnSpacing * (columns - 1)) / columns
+        readonly property real ch: (height - rowSpacing) / 2
+        Repeater {
+            model: root.all
             Rectangle {
-                width: 44; height: 44; radius: 13
-                color: Theme.tone("action")
-                Icon { anchors.centerIn: parent; name: "settings"; size: 24; fill: 1; color: Theme.frame }
-            }
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                Text { font.family: Theme.font; font.pixelSize: 18; font.weight: Font.Bold; color: Theme.text; text: "Settings" }
-                Label { font.pixelSize: 11; text: "Everything bead can change, in its own window" }
-            }
-        }
-
-        Grid {
-            id: grid
-            columns: 5
-            columnSpacing: 10
-            rowSpacing: 10
-            readonly property real cw: (parent.width - columnSpacing * (columns - 1)) / columns
-            Repeater {
-                model: root.tiles
-                Rectangle {
-                    id: tile
-                    required property var modelData
-                    readonly property bool focusStop: true   // a stop for the keyboard ring (focusnav.js)
-                    readonly property real focusRadius: 14
-                    function focusPress(): void { root.open(modelData.id); }
-                    width: grid.cw
-                    height: 64
-                    radius: 14
-                    color: Qt.alpha(Theme.text, ma.pressed ? 0.12 : ma.containsMouse ? 0.08 : 0.045)
-                    scale: ma.pressed ? 0.97 : 1
-                    Behavior on scale { NumberAnimation { duration: 120 } }
-                    Row {
-                        x: 14; anchors.verticalCenter: parent.verticalCenter
-                        spacing: 10
-                        Icon { anchors.verticalCenter: parent.verticalCenter; name: tile.modelData.g; size: 20; color: Theme.tone("action") }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: tile.width - 14 - 20 - 10 - 10
-                            elide: Text.ElideRight
-                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
-                            color: Theme.text
-                            text: tile.modelData.t
-                        }
+                id: tile
+                required property var modelData
+                readonly property bool main: !!modelData.main
+                readonly property bool focusStop: true   // a stop for the keyboard ring (focusnav.js)
+                readonly property real focusRadius: 16
+                function focusPress(): void { root.open(modelData.id); }
+                width: grid.cw
+                height: grid.ch
+                radius: 16
+                color: main ? Qt.alpha(Theme.tone("action"), ma.pressed ? 0.3 : ma.containsMouse ? 0.24 : 0.18)
+                    : Qt.alpha(Theme.text, ma.pressed ? 0.12 : ma.containsMouse ? 0.08 : 0.045)
+                Behavior on color { ColorAnimation { duration: 120 } }
+                scale: ma.pressed ? 0.96 : 1
+                Behavior on scale { NumberAnimation { duration: 120 } }
+                Column {
+                    anchors.centerIn: parent
+                    width: parent.width - 16
+                    spacing: 8
+                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: tile.modelData.g; size: 24; fill: tile.main ? 1 : 0; color: Theme.tone("action") }
+                    Text {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        font.family: Theme.font; font.pixelSize: 12; font.weight: tile.main ? Font.DemiBold : Font.Medium
+                        color: Theme.text
+                        text: tile.modelData.t
                     }
-                    Rectangle {
-                        visible: (tile.modelData.id === "updates" && Updates.count > 0) || (tile.modelData.id === "about" && Release.available)
-                        anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 10
-                        width: 7; height: 7; radius: 3.5
-                        color: Theme.tone("action")
-                    }
-                    MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.open(tile.modelData.id) }
                 }
+                Rectangle {
+                    visible: (tile.modelData.id === "updates" && Updates.count > 0) || (tile.modelData.id === "about" && Release.available)
+                    anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 10
+                    width: 7; height: 7; radius: 3.5
+                    color: Theme.tone("action")
+                }
+                MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.open(tile.modelData.id) }
             }
         }
-
-        Label { font.pixelSize: 11; text: "Also: the launcher (type “settings”) or  bead settings [page]" }
     }
 }
