@@ -3,7 +3,7 @@ SHARE  := $(PREFIX)/share/bead
 
 .PHONY: build install run glint install-glint strand test
 
-build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb
+build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb
 
 shaders/%.frag.qsb: shaders/%.frag
 	/usr/lib/qt6/bin/qsb --glsl "100es,120,150" --hlsl 50 --msl 12 -o $@ $<
@@ -13,7 +13,7 @@ install: build
 	@# keep the running version: a bead that fails to start gets it back (below)
 	@rm -rf $(SHARE).prev && cp -a $(SHARE) $(SHARE).prev
 	cp -r shell.qml config components modules services pam.d data hold $(SHARE)/
-	install -Dm644 -t $(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb
+	install -Dm644 -t $(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb
 	install -Dm755 bin/bead $(PREFIX)/bin/bead
 	install -Dm755 bin/bead-resume $(PREFIX)/bin/bead-resume
 	install -Dm755 bin/bead-discord $(PREFIX)/bin/bead-discord

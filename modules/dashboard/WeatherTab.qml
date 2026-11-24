@@ -6,6 +6,7 @@ import "../../components/emptystates.js" as Empty
 import qs.components
 import qs.config
 import qs.services
+import "sky.js" as Sky
 
 // Weather.
 //  left:  where, a big animated icon, the temperature and conditions, today's
@@ -31,6 +32,28 @@ Row {
         width: 312
         height: parent.height
         visible: Weather.ready
+
+        // behind it all, light motion matched to the weather (sky.js, sky.frag);
+        // it only runs while the tab is on screen
+        ShaderEffect {
+            id: sky
+            anchors.fill: parent
+            readonly property var what: Sky.of(Weather.code, Weather.isDay)
+            fragmentShader: Qt.resolvedUrl("../../shaders/sky.frag.qsb")
+            property size size: Qt.size(width, height)
+            property real time: 0
+            property real kind: what.kind
+            property real amount: what.amount
+            property real radius: parent.radius
+            property color tint: Theme.tone("action")
+            opacity: 0
+            Component.onCompleted: opacity = 1
+            Behavior on opacity { NumberAnimation { duration: 1200 } }
+            FrameAnimation {
+                running: sky.visible && root.visible
+                onTriggered: sky.time += frameTime
+            }
+        }
 
         Row {
             x: 20; y: 16
