@@ -84,6 +84,9 @@ Singleton {
         ssh: "open an SSH session (a remote shell) in a new terminal; workspace = the number, if they say where",
         open_app: "open or launch an application; app = its name only; workspace = the number, if they say which workspace (or window, desktop) to open it on; alone = true if they ask to close the other windows there",
         workspace: "go or switch to a workspace; workspace = its number",
+        layout_save: "save the windows and workspaces as they are now, as a layout; text = the layout's name",
+        layout_open: "set up, load or restore a saved layout of windows" + (Layouts.names.length ? " (saved: " + Layouts.names.join(", ") + ")" : "") + "; text = its name",
+        reply: "reply to the last message or notification; text = the reply, as said; app = whose (discord, signal…), only if they say",
         overview: "show all workspaces / windows",
         wallpaper: "change to a random wallpaper",
         dnd: "turn do not disturb on or off",
@@ -203,6 +206,10 @@ Singleton {
         + "\"ssh\" -> {\"action\":\"ssh\"}\n"
         + "\"ssh into the pi on workspace two\" -> {\"action\":\"ssh\",\"workspace\":2}\n"
         + "\"go to workspace three\" -> {\"action\":\"workspace\",\"workspace\":3}\n"
+        + "\"save this layout as coding\" -> {\"action\":\"layout_save\",\"text\":\"coding\"}\n"
+        + "\"set up my coding layout\" -> {\"action\":\"layout_open\",\"text\":\"coding\"}\n"
+        + "\"reply to that on my way\" -> {\"action\":\"reply\",\"text\":\"on my way\"}\n"
+        + "\"reply to signal saying sounds good\" -> {\"action\":\"reply\",\"app\":\"signal\",\"text\":\"sounds good\"}\n"
         + "\"skip this song\" -> {\"action\":\"next_track\"}\n"
         + "\"who wrote hamlet\" -> {\"action\":\"ask\",\"text\":\"who wrote hamlet\"}\n"
         + "\"hi there\" -> {\"action\":\"none\"}"

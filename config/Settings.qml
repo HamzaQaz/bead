@@ -24,6 +24,8 @@ Singleton {
     property alias units: a.units                   // "auto" | "celsius" | "fahrenheit"
     property alias askModel: a.askModel             // "sonnet" | "opus" | "haiku"
     property alias askVia: a.askVia                 // "claude" (Claude Code) | "api" (own key) | "local"
+    property alias clipHints: a.clipHints           // copied a colour, address, tracking number: the island offers what's next
+    property alias gameMode: a.gameMode             // performance, no blur or animations while a game is fullscreen
 
     readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || (Quickshell.screens[0]?.name ?? "")
 
@@ -52,6 +54,8 @@ Singleton {
             property string units: "auto"
             property string askModel: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
             property string askVia: "claude"
+            property bool gameMode: true
+            property bool clipHints: true
         }
     }
     // first run: write the defaults once the folder exists

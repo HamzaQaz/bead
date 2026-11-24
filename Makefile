@@ -22,6 +22,7 @@ install: build
 	install -Dm755 bin/bead-tint $(PREFIX)/bin/bead-tint
 	install -Dm755 bin/bead-pearl $(PREFIX)/bin/bead-pearl
 	install -Dm755 bin/bead-term $(PREFIX)/bin/bead-term
+	install -Dm755 bin/bead-activity $(PREFIX)/bin/bead-activity
 	install -Dm644 systemd/bead-resume.service $(HOME)/.config/systemd/user/bead-resume.service
 	@if pgrep -f "^qs -p $(SHARE) -n" >/dev/null; then \
 		: "anchored: an unanchored pattern also matches this very shell"; \

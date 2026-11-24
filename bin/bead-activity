@@ -1,0 +1,26 @@
+#!/bin/sh
+# Run a command and show it on bead's island while it runs: a chip with a
+# spinner and how long it's been, then "done" or "failed" when it ends.
+#
+#   bead-activity [-i ICON] LABEL -- COMMAND [ARGS...]
+#   e.g. bead-activity "Build" -- make -j8
+#        bead-activity -i download "ISO" -- curl -LO https://…
+#
+# ICON is a Material Symbols name (default: progress_activity). The command's
+# output and exit status are its own; with bead not running it just runs.
+icon=progress_activity
+[ "${1:-}" = -i ] && { icon=$2; shift 2; }
+label=${1:?usage: bead-activity [-i ICON] LABEL -- COMMAND...}
+shift
+[ "${1:-}" = -- ] && shift
+[ $# -gt 0 ] || { echo "bead-activity: no command" >&2; exit 2; }
+
+share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+ipc() { qs -p "$share" ipc call activity "$@" >/dev/null 2>&1 || true; }
+id="run-$$-$(date +%s)"
+ipc set "$id" "$icon" "$label" -1
+trap 'ipc fail "$id" "stopped"; exit 130' INT TERM
+"$@"
+rc=$?
+if [ $rc -eq 0 ]; then ipc done "$id" ""; else ipc fail "$id" "exit $rc"; fi
+exit $rc

@@ -250,8 +250,9 @@ Scope {
             done; done`, "sh", String(ws)];
         busyCheck.running = true;
     }
-    function names(ts: var): string {
-        const n = ts.map(t => root.winName(t)).filter((x, i, all) => all.indexOf(x) === i);
+    function names(ts: var): string { return nameList(ts.map(t => root.winName(t))); }
+    function nameList(ns: var): string {
+        const n = ns.filter((x, i, all) => all.indexOf(x) === i);
         return n.length > 3 ? n.slice(0, 2).join(", ") + " and " + (n.length - 2) + " more" : n.join(n.length === 2 ? " and " : ", ");
     }
 
@@ -401,6 +402,12 @@ Scope {
     function runVoice(a: var, heard: string): void {
         const say = (icon, text) => { if (!root.voiceQuiet) root.toast(icon, text, "action", 2200); };
         const dispatch = lua => Quickshell.execDetached(["hyprctl", "dispatch", lua]);
+        // layouts: the small model mixes up saving and setting one up; the words decide
+        if (/\blayout\b/i.test(heard) || a.action === "layout_save" || a.action === "layout_open") {
+            if (/\bsave\b/i.test(heard)) a = Object.assign({}, a, { action: "layout_save" });
+            // saving needs the word "save"
+            else if (a.action === "layout_save" || /\b(set\s*up|load|restore|bring\s+up|open|switch\s+to|go\s+to|use)\b/i.test(heard)) a = Object.assign({}, a, { action: "layout_open" });
+        }
         switch (a.action) {
         case "timer": {
             // the words themselves first: small models mix up units
@@ -622,6 +629,56 @@ Scope {
             return;
         }
         case "overview": root.overviewOpen = true; return;
+        case "layout_save": {
+            const n = (a.text || (heard.match(/\bas\s+(.+)$/i)?.[1] ?? "")).trim();
+            const k = Layouts.key(n);
+            if (!k) return root.toast("dashboard_customize", "Save it as what? \u201csave this layout as coding\u201d", "info", 3000);
+            const old = Layouts.layouts[k] ?? null;
+            remember("saving " + k, () => Layouts.put(k, old));
+            Layouts.save(k, (name, count, wss) => say("dashboard_customize",
+                (old ? "Updated \u201c" : "Saved \u201c") + name + "\u201d \u00b7 " + count + (count === 1 ? " window" : " windows") + " on " + wss.join(", ")));
+            return;
+        }
+        case "layout_open": {
+            const k = Layouts.find(a.text || heard);
+            if (!k) return root.toast("dashboard_customize", Layouts.names.length
+                ? "No layout like \u201c" + (a.text || heard) + "\u201d \u00b7 " + Layouts.names.join(", ")
+                : "No layouts yet \u00b7 say \u201csave this layout as coding\u201d", "error", 3200);
+            const p = Layouts.plan(k);
+            if (!p.moves.length && !p.opens.length) return say("dashboard_customize", "\u201c" + k + "\u201d is already set up");
+            const before = Hyprland.toplevels.values.map(t => root.addr(t));
+            const moved = p.moves.map(m => ({ ad: root.addr(m.t), from: m.from }));
+            remember("setting up " + k, () => {
+                for (const m of moved) if (m.from) dispatch(`hl.dsp.window.move({ workspace = "${m.from}", window = "address:${m.ad}", follow = false })`);
+                root.closeNew(before, p.opens.map(o => o.cls));
+            });
+            for (const m of p.moves) dispatch(`hl.dsp.window.move({ workspace = "${m.ws}", window = "address:${root.addr(m.t)}", follow = false })`);
+            for (const o of p.opens) Apps.launchOn(o.e, o.ws);
+            const bits = [];
+            if (p.opens.length) bits.push("opening " + root.nameList(p.opens.map(o => o.e.name)));
+            if (p.moves.length) bits.push("moving " + root.names(p.moves.map(m => m.t)));
+            if (p.unknown.length) bits.push("can't open " + root.nameList(p.unknown));
+            return say("dashboard_customize", "Setting up " + k + " \u00b7 " + bits.join(" \u00b7 "));
+        }
+        case "reply": {
+            const text = String(a.text ?? "").trim();
+            const want = Voice.norm(a.app ?? "").replace(/ /g, "");
+            const app = e => Voice.norm(e.appName ?? "").replace(/ /g, "");
+            const can = Notifs.entries.filter(e => Notifs.notif(e.key)?.hasInlineReply);
+            const e = can.find(e => !want || app(e).includes(want) || (app(e).length >= 3 && want.includes(app(e))));
+            if (!e) return root.toast("reply", "Nothing to reply to" + (want ? " from " + a.app : "") + " (it needs a notification with a reply box)", "error", 3200);
+            if (!text) return root.toast("reply", "Reply what? \u201creply to that: on my way\u201d", "info", 2800);
+            const who = e.summary || e.appName || "that";
+            // read back first: what goes, and to whom; tap to stop
+            root.confirmThen("reply", "Replying to " + who + ": \u201c" + text + "\u201d", () => {
+                const n = Notifs.notif(e.key);
+                if (!n) return root.toast("reply", "That message is gone", "error", 2400);
+                n.sendInlineReply(text);
+                Notifs.remove(e.key);
+                root.toast("send", "Sent to " + who, "action", 1800);
+            }, 3600);
+            return;
+        }
         case "wallpaper": {
             const k = Wallpaper.kind, c = Wallpaper.current;
             if (c) remember("the wallpaper", () => k === "live" ? Wallpaper.setLive(c) : Wallpaper.setStill(c));
@@ -777,10 +834,53 @@ Scope {
     function toast(icon: string, text: string, tone: string, ms: int): void {
         if (activity === "timerdone") return; // its own alarm is showing
         toastTap = null; // set again after this by a toast that leads somewhere
+        toastColour = "";
         toastIcon = icon;
         toastText = text;
         toastTone = tone || "info";
         flash("toast", "", ms || 1600);
+    }
+    Connections {
+        target: Activities
+        function onFinished(it, ok, text) {
+            const took = Activities.elapsed(it);
+            if (ok) root.toast("check_circle", it.label + " done \u00b7 " + took + (text ? " \u00b7 " + text : ""), "action", 2600);
+            else root.toast("error", it.label + " failed \u00b7 " + (text || took), "error", 3400);
+        }
+    }
+    // copied something with an obvious next step: offered, a tap does it
+    Connections {
+        target: ClipHints
+        function onHint(kind, text) {
+            const open = url => () => Quickshell.execDetached(["xdg-open", url]);
+            const short = text.length > 28 ? text.slice(0, 26) + "\u2026" : text;
+            switch (kind) {
+            case "colour": {
+                const other = ClipHints.otherColour(text);
+                root.toast("circle", "Copied " + short + (other ? " \u00b7 tap for " + other : ""), "info", 3000);
+                root.toastColour = Clipboard.colourOf(text);
+                if (other) root.toastTap = () => Quickshell.execDetached(["wl-copy", "--", other]);
+                return;
+            }
+            case "parcel":
+                root.toast("local_shipping", "Tracking number \u00b7 tap to track it", "action", 3500);
+                root.toastTap = open("https://parcelsapp.com/en/tracking/" + encodeURIComponent(text.replace(/\s+/g, "")));
+                return;
+            case "address":
+                root.toast("map", short + " \u00b7 tap for the map", "action", 3500);
+                root.toastTap = open("https://www.openstreetmap.org/search?query=" + encodeURIComponent(text.replace(/\s+/g, " ")));
+                return;
+            case "link":
+                root.toast("link", "Link copied \u00b7 tap to open", "info", 2800);
+                root.toastTap = open(/^www\./i.test(text) ? "https://" + text : text);
+                return;
+            }
+        }
+    }
+    Connections {
+        target: GameMode
+        function onStarted(game: string) { root.toast("sports_esports", "Game mode \u00b7 " + (Apps.entryFor(game)?.name || game), "action", 1800); }
+        function onEnded() { root.toast("sports_esports", "Game mode off", "info", 1600); }
     }
     Connections {
         target: CapsLock
@@ -790,6 +890,7 @@ Scope {
     }
     // a toast you can tap (the DND digest opens the history)
     property var toastTap: null
+    property string toastColour: "" // the icon in this colour (a copied colour)
     Connections {
         target: Notifs
         function onMissed(list) {
@@ -907,7 +1008,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active ? "tucked" : "rest"
+            readonly property string state: Passkey.active ? "passkey" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active && !(Activities.items.length > 0 && !root.fullscreen) ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
                 // launcher…) tucks at the resting width, not as a wide strip
@@ -1405,8 +1506,57 @@ Scope {
                         TapHandler { acceptedButtons: Qt.LeftButton; onTapped: Countdown.toggle() }
                         TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
                     }
+                    // live activities (bead-activity, IPC "activity"): a ring and how
+                    // long it's been; right-click drops one
+                    Repeater {
+                        model: ScriptModel { values: Activities.items.slice(-3); objectProp: "id" }
+                        delegate: Row {
+                            id: act
+                            required property var modelData
+                            anchors.verticalCenter: parent?.verticalCenter
+                            spacing: 6
+                            Item {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 18; height: 18
+                                Shape {
+                                    anchors.fill: parent
+                                    preferredRendererType: Shape.CurveRenderer
+                                    ShapePath {
+                                        strokeColor: Qt.alpha(Theme.tone("action"), 0.25)
+                                        strokeWidth: 3
+                                        fillColor: "transparent"
+                                        PathAngleArc { centerX: 9; centerY: 9; radiusX: 7; radiusY: 7; startAngle: 0; sweepAngle: 360 }
+                                    }
+                                    ShapePath {
+                                        strokeColor: Theme.tone("action")
+                                        strokeWidth: 3
+                                        fillColor: "transparent"
+                                        capStyle: ShapePath.RoundCap
+                                        PathAngleArc { centerX: 9; centerY: 9; radiusX: 7; radiusY: 7; startAngle: -90; sweepAngle: act.modelData.progress < 0 ? 100 : 360 * act.modelData.progress }
+                                    }
+                                    // no progress known: it spins
+                                    RotationAnimator on rotation {
+                                        running: act.modelData.progress < 0 && win.state === "rest"
+                                        from: 0; to: 360; duration: 1100; loops: Animation.Infinite
+                                    }
+                                }
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                font.features: { "tnum": 1 }
+                                color: Theme.text
+                                textFormat: Text.StyledText
+                                text: act.modelData.label.slice(0, 18).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                                    + " <font color=\"" + Theme.subtext + "\">" + (act.modelData.progress >= 0 ? Math.round(act.modelData.progress * 100) + "%" : Activities.elapsed(act.modelData)) + "</font>"
+                            }
+                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: Activities.items = Activities.items.filter(i => i.id !== act.modelData.id) }
+                        }
+                    }
                     Rectangle { // between live chips and the rest
-                        visible: Recorder.recording || Countdown.mode !== "" || Discord.inCall || Discord.dmCount > 0 || Dictation.active || Voice.active
+                        visible: Activities.items.length > 0 || Recorder.recording || Countdown.mode !== "" || Discord.inCall || Discord.dmCount > 0 || Dictation.active || Voice.active
                         anchors.verticalCenter: parent.verticalCenter
                         width: 1; height: 14
                         color: Qt.alpha(Theme.text, 0.15)
@@ -1680,7 +1830,7 @@ Scope {
                         name: eventRow.isToast ? root.toastIcon : eventRow.done ? "alarm" : "radio_button_checked"
                         size: 20
                         fill: 1
-                        color: eventRow.isToast ? Theme.tone(root.toastTone) : eventRow.done ? Theme.tone("action") : Theme.tone("error")
+                        color: eventRow.isToast ? (root.toastColour || Theme.tone(root.toastTone)) : eventRow.done ? Theme.tone("action") : Theme.tone("error")
                         SequentialAnimation on scale {
                             running: eventRow.visible && eventRow.done
                             loops: Animation.Infinite

@@ -511,12 +511,20 @@ Item {
                         }
                     }
                 }
+                In {
+                    order: 4; width: root.colW; height: 44
+                    Line { label: "Game mode"; hint: "Faster, plainer while you play"; Toggle { checked: Settings.gameMode; onToggled: Settings.gameMode = !Settings.gameMode } }
+                }
+                In {
+                    order: 5; width: root.colW; height: 44
+                    Line { label: "Clipboard hints"; hint: "Tap the island after copying"; Toggle { checked: Settings.clipHints; onToggled: Settings.clipHints = !Settings.clipHints } }
+                }
             }
             // the waiting updates, a few by name
             In {
                 visible: root.section === 3 && Updates.count > 0
-                order: 4
-                y: 2 * 46 + 4
+                order: 6
+                y: 3 * 46 + 4
                 width: rows.width
                 height: rows.height - y
                 clip: true

@@ -33,4 +33,6 @@ ShellRoot {
     // the lock screen shows the weather straight away, even right after a restart
     readonly property bool weatherWarm: Weather.ready
     readonly property int updatesWarm: Updates.count // starts the update checks
+    readonly property bool gaming: GameMode.active // starts watching for games
+    readonly property string clipSeen: ClipHints.last // starts reading copies
 }
