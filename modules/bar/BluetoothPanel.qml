@@ -2,12 +2,16 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Bluetooth
+import Quickshell.Io
 import qs.components
 import qs.config
+import "bluetooth.js" as Bt
 
 // Bluetooth: on/off, scanning, devices (connected, then paired, then nearby
 // ones with a name). Click connects / disconnects; a new device pairs, is
-// trusted and connects.
+// trusted and connects. Pairing goes through bluetoothctl with a one-off
+// agent (Quickshell has none, and BlueZ won't pair most devices without one);
+// it lives only while bead pairs, so nothing else can pair unasked.
 PanelColumn {
     id: root
     property bool active: false // shown: scan while open
@@ -21,6 +25,27 @@ PanelColumn {
         return all.map((d, i) => ({ d, i }))
             .sort((a, b) => rank(b.d) - rank(a.d) || a.d.name.localeCompare(b.d.name) || a.i - b.i)
             .map(x => x.d).slice(0, 9);
+    }
+
+    // ── pairing ──
+    property string pairingAddr: ""
+    property var pairErrors: ({})   // address → why it didn't pair
+    function pair(d: var): void {
+        if (pairer.running) return;
+        const e = Object.assign({}, pairErrors); delete e[d.address]; pairErrors = e;
+        pairingAddr = d.address;
+        pairer.command = ["bluetoothctl", "--agent", "NoInputNoOutput", "--timeout", "30", "pair", d.address];
+        pairer.running = true;
+    }
+    Process {
+        id: pairer
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const why = Bt.pairResult(text);
+                if (why) { const e = Object.assign({}, root.pairErrors); e[root.pairingAddr] = why; root.pairErrors = e; }
+                root.pairingAddr = "";
+            }
+        }
     }
 
     // look for new devices while the panel is open
@@ -98,8 +123,10 @@ PanelColumn {
             title: d.name
             lit: d.connected
             dim: !d.paired && !d.connected
-            busy: d.pairing || d.state === BluetoothDeviceState.Connecting || d.state === BluetoothDeviceState.Disconnecting
-            sub: d.pairing ? "Pairing…"
+            readonly property bool pairingNow: d.pairing || root.pairingAddr === d.address
+            busy: pairingNow || d.state === BluetoothDeviceState.Connecting || d.state === BluetoothDeviceState.Disconnecting
+            sub: pairingNow ? "Pairing…"
+                : !d.paired && root.pairErrors[d.address] ? root.pairErrors[d.address]
                 : d.state === BluetoothDeviceState.Connecting ? "Connecting…"
                 : d.state === BluetoothDeviceState.Disconnecting ? "Disconnecting…"
                 : d.connected ? (d.batteryAvailable ? `Connected · ${Math.round(d.battery * 100)}%` : "Connected")
@@ -112,8 +139,8 @@ PanelColumn {
             onClicked: {
                 if (d.connected) d.disconnect();
                 else if (d.paired) { d.trusted = true; d.connect(); }
-                else if (d.pairing) d.cancelPair();
-                else d.pair();
+                else if (row.pairingNow) { pairer.running = false; root.pairingAddr = ""; }
+                else root.pair(d);
             }
         }
     }
