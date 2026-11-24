@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Hyprland
 import Quickshell.Io
 
@@ -57,7 +58,7 @@ Singleton {
         [ -s "$f" ] || exit 0
         if [ "$gif" = gif ]; then
             out="$dir/gif_$stamp.gif"
-            qs -p "$HOME/.local/share/bead" ipc call osd toast "Making the GIF…" "gif_box" "action" >/dev/null 2>&1
+            qs -p "$5" ipc call osd toast "Making the GIF…" "gif_box" "action" >/dev/null 2>&1
             ffmpeg -loglevel error -y -i "$f" -vf "fps=15,scale=\'min(960,iw)\':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" "$out"
             rm -f "$f"
             [ -s "$out" ] || exit 0
@@ -78,7 +79,7 @@ Singleton {
     // sound: record what's playing (defaults to the panel's switch)
     function record(mode, sound, gif): void {
         if (Recorder.recording) return;
-        Quickshell.execDetached(["sh", "-c", recordScript, "sh", mode, monitorName(), soundDevice(sound ?? withSound), gif ? "gif" : ""]);
+        Quickshell.execDetached(["sh", "-c", recordScript, "sh", mode, monitorName(), soundDevice(sound ?? withSound), gif ? "gif" : "", Paths.share]);
     }
     function pickColour(): void {
         Quickshell.execDetached(["sh", "-c", 'sleep 0.4; c=$(hyprpicker -a -f hex 2>/dev/null) && [ -n "$c" ] && notify-send -a "Colour picker" -i color-select-symbolic "$c" "Copied to the clipboard"']);

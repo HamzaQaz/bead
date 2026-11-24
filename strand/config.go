@@ -21,6 +21,9 @@ func claudeHooks() (string, error) {
 		}
 	}
 	hook := "~/.local/share/glint/claude-hook.sh"
+	if shareDir != filepath.Join(home, ".local", "share") {
+		hook = filepath.Join(shareDir, "glint", "claude-hook.sh")
+	}
 	events := []struct {
 		name, matcher string
 		timeout       int
@@ -115,7 +118,11 @@ func hyprBinds(lua bool) (string, error) {
 	if lua {
 		file, main, include = filepath.Join(hypr, "bead.lua"), filepath.Join(hypr, "hyprland.lua"), `require("bead")`
 		b.WriteString("-- bead (written by strand). Edit freely; strand won't overwrite it.\n")
-		b.WriteString(`local bead = os.getenv("HOME") .. "/.local/bin/bead"` + "\n")
+		if binDir == filepath.Join(home, ".local", "bin") {
+			b.WriteString(`local bead = os.getenv("HOME") .. "/.local/bin/bead"` + "\n")
+		} else {
+			fmt.Fprintf(&b, "local bead = %q\n", filepath.Join(binDir, "bead"))
+		}
 		b.WriteString("hl.on(\"hyprland.start\", function()\n")
 		b.WriteString("    hl.exec_cmd(bead .. \" start\")\n")
 		fmt.Fprintf(&b, "    hl.exec_cmd(%q) -- asks for your password when installing (if you have no agent yet)\n", polkitAgent)
@@ -138,7 +145,11 @@ func hyprBinds(lua bool) (string, error) {
 	} else {
 		file, main, include = filepath.Join(hypr, "bead.conf"), filepath.Join(hypr, "hyprland.conf"), "source = ~/.config/hypr/bead.conf"
 		b.WriteString("# bead (written by strand). Edit freely; strand won't overwrite it.\n")
-		b.WriteString("exec-once = ~/.local/bin/bead start\n")
+		bin := "~/.local/bin/"
+		if binDir != filepath.Join(home, ".local", "bin") {
+			bin = binDir + "/"
+		}
+		b.WriteString("exec-once = " + bin + "bead start\n")
 		b.WriteString("exec-once = " + polkitAgent + " # asks for your password when installing (if you have no agent yet)\n")
 		b.WriteString("exec-once = wl-paste --type text --watch cliphist store # clipboard history (Super+V)\n")
 		b.WriteString("exec-once = wl-paste --type image --watch cliphist store\n\n")
@@ -153,7 +164,7 @@ func hyprBinds(lua bool) (string, error) {
 			if k.global != "" {
 				fmt.Fprintf(&b, "%s = %s, %s, global, bead:%s # %s\n", flag, mods, key, k.global, k.what)
 			} else {
-				fmt.Fprintf(&b, "%s = %s, %s, exec, ~/.local/bin/%s # %s\n", flag, mods, key, k.exec, k.what)
+				fmt.Fprintf(&b, "%s = %s, %s, exec, %s%s # %s\n", flag, mods, key, bin, k.exec, k.what)
 			}
 		}
 	}

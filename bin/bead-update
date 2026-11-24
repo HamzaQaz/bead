@@ -1,0 +1,50 @@
+#!/bin/sh
+# bead update: bring bead up to its newest release.
+#   bead update          update now (a git checkout), or say how (a package)
+#   bead update --check  one line, changes nothing but fetching tags:
+#                        <state> <installed> <newest>
+#     state: uptodate | available | dev | package | nosource | offline
+#
+# A git checkout (installed with ./install.sh or make install) moves to the
+# newest vX.Y.Z tag and reinstalls; make install rolls back if the new bead
+# won't start. It never touches a checkout with changes of its own, or one
+# ahead of the newest release (a development checkout): those are yours.
+set -u
+share=$(cd "$(dirname "$(readlink -f "$0")")/../share/bead" 2>/dev/null && pwd) || share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+check=; [ "${1:-}" = --check ] && check=1
+have=$(cat "$share/VERSION" 2>/dev/null || echo 0)
+
+say() { # state newest message
+	if [ -n "$check" ]; then echo "$1 $have $2"; else echo "$3"; fi
+	exit 0
+}
+
+case $share in
+/usr/*) say package "$have" "bead came from a package: update it with your package manager (paru -Syu)." ;;
+esac
+src=$(cat "$share/source" 2>/dev/null)
+[ -n "$src" ] && [ -d "$src/.git" ] || say nosource "$have" "bead doesn't know which checkout it came from. Run make install from it once, then bead update works."
+
+git -C "$src" fetch --tags --quiet 2>/dev/null || say offline "$have" "Couldn't reach the repository to look for a new release."
+tag=$(git -C "$src" tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+[ -n "$tag" ] || say uptodate "$have" "No releases yet."
+newest=${tag#v}
+
+# already there, or past it
+if git -C "$src" merge-base --is-ancestor "$tag" HEAD 2>/dev/null; then
+	if [ "$(git -C "$src" rev-parse HEAD)" = "$(git -C "$src" rev-parse "$tag^{commit}")" ]; then
+		say uptodate "$newest" "bead $have is the newest."
+	fi
+	say dev "$newest" "This checkout ($src) is ahead of $newest, a development one: pull and make install there yourself."
+fi
+[ -n "$check" ] && say available "$newest" ""
+
+if [ -n "$(git -C "$src" status --porcelain --untracked-files=no)" ]; then
+	echo "$src has changes of its own; bead update leaves it alone. Commit or put them aside, then try again." >&2
+	exit 1
+fi
+echo "bead $have → $newest"
+git -C "$src" -c advice.detachedHead=false checkout --quiet "$tag" || exit 1
+make -C "$src" install || { echo "The install failed; bead is still on $have." >&2; exit 1; }
+"$(dirname "$0")/bead-doctor" >/dev/null || echo "bead doctor found something missing: run bead doctor to see it."
+echo "bead is now $newest. What's new: $share/CHANGELOG.md"

@@ -1,0 +1,40 @@
+# Every push and pull request, on a fresh Arch:
+#   test     make test (QML logic, strand, glint, bead update / uninstall)
+#   friend   install it the way a friend would, both ways (tests/friend-inside.sh)
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Packages
+        run: pacman -Syu --noconfirm --needed git make go lua python qt6-declarative qt6-shadertools quickshell
+      - uses: actions/checkout@v4
+      - name: make test
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          make build test
+
+  friend:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [user, package]
+    steps:
+      - name: Packages
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v4
+      - name: The working copy at /src, as tests/friend-test.sh gives it
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir /src
+          git ls-files -z | xargs -0 cp --parents -t /src
+          chmod -R a+rX /src
+      - name: friend-test (${{ matrix.mode }})
+        run: sh /src/tests/friend-inside.sh ${{ matrix.mode }}

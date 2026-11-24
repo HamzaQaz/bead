@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 import Quickshell.Hyprland
 
@@ -58,7 +59,7 @@ Singleton {
         id: helper
         running: true
         stdinEnabled: true
-        command: [Quickshell.env("HOME") + "/.local/bin/bead-discord"]
+        command: [Paths.cmd("bead-discord")]
         stdout: SplitParser {
             onRead: line => {
                 let m;

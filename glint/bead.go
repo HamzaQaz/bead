@@ -21,7 +21,7 @@ func viaBead(o *opts, wait bool, extraEnv []string, onLine ...func(string)) (str
 	if os.Getenv("TOAST_BEAD") == "0" {
 		return "", false
 	}
-	share := filepath.Join(or(os.Getenv("XDG_DATA_HOME"), filepath.Join(os.Getenv("HOME"), ".local/share")), "bead")
+	share := filepath.Join(shareDir("bead", "shell.qml"), "bead")
 	if _, err := os.Stat(filepath.Join(share, "shell.qml")); err != nil {
 		return "", false
 	}

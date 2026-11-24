@@ -425,7 +425,7 @@ Scope {
     Process {
         id: shooter
         property string q: ""
-        command: [Quickshell.env("HOME") + "/.local/bin/bead-look", "shot"]
+        command: [Paths.cmd("bead-look"), "shot"]
         stdout: SplitParser {
             onRead: line => {
                 let m;
@@ -617,7 +617,7 @@ Scope {
             if (!what) break;
             if (looker.running) return root.toast("ads_click", "Still looking…", "action", 1600);
             looker.what = what;
-            looker.command = [Quickshell.env("HOME") + "/.local/bin/bead-look", "click", what, "--confirm"];
+            looker.command = [Paths.cmd("bead-look"), "click", what, "--confirm"];
             looker.running = true;
             root.toast("ads_click", "Looking for " + what + "…", "action", 6000);
             return;
@@ -992,7 +992,7 @@ Scope {
                 Settings.scaleWas = 0;
                 Settings.scale = was;
                 root.toast("undo", "Back to " + SizeCheck.percent(was), "info", 1600);
-                Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Quickshell.env("HOME") + "/.local/bin/bead"]);
+                Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Paths.cmd("bead")]);
                 return;
             }
             // each second again: it stays up, and stays tappable, whatever else toasts

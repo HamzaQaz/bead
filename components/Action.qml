@@ -22,6 +22,7 @@ Rectangle {
         spacing: 5
         Icon { visible: act.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: act.glyph; size: 15; color: act.accent ? Theme.frame : Theme.text }
         Text {
+            visible: act.text !== ""   // icon-only: just the glyph, square-ish
             anchors.verticalCenter: parent.verticalCenter
             font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
             color: act.accent ? Theme.frame : Theme.text

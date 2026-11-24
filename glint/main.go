@@ -464,11 +464,23 @@ func qmlPath() string {
 	if p := os.Getenv("TOAST_QML"); p != "" {
 		return p
 	}
-	share := os.Getenv("XDG_DATA_HOME")
-	if share == "" {
-		share = filepath.Join(os.Getenv("HOME"), ".local", "share")
+	return filepath.Join(shareDir("glint", "toast.qml"), "glint", "toast.qml")
+}
+
+// shareDir: the share folder holding name/file — next to this executable
+// first (<prefix>/bin → <prefix>/share, so a packaged glint finds /usr/share),
+// else $XDG_DATA_HOME or ~/.local/share.
+func shareDir(name, file string) string {
+	if exe, err := os.Executable(); err == nil {
+		if real, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = real
+		}
+		share := filepath.Join(filepath.Dir(filepath.Dir(exe)), "share")
+		if _, err := os.Stat(filepath.Join(share, name, file)); err == nil {
+			return share
+		}
 	}
-	return filepath.Join(share, "glint", "toast.qml")
+	return or(os.Getenv("XDG_DATA_HOME"), filepath.Join(os.Getenv("HOME"), ".local", "share"))
 }
 
 func scale(o *opts) string {

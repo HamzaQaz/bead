@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Hyprland
 import Quickshell.Io
 
@@ -27,7 +28,7 @@ Singleton {
             { match: [{ class: "Todoist" }], command: ["todoist"], move: true }
         ],
         sysmon: [
-            { match: [{ class: "btop", title: "btop", workspace: { name: "special:sysmon" } }], command: [Quickshell.env("HOME") + "/.local/bin/bead-term", "--class", "btop", "--title", "btop", "--", "sh", "-c", 'btop; exec "${SHELL:-sh}"'] }
+            { match: [{ class: "btop", title: "btop", workspace: { name: "special:sysmon" } }], command: [Paths.cmd("bead-term"), "--class", "btop", "--title", "btop", "--", "sh", "-c", 'btop; exec "${SHELL:-sh}"'] }
         ],
         bitwarden: [
             { match: [{ class: "Bitwarden" }], command: ["bitwarden-desktop"], move: true }

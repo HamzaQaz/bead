@@ -25,13 +25,28 @@ var (
 	configDir = xdg("XDG_CONFIG_HOME", ".config")
 	beadConf  = filepath.Join(configDir, "bead")
 	modelsDir = filepath.Join(xdg("XDG_DATA_HOME", ".local/share"), "bead-models")
+	// where bead's commands and files are: ~/.local for a checkout's install,
+	// /usr for a package (setPackaged)
+	binDir   = filepath.Join(home, ".local", "bin")
+	shareDir = filepath.Join(home, ".local", "share")
 )
+
+// a packaged bead (bead-shell-git): strand runs from /usr/share/bead, with no
+// Makefile; the build steps are the package's, and paths point at /usr
+func setPackaged(on bool) {
+	if on {
+		binDir, shareDir = "/usr/bin", "/usr/share"
+	} else {
+		binDir, shareDir = filepath.Join(home, ".local", "bin"), filepath.Join(home, ".local", "share")
+	}
+}
 
 // What strand found on this machine.
 type system struct {
 	arch      bool   // pacman present
 	helper    string // paru / yay, "" if none
 	terminal  bool   // a terminal bead-term can use is installed
+	packaged  bool   // bead came from a package (no Makefile to build with)
 	hyprLua   bool   // Hyprland's Lua config (hyprland.lua) rather than hyprland.conf
 	hyprBinds bool   // the config already binds bead's shortcuts
 	claude    bool   // Claude Code installed (~/.claude)
@@ -42,6 +57,9 @@ func have(cmd string) bool { _, err := exec.LookPath(cmd); return err == nil }
 
 func detect(repo string) system {
 	s := system{arch: have("pacman"), repo: repo}
+	_, err := os.Stat(filepath.Join(repo, "Makefile"))
+	s.packaged = err != nil
+	setPackaged(s.packaged)
 	for _, h := range []string{"paru", "yay"} {
 		if have(h) {
 			s.helper = h
@@ -55,7 +73,7 @@ func detect(repo string) system {
 		}
 	}
 	hypr := filepath.Join(configDir, "hypr")
-	_, err := os.Stat(filepath.Join(hypr, "hyprland.lua"))
+	_, err = os.Stat(filepath.Join(hypr, "hyprland.lua"))
 	s.hyprLua = err == nil
 	s.hyprBinds = exec.Command("grep", "-rqs", "bead:launcher", hypr).Run() == nil
 	_, err = os.Stat(filepath.Join(home, ".claude"))
@@ -105,7 +123,7 @@ func (c choices) has(id string) bool { return c.parts[id] }
 func wanted(s system, parts []*part, c choices) []string {
 	var want []string
 	for _, p := range parts {
-		if c.has(p.id) {
+		if c.has(p.id) && !(p.core && s.packaged) { // a package brought the core's itself
 			want = append(want, p.pkgs...)
 		}
 	}
@@ -148,13 +166,15 @@ func plan(s system, parts []*part, c choices) (steps []step, repoPkgs, aurPkgs [
 	mk := func(target string) func() (string, error) {
 		return func() (string, error) { return output(exec.Command("make", "-C", s.repo, target))() }
 	}
-	steps = append(steps, step{title: "Build and install bead", detail: "shaders, then ~/.local/share/bead and ~/.local/bin", run: func() (string, error) {
-		os.MkdirAll(filepath.Join(xdg("XDG_PICTURES_DIR", "Pictures"), "Wallpapers"), 0o755) // where bead looks for them
-		return mk("install")()
-	}})
+	if !s.packaged { // a package has built and installed these already
+		steps = append(steps, step{title: "Build and install bead", detail: "shaders, then ~/.local/share/bead and ~/.local/bin", run: func() (string, error) {
+			os.MkdirAll(filepath.Join(xdg("XDG_PICTURES_DIR", "Pictures"), "Wallpapers"), 0o755) // where bead looks for them
+			return mk("install")()
+		}})
 
-	if c.has("glint") {
-		steps = append(steps, step{title: "Glint", detail: "build the glint command", run: mk("install-glint")})
+		if c.has("glint") {
+			steps = append(steps, step{title: "Glint", detail: "build the glint command", run: mk("install-glint")})
+		}
 	}
 	if c.has("glint-claude") {
 		steps = append(steps, step{title: "Glint for Claude Code", detail: "hooks in ~/.claude/settings.json (backed up first)", run: claudeHooks})
@@ -276,11 +296,11 @@ func pearlSetup(way, key string) (string, error) {
 func tintFirst() (string, error) {
 	// your own first, else bead's (installed with the shell)
 	w := firstWallpaper(filepath.Join(xdg("XDG_PICTURES_DIR", "Pictures"), "Wallpapers"),
-		filepath.Join(xdg("XDG_DATA_HOME", ".local/share"), "bead", "data", "wallpapers"))
+		filepath.Join(shareDir, "bead", "data", "wallpapers"))
 	if w == "" {
 		return "no wallpaper found yet: Tint runs when you pick one", nil
 	}
-	out, err := exec.Command(filepath.Join(home, ".local/bin/bead-tint"), w).CombinedOutput()
+	out, err := exec.Command(filepath.Join(binDir, "bead-tint"), w).CombinedOutput()
 	return string(out), err
 }
 

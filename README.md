@@ -1,5 +1,8 @@
 # bead
 
+[![CI](https://github.com/HamzaQaz/bead/actions/workflows/ci.yml/badge.svg)](https://github.com/HamzaQaz/bead/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/HamzaQaz/bead?label=version&sort=semver)](CHANGELOG.md)
+
 A desktop shell for [Hyprland](https://hyprland.org), built with
 [Quickshell](https://quickshell.org). Soft pills that morph instead of pop:
 a bar, an island at the top of the screen that grows into a launcher, a
@@ -15,11 +18,18 @@ dashboard, a lock screen and notifications, all coloured by your wallpaper.
 
 ## Install
 
-Arch and Arch-based distros (CachyOS, EndeavourOS, Manjaro…) only.
+Arch and Arch-based distros (CachyOS, EndeavourOS, Manjaro…) on
+Hyprland 0.57 or newer (the Lua config).
 
 ```sh
 git clone https://github.com/HamzaQaz/bead && cd bead
 ./install.sh            # or ./install.sh --dry-run to look around first
+```
+
+Or from the AUR, then `bead-setup` once for your keybinds and the optional parts:
+
+```sh
+paru -S bead-shell-git && bead-setup
 ```
 
 `install.sh` builds **strand**, a small installer (Go, Bubble Tea), and runs it.
@@ -28,7 +38,21 @@ whole plan (packages, downloads, files it will touch), and only then
 installs. Packages come from pacman, and from the AUR through `paru` or `yay`.
 Any file strand edits gets backed up first (`*.bak-strand-<time>`).
 
-Then start it with `bead start`, or log out and back in.
+Then start it with `bead start`, or log out and back in. If something
+doesn't work, `bead doctor` lists what's missing and how to fix it (the same
+check is in Settings → System).
+
+### Keeping it up to date, or taking it off
+
+```sh
+bead update              # the newest release, with what's new (CHANGELOG.md)
+bead uninstall           # keeps your settings; --purge takes those too, --dry-run only lists
+```
+
+`bead update` moves a git checkout to the newest release and reinstalls; if
+the new bead won't start, the old one comes back. It leaves a checkout with
+changes of its own alone. An AUR install updates with `paru -Syu`. Settings →
+System says when a new release is out.
 
 ## What's in it
 
@@ -99,12 +123,14 @@ bead dashboard toggle
 bead lock
 bead shot area
 bead log                  # the shell's log, for when something's off
+bead doctor               # what bead needs, and what's missing
+bead version
 bead voice list | run NAME | edit   # your voice commands
 ```
 
 - Wallpapers live in `~/Pictures/Wallpapers`. Pick one from the dashboard.
 - Settings live in the dashboard's Settings tab. They're saved to `~/.config/bead/settings.json`.
-- `BEAD_SCALE` sets the UI scale (default `1.35`).
+- `BEAD_SCALE` sets the UI scale (Settings → Looks → Size otherwise).
 
 ## Layout
 
@@ -115,14 +141,19 @@ components/      shared pieces (icons, the play/pause morph…)
 modules/         bar, island, dashboard, lock, notifications, background
 services/        audio, media, weather, voice, Pearl (Ask.qml), wallpapers…
 shaders/         the goo / blob effects (built with qsb)
-bin/             bead (the CLI), bead-tint, bead-pearl, bead-dictate, bead-discord
+bin/             bead (the CLI), bead-doctor, bead-update, bead-uninstall, bead-tint, bead-pearl…
 glint/           the toast CLI (Go) and its Claude Code hook
 strand/          the installer (Go, Bubble Tea)
-tools/           screenshots.sh (these README pictures)
-docs/            the screenshots
+tools/           screenshots.sh (these README pictures), make-wallpaper.py (bead's wallpapers)
+packaging/       the AUR package (bead-shell-git)
+tests/           QML logic tests, the script test, and the friend test
+docs/            the screenshots, and the plans behind each round (docs/ideas)
 ```
 
-To build by hand: `make install` (the shell), `make install-glint`, and `make test`.
+To build by hand: `make install` (the shell), `make install-glint`, and
+`make test`. `make friend-test` installs bead on a fresh Arch in a throwaway
+podman container, both with `./install.sh` and as the package, and checks it;
+CI runs the same on every push.
 
 ## Licence
 

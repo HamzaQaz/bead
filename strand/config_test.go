@@ -15,7 +15,8 @@ func fakeHome(t *testing.T) string {
 	h := t.TempDir()
 	oldHome, oldConf, oldBead := home, configDir, beadConf
 	home, configDir, beadConf = h, filepath.Join(h, ".config"), filepath.Join(h, ".config", "bead")
-	t.Cleanup(func() { home, configDir, beadConf = oldHome, oldConf, oldBead })
+	setPackaged(false) // bin and share under the fake home
+	t.Cleanup(func() { home, configDir, beadConf = oldHome, oldConf, oldBead; setPackaged(false) })
 	return h
 }
 
@@ -183,5 +184,37 @@ func TestFirstWallpaper(t *testing.T) {
 	}
 	if got := firstWallpaper(t.TempDir()); got != "" {
 		t.Errorf("nothing anywhere: got %q", got)
+	}
+}
+
+// A packaged bead (no Makefile next to shell.qml): keybinds call /usr/bin/bead,
+// and strand doesn't try to build what the package already installed.
+func TestPackaged(t *testing.T) {
+	h := fakeHome(t)
+	repo := t.TempDir()
+	os.WriteFile(filepath.Join(repo, "shell.qml"), nil, 0o644)
+	s := detect(repo)
+	defer setPackaged(false)
+	if !s.packaged {
+		t.Fatal("no Makefile: should count as packaged")
+	}
+	hypr := filepath.Join(h, ".config", "hypr")
+	os.MkdirAll(hypr, 0o755)
+	os.WriteFile(filepath.Join(hypr, "hyprland.lua"), []byte("-- mine\n"), 0o644)
+	if _, err := hyprBinds(true); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := os.ReadFile(filepath.Join(hypr, "bead.lua"))
+	if !strings.Contains(string(out), `local bead = "/usr/bin/bead"`) {
+		t.Errorf("bead.lua doesn't call /usr/bin/bead:\n%s", out)
+	}
+	if w := wanted(system{packaged: true, terminal: true}, []*part{{id: "core", core: true, on: true, pkgs: []string{"make"}}}, choices{parts: map[string]bool{"core": true}}); len(w) != 0 {
+		t.Errorf("packaged: core packages wanted again: %v", w)
+	}
+	steps, _, _, _ := plan(s, []*part{{id: "core", core: true, on: true}, {id: "glint", on: true}}, choices{parts: map[string]bool{"core": true, "glint": true}})
+	for _, st := range steps {
+		if st.title == "Build and install bead" || st.title == "Glint" {
+			t.Errorf("packaged, but plans %q", st.title)
+		}
 	}
 }

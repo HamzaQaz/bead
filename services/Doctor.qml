@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 import "doctor.js" as Doc
 
@@ -23,9 +24,7 @@ Singleton {
     function check(): void { if (!probe.running) { checking = true; probe.running = true; } }
     Process {
         id: probe
-        // installed with bead next to `bead`; from a checkout, its bin/
-        command: ["sh", "-c", 'for d in "$1" "$2"; do [ -x "$d/bead-doctor" ] && exec "$d/bead-doctor" --tsv; done; exit 127', "sh",
-            Quickshell.env("HOME") + "/.local/bin", Quickshell.shellPath("bin")]
+        command: [Paths.cmd("bead-doctor"), "--tsv"]
         stdout: StdioCollector { onStreamFinished: { root.checks = Doc.parse(text); root.checking = false; } }
     }
 

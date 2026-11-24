@@ -16,6 +16,9 @@
 # If the terminal running that session is focused (when asked, or while it waits in
 # the queue), nothing is shown and the normal prompt appears there. Dismissing a
 # toast also hands the prompt back to the terminal.
+
+# bead next to this hook: <prefix>/share/glint → <prefix>/share/bead
+bead_share=$(cd "$(dirname "$(readlink -f "$0")")/../bead" 2>/dev/null && pwd) || bead_share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
 in=$(cat)
 command -v glint >/dev/null || exit 0
 get() { jq -r "$1 // empty" <<<"$in" 2>/dev/null; }
@@ -97,7 +100,7 @@ withdraw_question() {
 	[ -f "$qmark" ] && read -r w t <"$qmark" || return 0
 	rm -f "$qmark"
 	[ -n "$w" ] && kill "$w" 2>/dev/null
-	[ -n "$t" ] && { qs -p "${XDG_DATA_HOME:-$HOME/.local/share}/bead" ipc call toast close "$t-" >/dev/null 2>&1; kill "$t" 2>/dev/null; }
+	[ -n "$t" ] && { qs -p "$bead_share" ipc call toast close "$t-" >/dev/null 2>&1; kill "$t" 2>/dev/null; }
 	log "question answered in the terminal: toast withdrawn"
 }
 # this question has an answer in the transcript (picked, declined with Esc,
@@ -189,7 +192,7 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 	while kill -0 "$tp" 2>/dev/null; do
 		if settled; then
 			rm -f "$qmark" "$out"
-			qs -p "${XDG_DATA_HOME:-$HOME/.local/share}/bead" ipc call toast close "$tp-" >/dev/null 2>&1
+			qs -p "$bead_share" ipc call toast close "$tp-" >/dev/null 2>&1
 			kill "$tp" 2>/dev/null
 			log "question settled in the terminal: toast withdrawn"
 			done_turn 900

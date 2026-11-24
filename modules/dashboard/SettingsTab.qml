@@ -18,13 +18,13 @@ Item {
     // after a change that needs a fresh start (Size): give the settings file
     // a moment to be written, then restart from outside bead
     function restartSoon(): void {
-        Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Quickshell.env("HOME") + "/.local/bin/bead"]);
+        Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Paths.cmd("bead")]);
     }
 
     // Size: picking one only shows it (a sample island, at that size); Apply
     // restarts bead with it, and the island then asks whether to keep it
     property string sizePick: ""
-    onSectionChanged: { sizePick = ""; if (section === 3) Doctor.check(); }
+    onSectionChanged: { sizePick = ""; if (section === 3) { Doctor.check(); Release.check(); } }
     onVisibleChanged: if (!visible) sizePick = ""
     function applySize(): void {
         if (!sizePick) return;
@@ -556,12 +556,19 @@ Item {
                 In {
                     order: 3; width: root.colW; height: 44
                     Line {
-                        label: "bead"
-                        hint: "See the welcome again, or reload the shell"
+                        label: "bead " + Release.version
+                        hint: Release.checking ? "Looking for a new release…"
+                            : Release.available ? Release.newest + " is out"
+                            : Release.state === "dev" ? "A development checkout"
+                            : Release.state === "package" ? "From a package: updates come with it"
+                            : Release.state === "offline" ? "Couldn't look for a new release"
+                            : Release.state === "uptodate" ? "The newest" : "Release notes, the welcome, a restart"
                         Row {
                             spacing: 6
-                            Action { text: "Welcome"; glyph: "waving_hand"; onHit: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "welcome", "open"]) }
-                            Action { text: "Restart"; glyph: "restart_alt"; onHit: Quickshell.execDetached(["bead", "restart"]) }
+                            Action { visible: Release.available; accent: true; text: "Update"; glyph: "upgrade"; onHit: Release.update() }
+                            Action { text: "What's new"; glyph: "new_releases"; onHit: Release.whatsNew() }
+                            Action { glyph: "waving_hand"; onHit: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "welcome", "open"]) }
+                            Action { glyph: "restart_alt"; onHit: Quickshell.execDetached([Paths.cmd("bead"), "restart"]) }
                         }
                     }
                 }

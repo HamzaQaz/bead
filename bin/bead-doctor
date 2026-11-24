@@ -7,7 +7,8 @@
 # the optional part / feature it's for. package: what pacman installs, if any.
 # Exits 1 when something core is missing.
 tsv=; [ "${1:-}" = --tsv ] && tsv=1
-share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+# the shell sits next to this script's folder: <prefix>/bin → <prefix>/share/bead
+share=$(cd "$(dirname "$(readlink -f "$0")")/../share/bead" 2>/dev/null && pwd) || share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
 cfg=${XDG_CONFIG_HOME:-$HOME/.config}
 out=$(mktemp); trap 'rm -f "$out"' EXIT
 
@@ -25,7 +26,7 @@ cmd() { check "$1" "$2" "$3" "Install $4" "$4" has "$2"; }
 check core hyprland "Hyprland is running" "Log in to a Hyprland session" "" sh -c '[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && hyprctl version'
 check core hypr-lua "Hyprland uses a Lua config (0.57 or newer)" "Update Hyprland; bead's keybinds and Displays need hyprland.lua" "" test -f "$cfg/hypr/hyprland.lua"
 cmd core qs "Quickshell" quickshell
-check core installed "bead is installed" "Run ./install.sh from bead's folder" "" test -f "$share/shell.qml"
+check core installed "bead is installed" "Run ./install.sh from bead's folder, or install bead-shell-git" "" test -f "$share/shell.qml"
 check core symbols "Material Symbols font" "Install ttf-material-symbols-variable" ttf-material-symbols-variable sh -c 'fc-list | grep -qi "Material Symbols"'
 check core noto "Noto fonts" "Install noto-fonts" noto-fonts sh -c 'fc-list | grep -qi "Noto Sans"'
 check core emoji "Emoji font" "Install noto-fonts-emoji" noto-fonts-emoji sh -c 'fc-list | grep -qi "Emoji"'

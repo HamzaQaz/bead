@@ -1,0 +1,8 @@
+post_install() {
+	echo ">> bead is installed. Run  bead-setup  once (as you, not root) for your"
+	echo "   keybinds and the optional parts, then log out and back in."
+	echo "   bead doctor checks what's missing."
+}
+post_upgrade() {
+	echo ">> bead updated: restart it with  bead restart"
+}

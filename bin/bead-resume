@@ -7,8 +7,9 @@
 # Run by systemd/bead-resume.service.
 
 set -uo pipefail
-share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
-bead=$HOME/.local/bin/bead
+# the shell sits next to this script's folder: <prefix>/bin → <prefix>/share/bead
+share=$(cd "$(dirname "$(readlink -f "$0")")/../share/bead" 2>/dev/null && pwd) || share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+bead=$(dirname "$(readlink -f "$0")")/bead
 before=0
 
 dbus-monitor --system \

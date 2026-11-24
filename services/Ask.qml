@@ -26,7 +26,7 @@ Singleton {
 
     readonly property string via: Settings.askVia || "claude"
     readonly property string model: Settings.askModel || "sonnet"
-    readonly property string pearl: Quickshell.env("HOME") + "/.local/bin/bead-pearl"
+    readonly property string pearl: Paths.cmd("bead-pearl")
     readonly property var apiModels: ({ haiku: "claude-haiku-5-5", sonnet: "claude-sonnet-5-5", opus: "claude-opus-5-5" })
     readonly property string system: "You are answering a quick question typed into a desktop launcher "
         + "(Hyprland on CachyOS / Arch Linux, fish shell). Answer directly and briefly: usually one to four "

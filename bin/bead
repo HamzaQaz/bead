@@ -1,8 +1,9 @@
 #!/bin/sh
-# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor]: run the shell in the background.
+# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor|update|uninstall|version]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
-share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+# the shell sits next to this script's folder: <prefix>/bin → <prefix>/share/bead
+share=$(cd "$(dirname "$(readlink -f "$0")")/../share/bead" 2>/dev/null && pwd) || share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
 case ${1:-start} in
 start)
 	mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/bead"
@@ -127,5 +128,8 @@ EOT
 	esac ;;
 log) exec qs -p "$share" log -f ;;
 doctor) exec "$(dirname "$0")/bead-doctor" "${2:-}" ;;
-*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor]" >&2; exit 2 ;;
+update) shift; exec "$(dirname "$0")/bead-update" "$@" ;;
+uninstall) shift; exec "$(dirname "$0")/bead-uninstall" "$@" ;;
+version|--version|-v) cat "$share/VERSION" 2>/dev/null || echo unknown ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor|update|uninstall|version]" >&2; exit 2 ;;
 esac

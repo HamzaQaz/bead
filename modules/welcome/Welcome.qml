@@ -36,7 +36,7 @@ Scope {
     Timer { id: firstRun; interval: 1400; onTriggered: root.show() }
     Process {
         id: hasMurmur
-        command: ["test", "-f", Quickshell.env("HOME") + "/.local/share/bead-models/ggml-base.en.bin"]
+        command: ["test", "-f", Paths.models + "/ggml-base.en.bin"]
         onExited: code => root.murmur = code === 0
     }
 
@@ -46,7 +46,7 @@ Scope {
         Quickshell.execDetached(["sh", "-c", 'mkdir -p "$(dirname "$1")" && : > "$1"', "sh", flag]);
         if (Number(size) !== Settings.scale) {
             Settings.scale = Number(size);
-            Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Quickshell.env("HOME") + "/.local/bin/bead"]);
+            Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Paths.cmd("bead")]);
         }
     }
     function next(): void {

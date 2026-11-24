@@ -1,0 +1,95 @@
+#!/bin/sh
+# bead uninstall: take bead off this machine.
+#   bead uninstall            remove bead, keep your settings (~/.config/bead)
+#                             and state, so installing again picks up where you were
+#   bead uninstall --purge    those too, and Murmur's models
+#   bead uninstall --dry-run  only list what it would do
+# It removes what bead and its installer put in place: the shell, its
+# commands, Glint, the resume watcher, ~/.config/hypr/bead.lua (or bead.conf)
+# and the line that loads it, and Glint's hooks in Claude Code's settings
+# (each config edited is backed up first). Packages stay: they may be used by
+# other things. A packaged bead (in /usr) is removed with pacman; this then
+# only tidies your own config.
+set -u
+purge=; dry=
+for a in "$@"; do
+	case $a in
+	--purge) purge=1 ;;
+	--dry-run | -n) dry=1 ;;
+	*) echo "usage: bead uninstall [--purge] [--dry-run]" >&2; exit 2 ;;
+	esac
+done
+here=$(dirname "$(readlink -f "$0")")
+share=$(cd "$here/../share/bead" 2>/dev/null && pwd) || share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+prefix=$(dirname "$(dirname "$share")")
+cfg=${XDG_CONFIG_HOME:-$HOME/.config}
+state=${XDG_STATE_HOME:-$HOME/.local/state}
+data=${XDG_DATA_HOME:-$HOME/.local/share}
+stamp=$(date +%Y%m%d-%H%M%S)
+
+do_() { echo "  $*"; [ -n "$dry" ] || "$@"; }
+gone() { for p; do [ -e "$p" ] && do_ rm -rf -- "$p"; done; return 0; }
+
+[ -n "$dry" ] && echo "bead uninstall would:" || echo "Removing bead:"
+
+# stop it first (and the watcher that would restart it)
+if [ -z "$dry" ]; then
+	qs -p "$share" kill >/dev/null 2>&1
+	# only the watcher this install put in place (not another home's)
+	[ "$(systemctl --user show -P FragmentPath bead-resume.service 2>/dev/null)" = "$cfg/systemd/user/bead-resume.service" ] &&
+		systemctl --user disable --now bead-resume.service >/dev/null 2>&1
+fi
+
+# the line that loads bead's keybinds, then the file itself (backed up)
+unhook() { # main-config line-pattern
+	[ -f "$1" ] && grep -q "$2" "$1" || return 0
+	do_ cp -p "$1" "$1.bak-$stamp"
+	echo "  remove the bead line from $1"
+	[ -n "$dry" ] || sed -i "\\|$2|d" "$1"
+}
+unhook "$cfg/hypr/hyprland.lua" 'require("bead")'
+unhook "$cfg/hypr/hyprland.conf" 'source = ~/.config/hypr/bead.conf'
+gone "$cfg/hypr/bead.lua" "$cfg/hypr/bead.conf"
+
+# Glint's hooks in Claude Code (only its own entries)
+cs=$HOME/.claude/settings.json
+if [ -f "$cs" ] && grep -q "glint/claude-hook.sh" "$cs"; then
+	do_ cp -p "$cs" "$cs.bak-$stamp"
+	echo "  remove Glint's hooks from $cs"
+	[ -n "$dry" ] || python3 - "$cs" <<'PY'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+hooks = m.get("hooks", {})
+for ev in list(hooks):
+    keep = [e for e in hooks[ev] if "glint/claude-hook.sh" not in json.dumps(e)]
+    if keep: hooks[ev] = keep
+    else: del hooks[ev]
+if not hooks: m.pop("hooks", None)
+json.dump(m, open(p, "w"), indent=2)
+PY
+fi
+
+case $share in
+/usr/*)
+	echo
+	echo "bead itself came from a package: remove it with  sudo pacman -R bead-shell-git"
+	;;
+*)
+	gone "$cfg/systemd/user/bead-resume.service"
+	for b in bead-resume bead-discord bead-dictate bead-look bead-tint bead-pearl bead-term bead-activity bead-doctor bead-update glint; do
+		gone "$prefix/bin/$b"
+	done
+	gone "$prefix/share/glint" "$share.prev" "$share.broken" "$share"
+	;;
+esac
+
+if [ -n "$purge" ]; then
+	gone "$cfg/bead" "$state/bead" "$data/bead-models"
+else
+	echo "  keep your settings: $cfg/bead (bead uninstall --purge removes them)"
+fi
+
+# last: this script and `bead` itself (a running shell script reads ahead, so it's safe)
+case $share in /usr/*) ;; *) gone "$prefix/bin/bead-uninstall" "$prefix/bin/bead" ;; esac
+[ -n "$dry" ] || echo "bead is off this machine. Log out and back in to drop its keybinds."

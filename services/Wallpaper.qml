@@ -40,7 +40,7 @@ Singleton {
     }
 
     // ── Tint ──
-    readonly property string tintBin: root.home + "/.local/bin/bead-tint"
+    readonly property string tintBin: Paths.cmd("bead-tint")
     // a live wallpaper: its captured still if there is one, else the workshop preview
     function tintLive(id: string): string {
         return `f="$3/we-$2-live.png"; [ -f "$f" ] || f="$4"; [ -n "$f" ] && "$5" --variant "$6" "$f"`;

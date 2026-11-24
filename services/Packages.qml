@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 import "pkgs.js" as Pkgs
 
@@ -146,7 +147,7 @@ Singleton {
         if (r.installed) return label(r) + " is already installed";
         if (r.source === "aur") {
             // built in a terminal: paru shows the build file and asks its questions there
-            Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/bead-term", "--title", "Build " + r.name, "--", "sh", "-c",
+            Quickshell.execDetached([Paths.cmd("bead-term"), "--title", "Build " + r.name, "--", "sh", "-c",
                 'paru -S -- "$1"; echo; printf "Done. Press Enter to close… "; read _', "sh", r.name]);
             afterTerminal.restart();
             return "Building " + r.name + " in a terminal";

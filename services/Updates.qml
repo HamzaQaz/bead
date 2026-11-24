@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 import "pkgs.js" as Pkgs
 
@@ -38,7 +39,7 @@ Singleton {
 
     function check(): void { if (!probe.running) { checking = true; probe.running = true; } }
     function update(): void {
-        Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/bead-term", "--title", "System update", "--", "sh", "-c",
+        Quickshell.execDetached([Paths.cmd("bead-term"), "--title", "System update", "--", "sh", "-c",
             "if command -v paru >/dev/null; then paru; elif command -v yay >/dev/null; then yay; else sudo pacman -Syu; fi; "
             + "if command -v flatpak >/dev/null && [ -n \"$(flatpak remote-ls --updates --app 2>/dev/null)\" ]; then echo; echo ':: Flatpak'; flatpak update; fi; "
             + "echo; printf 'Done. Press Enter to close… '; read _"]);

@@ -15,7 +15,8 @@ shift
 [ "${1:-}" = -- ] && shift
 [ $# -gt 0 ] || { echo "bead-activity: no command" >&2; exit 2; }
 
-share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+# the shell sits next to this script's folder: <prefix>/bin → <prefix>/share/bead
+share=$(cd "$(dirname "$(readlink -f "$0")")/../share/bead" 2>/dev/null && pwd) || share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
 ipc() { qs -p "$share" ipc call activity "$@" >/dev/null 2>&1 || true; }
 id="run-$$-$(date +%s)"
 ipc set "$id" "$icon" "$label" -1

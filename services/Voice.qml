@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 
 // Voice commands: hold Super+Space, say what you want, release. bead-dictate
@@ -59,7 +60,7 @@ Singleton {
     }
     signal failed(string why)
 
-    readonly property string model: Quickshell.env("HOME") + "/.local/share/bead-models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    readonly property string model: Paths.models + "/qwen2.5-1.5b-instruct-q4_k_m.gguf"
     readonly property int port: 8737
     property bool serverReady: false
     property string pending: "" // heard before the server was ready
@@ -383,7 +384,7 @@ Singleton {
     readonly property int whisperPort: 8739
     Process {
         id: whisper
-        command: ["whisper-server", "-m", Quickshell.env("HOME") + "/.local/share/bead-models/ggml-base.en.bin",
+        command: ["whisper-server", "-m", Paths.models + "/ggml-base.en.bin",
             "--host", "127.0.0.1", "--port", String(root.whisperPort), "-l", "en"]
     }
     Process {
@@ -416,7 +417,7 @@ Singleton {
     // ── listening, then deciding ──
     Process {
         id: helper
-        command: [Quickshell.env("HOME") + "/.local/bin/bead-dictate", "--no-type", "--partials",
+        command: [Paths.cmd("bead-dictate"), "--no-type", "--partials",
             "--server", "http://127.0.0.1:" + root.whisperPort].concat(root.handsFree ? ["--until-silence"] : [])
         stdinEnabled: true
         property string heard: ""

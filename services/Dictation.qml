@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import qs.config
 import Quickshell.Io
 
 // Push-to-talk dictation: hold the key, speak, release, and the words are
@@ -55,7 +56,7 @@ Singleton {
 
     Process {
         id: helper
-        command: [Quickshell.env("HOME") + "/.local/bin/bead-dictate", "--live", "--partials",
+        command: [Paths.cmd("bead-dictate"), "--live", "--partials",
             "--server", "http://127.0.0.1:" + Voice.whisperPort]
         stdinEnabled: true
         stdout: SplitParser {
