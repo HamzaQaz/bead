@@ -55,5 +55,6 @@ strand:
 	cd strand && go build -trimpath -o strand .
 
 test:
+	QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests
 	cd strand && go test ./...
 	cd glint && go vet ./...

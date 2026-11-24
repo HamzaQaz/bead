@@ -10,6 +10,7 @@ import Quickshell.Io
 import qs.components
 import qs.config
 import qs.services
+import "launcher-actions.js" as RowActions
 
 // The island as a launcher: type to fuzzy-search apps (the ones you launch
 // most float up), do maths (qalc: "2^10", "5 usd to eur"; Enter copies the
@@ -21,7 +22,8 @@ import qs.services
 // Shift+Enter copies the path), or "?" to ask Pearl (services/Ask.qml): the answer streams in
 // below; Enter on an edited question asks a follow-up. Log out / reboot /
 // shut down need a second Enter.
-// Keys: Up/Down (Tab, Ctrl+J/K/N/P), Enter, Esc.
+// Keys: Up/Down (Ctrl+J/K/N/P), Enter, Esc; Tab: what you can do with the
+// selected app, window or file (Shift+Tab or Esc: back).
 Item {
     id: root
 
@@ -43,7 +45,65 @@ Item {
     // `query` still reads as before ("?question"), so the rest is unchanged
     property string mode: ""
     property string fieldText: ""
-    readonly property string query: mode + fieldText
+    readonly property string query: acting ? "" : mode + fieldText
+
+    // ── Tab: what you can do with a row (launcher-actions.js). While its
+    // actions show, the row's name is the chip, and typing narrows them or
+    // gives a workspace number ──
+    property var acting: null      // the row (an app, a window or a file)
+    property var actingBack: null  // { mode, text, index }: what to go back to
+    function rowName(r: var): string { return r.kind === "app" ? r.e.name : r.kind === "win" ? r.w.name : r.kind === "file" ? r.f.name : ""; }
+    function appWindows(e: var): list<var> {
+        return Hyprland.toplevels.values.filter(t => Apps.entryFor(t.wayland?.appId ?? t.lastIpcObject?.class ?? "")?.id === e.id);
+    }
+    function rowInfo(r: var): var {
+        return { kind: r.kind, name: rowName(r), running: r.kind === "app" ? appWindows(r.e).length : 0, ws: r.kind === "win" ? (r.w.t.workspace?.id ?? 0) : 0 };
+    }
+    function enterActions(): bool {
+        const r = results[current];
+        if (acting || !r || !RowActions.hasActions(r.kind)) return false;
+        actingBack = { mode: mode, text: field.text, index: current };
+        acting = r;
+        mode = "";
+        field.text = "";
+        return true;
+    }
+    function leaveActions(): void {
+        if (!acting) return;
+        const back = actingBack;
+        acting = null;
+        actingBack = null;
+        mode = back.mode;
+        field.text = back.text;
+        fieldText = back.text;
+        Qt.callLater(() => { current = Math.min(back.index, Math.max(0, results.length - 1)); });
+    }
+    function winAddr(t: var): string { const a = String(t.address); return a.startsWith("0x") ? a : "0x" + a; }
+    function dispatch(lua: string): void { Quickshell.execDetached(["hyprctl", "dispatch", lua]); }
+    function runRowAction(a: var, r: var): void {
+        const here = Hyprland.focusedWorkspace?.id ?? 1;
+        if (r.kind === "app") {
+            if (a.act === "open") Apps.launch(r.e);
+            else if (a.act === "open_on") Apps.launchOn(r.e, a.ws);
+            else if (a.act === "open_empty") {
+                const busy = Hyprland.toplevels.values.map(t => t.workspace?.id);
+                let n = 1;
+                while (n < 10 && busy.includes(n)) n++;
+                Apps.launchOn(r.e, n);
+                dispatch(`hl.dsp.focus({ workspace = "${n}" })`);
+            }
+            else if (a.act === "quit") for (const t of appWindows(r.e)) dispatch(`hl.dsp.window.close({ window = "address:${winAddr(t)}" })`);
+        } else if (r.kind === "win") {
+            const w = `window = "address:${winAddr(r.w.t)}"`;
+            if (a.act === "bring") { dispatch(`hl.dsp.window.move({ workspace = "${here}", ${w}, follow = false })`); dispatch(`hl.dsp.focus({ ${w} })`); }
+            else if (a.act === "move_to") dispatch(`hl.dsp.window.move({ workspace = "${a.ws}", ${w}, follow = false })`);
+            else if (a.act === "close") dispatch(`hl.dsp.window.close({ ${w} })`);
+        } else if (r.kind === "file") {
+            if (a.act === "open") Quickshell.execDetached(["xdg-open", r.f.path]);
+            else if (a.act === "folder") Quickshell.execDetached(["xdg-open", r.f.isDir ? r.f.path : r.f.path.slice(0, r.f.path.lastIndexOf("/")) || "/"]);
+            else if (a.act === "copy_path") Quickshell.execDetached(["wl-copy", r.f.path]);
+        }
+    }
     readonly property var modes: ({
         "?": { label: "Ask Claude", hint: "Ask anything" },
         ">": { label: "Actions", hint: "Lock, timer, Wi-Fi, screenshot…" },
@@ -52,7 +112,7 @@ Item {
         "/": { label: "Files", hint: "Search your home folder" }
     })
     function absorb(text: string): void {
-        if (!mode && text.length && modes[text[0]]) {
+        if (!acting && !mode && text.length && modes[text[0]]) {
             mode = text[0];
             field.text = text.slice(1).replace(/^ +/, ""); // comes straight back here
             return;
@@ -64,6 +124,8 @@ Item {
 
     function reset(seed: string): void {
         Ask.clear();
+        acting = null;
+        actingBack = null;
         mode = "";
         field.text = seed ?? "";
         current = 0;
@@ -300,6 +362,8 @@ Item {
     readonly property bool emojiing: query.startsWith(":")
     onClippingChanged: if (clipping) Clipboard.load()
     readonly property list<var> results: {
+        if (acting) return RowActions.actionsFor(rowInfo(acting), fieldText, { here: Hyprland.focusedWorkspace?.id ?? 0 })
+            .map(a => ({ kind: "action", a: Object.assign({}, a, { id: "row:" + a.id, act: a.id }) }));
         const q = query.trim();
         if (clipping) {
             const words = q.slice(1).trim().toLowerCase().split(/\s+/).filter(w => w);
@@ -362,6 +426,14 @@ Item {
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
         else {
             if (r.a.id === "timermenu") { root.mode = ">"; field.text = "timer "; return; } // stay open: pick a length
+            if (r.a.act) {
+                if ((r.a.act === "open_on" || r.a.act === "move_to") && !r.a.ws) return; // wants a number first
+                if (r.a.confirm && confirming !== r.a.id) { current = i; confirming = r.a.id; return; }
+                const on = acting;
+                close();
+                runRowAction(r.a, on);
+                return;
+            }
             if (r.a.confirm && confirming !== r.a.id) { current = i; confirming = r.a.id; return; }
             close();
             runAction(r.a);
@@ -383,7 +455,7 @@ Item {
         Icon {
             x: 14
             anchors.verticalCenter: parent.verticalCenter
-            name: root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
+            name: root.acting ? "bolt" : root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
             color: root.asking ? Theme.tone("action") : Theme.subtext
             size: 20
         }
@@ -393,10 +465,10 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             height: 26
             radius: 13
-            readonly property var m: root.modes[root.mode] ?? null
+            readonly property var m: root.acting ? { label: root.rowName(root.acting) } : root.modes[root.mode] ?? null
             property string shownLabel: ""
             onMChanged: if (m) shownLabel = m.label // keeps its text while it fades out
-            width: m ? chipLabel.implicitWidth + 22 : 0
+            width: m ? Math.min(chipLabel.implicitWidth + 22, 220) : 0
             opacity: m ? 1 : 0
             visible: width > 1
             clip: true
@@ -406,13 +478,15 @@ Item {
             Text {
                 id: chipLabel
                 anchors.centerIn: parent
+                width: Math.min(implicitWidth, 198)
+                elide: Text.ElideRight
                 font.family: Theme.font
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
                 color: Theme.tone("action")
                 text: modeChip.shownLabel
             }
-            TapHandler { onTapped: { root.mode = ""; field.forceActiveFocus(); } }
+            TapHandler { onTapped: { if (root.acting) root.leaveActions(); else root.mode = ""; field.forceActiveFocus(); } }
         }
         TextInput {
             id: field
@@ -431,6 +505,12 @@ Item {
                 if (e.key === Qt.Key_Backspace && root.mode && field.cursorPosition === 0 && !field.selectedText) {
                     root.mode = ""; e.accepted = true; return;
                 }
+                // a row's actions: Tab opens them; Shift+Tab, Esc or Backspace on nothing goes back
+                const backtab = e.key === Qt.Key_Backtab || e.key === Qt.Key_Tab && (e.modifiers & Qt.ShiftModifier);
+                if (root.acting && (backtab || e.key === Qt.Key_Escape || e.key === Qt.Key_Backspace && !field.text)) {
+                    root.leaveActions(); e.accepted = true; return;
+                }
+                if (e.key === Qt.Key_Tab && !backtab && !root.acting && root.enterActions()) { e.accepted = true; return; }
                 if (root.answering) { // the answer is showing: arrows scroll it, Enter asks again
                     if (e.key === Qt.Key_Down || e.key === Qt.Key_Up) { answer.scroll(e.key === Qt.Key_Down ? 60 : -60); e.accepted = true; return; }
                     if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
@@ -439,8 +519,8 @@ Item {
                         return;
                     }
                 }
-                if (e.key === Qt.Key_Down || e.key === Qt.Key_Tab || ctrl && (e.key === Qt.Key_J || e.key === Qt.Key_N)) { root.move(1); e.accepted = true; }
-                else if (e.key === Qt.Key_Up || e.key === Qt.Key_Backtab || ctrl && (e.key === Qt.Key_K || e.key === Qt.Key_P)) { root.move(-1); e.accepted = true; }
+                if (e.key === Qt.Key_Down || e.key === Qt.Key_Tab && !backtab || ctrl && (e.key === Qt.Key_J || e.key === Qt.Key_N)) { root.move(1); e.accepted = true; }
+                else if (e.key === Qt.Key_Up || backtab || ctrl && (e.key === Qt.Key_K || e.key === Qt.Key_P)) { root.move(-1); e.accepted = true; }
                 else if (e.key === Qt.Key_PageDown) { root.move(Math.min(root.maxRows, root.results.length - 1 - root.current)); e.accepted = true; }
                 else if (e.key === Qt.Key_PageUp) { root.move(-Math.min(root.maxRows, root.current)); e.accepted = true; }
                 else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.activate(root.current, !!(e.modifiers & Qt.ShiftModifier)); e.accepted = true; }
@@ -453,7 +533,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !field.text && !field.preeditText
                 font.pixelSize: 15
-                text: root.modes[root.mode]?.hint ?? "Search apps, = maths, > actions, ; clipboard, : emoji, ? ask Claude"
+                text: root.acting ? "Pick one, or type a workspace number" : root.modes[root.mode]?.hint ?? "Search apps, = maths, > actions, ; clipboard, : emoji, ? ask Claude"
             }
         }
     }
@@ -576,9 +656,19 @@ Item {
                     }
                 }
             }
+            Row { // the selected row says what Tab does
+                id: tabHint
+                visible: row.sel && !root.acting && RowActions.hasActions(row.modelData.kind)
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+                Key { text: "Tab"; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: "more"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+            }
             Column {
                 x: 52
-                width: parent.width - 52 - 12
+                width: parent.width - 52 - 12 - (tabHint.visible ? tabHint.width + 10 : 0)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 1
                 Text {
