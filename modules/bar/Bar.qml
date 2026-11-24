@@ -247,6 +247,9 @@ Scope {
                 preferredRendererType: Shape.CurveRenderer
                 ShapePath {
                     fillColor: Theme.frame
+                    // a new palette ripples out (config/Theme.qml): a ring of light
+                    // crosses the frame, from the island at the top to the far corners
+                    fillGradient: Theme.ripple < 1 ? ring : null
                     strokeColor: "transparent"
                     fillRule: ShapePath.OddEvenFill
                     PathSvg {
@@ -260,6 +263,20 @@ Scope {
                         }
                     }
                 }
+            }
+
+            RadialGradient {
+                id: ring
+                readonly property real at: Theme.ripple
+                readonly property color glow: root.mix(Theme.frame, Theme.tone("action"), 0.5 * Math.sin(Math.PI * at))
+                centerX: win.width / 2; centerY: 0
+                focalX: centerX; focalY: centerY
+                centerRadius: Math.hypot(win.width / 2, win.height)
+                GradientStop { position: 0; color: Theme.frame }
+                GradientStop { position: Math.max(0, ring.at - 0.09); color: Theme.frame }
+                GradientStop { position: ring.at; color: ring.glow }
+                GradientStop { position: Math.min(1, ring.at + 0.09); color: Theme.frame }
+                GradientStop { position: 1; color: Theme.frame }
             }
 
             // the bar's strip (input region and layout anchor)
