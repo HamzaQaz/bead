@@ -120,11 +120,17 @@ func plan(s system, parts []*part, c choices) (steps []step, repoPkgs, aurPkgs [
 		steps = append(steps, st)
 	}
 
-	mk := func(target string) *exec.Cmd { return exec.Command("make", "-C", s.repo, target) }
-	steps = append(steps, step{title: "Build and install bead", detail: "shaders, then ~/.local/share/bead and ~/.local/bin", run: output(mk("install"))})
+	// make is looked up when the step runs: on a bare system the packages step installs it
+	mk := func(target string) func() (string, error) {
+		return func() (string, error) { return output(exec.Command("make", "-C", s.repo, target))() }
+	}
+	steps = append(steps, step{title: "Build and install bead", detail: "shaders, then ~/.local/share/bead and ~/.local/bin", run: func() (string, error) {
+		os.MkdirAll(filepath.Join(xdg("XDG_PICTURES_DIR", "Pictures"), "Wallpapers"), 0o755) // where bead looks for them
+		return mk("install")()
+	}})
 
 	if c.has("glint") {
-		steps = append(steps, step{title: "Glint", detail: "build the glint command", run: output(mk("install-glint"))})
+		steps = append(steps, step{title: "Glint", detail: "build the glint command", run: mk("install-glint")})
 	}
 	if c.has("glint-claude") {
 		steps = append(steps, step{title: "Glint for Claude Code", detail: "hooks in ~/.claude/settings.json (backed up first)", run: claudeHooks})
