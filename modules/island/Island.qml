@@ -788,7 +788,10 @@ Scope {
         function toggle(): void { root.overviewOpen = !root.overviewOpen; }
         function open(): void { root.overviewOpen = true; }
         function close(): void { root.overviewOpen = false; }
+        // left right up down enter esc 1-9 f x p, as if pressed in the overview
+        function key(name: string): string { if (!root.overviewOpen) return "overview not open"; root.overviewKey(name); return "sent"; }
     }
+    signal overviewKey(string name)
 
     // ── dashboard ──
     readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
@@ -2040,6 +2043,10 @@ Scope {
                     opacity: active ? 1 : 0
                     visible: opacity > 0.01
                     SwapFade on opacity {}
+                }
+                Connections {
+                    target: root
+                    function onOverviewKey(name: string): void { if (win.state === "overview") overviewView.press(name); }
                 }
                 OverviewView {
                     id: overviewView

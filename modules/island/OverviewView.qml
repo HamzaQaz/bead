@@ -9,10 +9,14 @@ import Quickshell.Widgets
 import qs.components
 import qs.config
 import qs.services
+import "overview.js" as Ov
 
 // Workspace overview (Super+Tab): a card per workspace with live thumbnails of
 // its windows where they really sit. Click a card to go there, a thumbnail to
-// focus that window. ←/→ and Enter, 1-9 to jump, Esc closes.
+// focus that window; drag a thumbnail onto another card (or the "+" after the
+// last one, for a new workspace) to move it. ←/→ and Enter, 1-9 to jump, ↓/↑
+// to pick a window in the card; on the picked (or hovered) window f floats,
+// x closes and p pins it. Esc closes.
 Item {
     id: root
     signal close()
@@ -44,7 +48,8 @@ Item {
         for (const w of spaces) { const m = mon(w); if (m.w > 0) r = Math.max(r, m.h / m.w); }
         return Math.round(cardW * Math.min(r, 0.75));
     }
-    readonly property real wantW: Math.min(pad * 2 + spaces.length * cardW + Math.max(0, spaces.length - 1) * gap, maxW)
+    readonly property real newW: 44   // the "+" drop target after the last card
+    readonly property real wantW: Math.min(pad * 2 + spaces.length * (cardW + gap) + newW, maxW)
     readonly property real wantH: pad + 22 + 8 + cardH + 10 + 18 + pad
 
     // a workspace's monitor, in logical pixels
@@ -72,7 +77,27 @@ Item {
         Hyprland.refreshToplevels();
         current = Math.max(0, spaces.findIndex(w => w.focused));
         caption = "";
+        pick = -1;
+        hoverWin = null;
         enterAnim.restart();
+    }
+
+    // ── a window to act on: ↓/↑ picks one in the selected card (in reading
+    // order), else the one under the pointer ──
+    property int pick: -1
+    property var hoverWin: null
+    onCurrentChanged: pick = -1
+    readonly property var curWins: Ov.readingOrder((spaces[current]?.toplevels.values ?? []).filter(t => !t.lastIpcObject?.hidden), t => t.lastIpcObject?.at)
+    readonly property var picked: pick >= 0 ? curWins[pick] ?? null : hoverWin
+    function addr(t: var): string { const a = String(t.address); return "address:" + (a.startsWith("0x") ? a : "0x" + a); }
+    function act(kind: string, t: var): void {
+        if (!t) return;
+        const name = t.title || t.wayland?.appId || "window";
+        const w = `window = "${addr(t)}"`;
+        if (kind === "float") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.float({ action = "toggle", ${w} })`]); caption = (t.lastIpcObject?.floating ? "Tiled " : "Floating ") + name; }
+        else if (kind === "pin") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.pin({ ${w} })`]); caption = (t.lastIpcObject?.pinned ? "Unpinned " : "Pinned ") + name; }
+        else if (kind === "close") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.close({ ${w} })`]); caption = "Closed " + name; if (hoverWin === t) hoverWin = null; }
+        refreshTimer.restart();
     }
     function focusField(): void { keys.forceActiveFocus(); }
 
@@ -86,34 +111,52 @@ Item {
         if (p.y < strip.y || p.y > strip.y + strip.height) return -1;
         const x = p.x - strip.x + strip.contentX;
         const i = Math.floor(x / (cardW + gap));
-        return i >= 0 && i < spaces.length && x - i * (cardW + gap) <= cardW ? i : -1;
+        const into = x - i * (cardW + gap);
+        if (i === spaces.length) return into <= newW ? i : -1;   // the "+"
+        return i >= 0 && i < spaces.length && into <= cardW ? i : -1;
     }
     function moveWindow(t: var, w: var): void {
-        const a = String(t.address);
-        Quickshell.execDetached(["hyprctl", "dispatch",
-            `hl.dsp.window.move({ workspace = "${w.id}", window = "address:${a.startsWith("0x") ? a : "0x" + a}", follow = false })`]);
-        current = spaces.indexOf(w);
+        Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.move({ workspace = "${w.id}", window = "${addr(t)}", follow = false })`]);
+        if (spaces.indexOf(w) >= 0) current = spaces.indexOf(w);
         caption = "Moved to workspace " + (w.name || w.id);
         refreshTimer.restart();
+    }
+    // onto a workspace of its own: the lowest free number (it opens on the
+    // monitor you're on, as a new workspace does in Hyprland)
+    function moveToNew(t: var): void {
+        moveWindow(t, { id: Ov.freeWorkspace(Hyprland.workspaces.values.map(w => w.id)) });
     }
     // positions come from Hyprland's IPC snapshot: take a fresh one after a move
     Timer { id: refreshTimer; interval: 180; onTriggered: { Hyprland.refreshWorkspaces(); Hyprland.refreshToplevels(); } }
 
+    // a key, from the keyboard or `qs ipc call overview key <name>`; true if used
+    function handle(key: int, mods: int): bool {
+        const n = root.spaces.length;
+        if (key === Qt.Key_Escape || key === Qt.Key_Tab && (mods & Qt.MetaModifier)) root.close();
+        else if (key === Qt.Key_Right || key === Qt.Key_Tab) root.current = (root.current + 1) % Math.max(1, n);
+        else if (key === Qt.Key_Left || key === Qt.Key_Backtab) root.current = (root.current - 1 + n) % Math.max(1, n);
+        else if (key === Qt.Key_Down) root.pick = Ov.step(root.pick, root.curWins.length, 1);
+        else if (key === Qt.Key_Up) root.pick = Ov.step(root.pick, root.curWins.length, -1);
+        else if (key === Qt.Key_Return || key === Qt.Key_Enter) { if (root.pick >= 0 && root.picked) root.focusWindow(root.picked); else root.go(root.current); }
+        else if (key === Qt.Key_F && !mods) root.act("float", root.picked);
+        else if (key === Qt.Key_X && !mods) root.act("close", root.picked);
+        else if (key === Qt.Key_P && !mods) root.act("pin", root.picked);
+        else if (key >= Qt.Key_1 && key <= Qt.Key_9) {
+            const i = root.spaces.findIndex(w => w.id === key - Qt.Key_0);
+            if (i >= 0) root.go(i);
+        } else return false;
+        return true;
+    }
+    function press(name: string): bool {
+        const k = { left: Qt.Key_Left, right: Qt.Key_Right, up: Qt.Key_Up, down: Qt.Key_Down, enter: Qt.Key_Return, esc: Qt.Key_Escape, f: Qt.Key_F, x: Qt.Key_X, p: Qt.Key_P }[name]
+            ?? (/^[1-9]$/.test(name) ? Qt.Key_0 + Number(name) : 0);
+        return k ? handle(k, 0) : false;
+    }
+
     Item {
         id: keys
         focus: true
-        Keys.onPressed: e => {
-            const n = root.spaces.length;
-            if (e.key === Qt.Key_Escape || e.key === Qt.Key_Tab && (e.modifiers & Qt.MetaModifier)) root.close();
-            else if (e.key === Qt.Key_Right || e.key === Qt.Key_Tab) root.current = (root.current + 1) % Math.max(1, n);
-            else if (e.key === Qt.Key_Left || e.key === Qt.Key_Backtab) root.current = (root.current - 1 + n) % Math.max(1, n);
-            else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) root.go(root.current);
-            else if (e.key >= Qt.Key_1 && e.key <= Qt.Key_9) {
-                const i = root.spaces.findIndex(w => w.id === e.key - Qt.Key_0);
-                if (i >= 0) root.go(i);
-            } else return;
-            e.accepted = true;
-        }
+        Keys.onPressed: e => { if (root.handle(e.key, e.modifiers)) e.accepted = true; }
     }
 
     Label {
@@ -125,7 +168,8 @@ Item {
         elide: Text.ElideRight
         font.pixelSize: 12
         opacity: root.enter
-        text: root.caption || "←/→ to choose  ·  Enter to go  ·  1-9 to jump  ·  click a window to focus it"
+        text: root.caption || (root.picked ? (root.picked.title || "Window") + "  ·  f float  ·  x close  ·  p pin" + (root.pick >= 0 ? "  ·  Enter focus" : "")
+            : "←/→ choose  ·  ↓ pick a window  ·  Enter go  ·  drag a window to move it")
     }
 
     Flickable {
@@ -243,7 +287,7 @@ Item {
                                     z: o.floating ? 1 : 0
                                     radius: 6
                                     color: Qt.alpha(Theme.frame, 0.9)
-                                    border.width: winMa.containsMouse ? 2 : 0
+                                    border.width: winMa.containsMouse || root.pick >= 0 && root.picked === modelData ? 2 : 0
                                     border.color: Theme.tone("action")
                                     ScreencopyView {
                                         anchors.fill: parent
@@ -286,8 +330,8 @@ Item {
                                         preventStealing: true
                                         cursorShape: root.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                                         property point start
-                                        onEntered: if (!root.dragging) { root.current = card.index; root.caption = thumb.modelData.title || thumb.app; }
-                                        onExited: if (!root.dragging) root.caption = ""
+                                        onEntered: if (!root.dragging) { root.current = card.index; root.hoverWin = thumb.modelData; root.caption = ""; }
+                                        onExited: if (!root.dragging && root.hoverWin === thumb.modelData) root.hoverWin = null
                                         onPressed: e => start = Qt.point(e.x, e.y)
                                         onPositionChanged: e => {
                                             if (!pressed) return;
@@ -305,7 +349,8 @@ Item {
                                             root.dragPos = mapToItem(root, e.x, e.y);
                                             root.dropIndex = root.cardAt(root.dragPos);
                                             const w = root.spaces[root.dropIndex];
-                                            root.caption = w && w !== card.modelData ? "Move to workspace " + (w.name || w.id) : "Drop on another workspace";
+                                            root.caption = root.dropIndex === root.spaces.length ? "Move to a new workspace"
+                                                : w && w !== card.modelData ? "Move to workspace " + (w.name || w.id) : "Drop on another workspace, or + for a new one";
                                         }
                                         onReleased: {
                                             const t = root.dragging;
@@ -314,7 +359,8 @@ Item {
                                             const w = root.spaces[i];
                                             root.dragging = null;
                                             root.dropIndex = -1;
-                                            if (w && w !== card.modelData) { ghost.land(root.cardCentre(i), true); root.moveWindow(t, w); }
+                                            if (i === root.spaces.length) { ghost.land(root.cardCentre(i), true); root.moveToNew(t); }
+                                            else if (w && w !== card.modelData) { ghost.land(root.cardCentre(i), true); root.moveWindow(t, w); }
                                             else { ghost.land(thumb.mapToItem(root, thumb.width / 2, thumb.height / 2), false); root.caption = ""; }
                                         }
                                     }
@@ -327,6 +373,26 @@ Item {
                             text: "Empty"
                         }
                     }
+                }
+            }
+            // drop a window here for a workspace of its own
+            Item {
+                width: root.newW
+                height: 30 + root.cardH
+                readonly property bool over: !!root.dragging && root.dropIndex === root.spaces.length
+                opacity: root.enter * (root.dragging ? 1 : 0.45)
+                Behavior on opacity { NumberAnimation { duration: 160 } }
+                Rectangle {
+                    y: 30
+                    width: parent.width
+                    height: root.cardH
+                    radius: 14
+                    color: Qt.alpha(parent.over ? Theme.tone("success") : Theme.text, parent.over ? 0.14 : 0.04)
+                    border.width: parent.over ? 2 : 1
+                    border.color: parent.over ? Theme.tone("success") : Qt.alpha(Theme.text, 0.1)
+                    scale: parent.over ? 1.05 : 1
+                    Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                    Icon { anchors.centerIn: parent; name: "add"; size: 20; color: parent.parent.over ? Theme.tone("success") : Theme.subtext }
                 }
             }
         }
@@ -384,6 +450,6 @@ Item {
     }
     // where a card's centre is, in root
     function cardCentre(i: int): point {
-        return Qt.point(strip.x - strip.contentX + i * (cardW + gap) + cardW / 2, strip.y + 30 + cardH / 2);
+        return Qt.point(strip.x - strip.contentX + i * (cardW + gap) + (i === spaces.length ? newW : cardW) / 2, strip.y + 30 + cardH / 2);
     }
 }
