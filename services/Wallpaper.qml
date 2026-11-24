@@ -27,10 +27,9 @@ Singleton {
     property list<var> lives: []   // { id, title, type, preview }
     property bool busy: false
 
-    // the wallpaper as a still image: Tint's record, else Caelestia's
-    readonly property string stillPath: tintPath || caelestiaPath
+    // the wallpaper as a still image: Tint's record of it
+    readonly property string stillPath: tintPath
     property string tintPath: ""
-    property string caelestiaPath: ""
     FileView {
         path: root.stateDir + "/wallpaper-path"
         watchChanges: true
@@ -38,13 +37,6 @@ Singleton {
         onLoaded: root.tintPath = text().trim()
         onFileChanged: reload()
         onLoadFailed: root.tintPath = ""
-    }
-    FileView {
-        path: (Quickshell.env("XDG_STATE_HOME") || root.home + "/.local/state") + "/caelestia/wallpaper/path.txt"
-        watchChanges: true
-        printErrors: false
-        onLoaded: root.caelestiaPath = text().trim()
-        onFileChanged: reload()
     }
 
     // ── Tint ──
@@ -152,7 +144,7 @@ Singleton {
         if (!kind) adopt.running = true;
         firstTint.restart();
     }
-    // no Tint colours yet (first run, or coming from Caelestia): make them
+    // no Tint colours yet (a first run): make them
     Timer { id: firstTint; interval: 3000; onTriggered: if (!root.tintPath) root.retint() }
     Process {
         id: adopt

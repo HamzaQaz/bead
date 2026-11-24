@@ -6,9 +6,9 @@ import Quickshell.Io
 import "blend.js" as Blend
 
 // Colours come from Tint (bin/bead-tint: built from the wallpaper, written to
-// $XDG_STATE_HOME/bead/scheme.json) and follow it live. Until Tint has run, a
-// Caelestia scheme is used if there is one. BEAD_THEME=sileo uses sileo's own
-// palette.
+// $XDG_STATE_HOME/bead/scheme.json) and follow it live. Until Tint has run,
+// the fallbacks below (a neutral dark palette). BEAD_THEME=sileo uses sileo's
+// own palette.
 //
 // A new palette (a new wallpaper) doesn't snap in: it ripples out from the
 // island. `ripple` runs 0 → 1; the island's own colours and the accents lead,
@@ -19,9 +19,7 @@ Singleton {
     id: root
 
     readonly property bool themed: Settings.theme !== "sileo"
-    property var tint: ({})
-    property var caelestia: ({})
-    readonly property var scheme: Object.keys(tint).length ? tint : caelestia
+    property var scheme: ({})
 
     // ── the ripple ──
     property var prev: ({})    // the palette before this one
@@ -31,9 +29,9 @@ Singleton {
     signal changed()
     NumberAnimation { id: rippling; target: root; property: "ripple"; from: 0; to: 1; duration: 820; easing.type: Easing.InOutSine }
     // take a newly read palette; if there was one before and it differs, ripple
-    function adopt(which: string, next: var): void {
+    function adopt(next: var): void {
         const before = scheme;
-        if (which === "tint") tint = next; else caelestia = next;
+        scheme = next;
         if (!Object.keys(before).length || !Blend.differs(before, scheme)) return;
         prev = before;
         ripple = 0;
@@ -49,7 +47,7 @@ Singleton {
 
     readonly property string font: "Noto Sans"
     readonly property color fill: c("surfaceContainer", "#1a1a1a")
-    // Caelestia's screen frame: its colour and thickness (physical px)
+    // the screen frame: its colour and thickness (physical px)
     readonly property color frame: at("surface", "#0e0e0e", trail)
     readonly property int frameThickness: 10
     readonly property color text: at("onSurface", "#e6e6e6", trail)
@@ -71,14 +69,6 @@ Singleton {
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: { try { root.adopt("tint", JSON.parse(text()).colours || {}); } catch (e) {} }
-    }
-    FileView {
-        path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/caelestia/scheme.json"
-        blockLoading: true
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: { try { root.adopt("caelestia", JSON.parse(text()).colours || {}); } catch (e) {} }
+        onLoaded: { try { root.adopt(JSON.parse(text()).colours || {}); } catch (e) {} }
     }
 }

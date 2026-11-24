@@ -1,7 +1,7 @@
 PREFIX ?= $(HOME)/.local
 SHARE  := $(PREFIX)/share/bead
 
-.PHONY: build install run glint install-glint strand test
+.PHONY: build install run glint install-glint strand test friend-test
 
 build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb
 
@@ -23,6 +23,7 @@ install: build
 	install -Dm755 bin/bead-pearl $(PREFIX)/bin/bead-pearl
 	install -Dm755 bin/bead-term $(PREFIX)/bin/bead-term
 	install -Dm755 bin/bead-activity $(PREFIX)/bin/bead-activity
+	install -Dm755 bin/bead-doctor $(PREFIX)/bin/bead-doctor
 	install -Dm644 systemd/bead-resume.service $(HOME)/.config/systemd/user/bead-resume.service
 	@if pgrep -f "^qs -p $(SHARE) -n" >/dev/null; then \
 		: "anchored: an unanchored pattern also matches this very shell"; \
@@ -58,3 +59,7 @@ test:
 	QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests
 	cd strand && go test ./...
 	cd glint && go vet ./...
+
+# install on a fresh Arch in a throwaway container (podman) and check it
+friend-test:
+	tests/friend-test.sh

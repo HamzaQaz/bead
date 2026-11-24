@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]: run the shell in the background.
+# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
 share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
@@ -126,5 +126,6 @@ EOT
 	*) echo "bead discord [status|mute|deafen|leave|setup]" >&2; exit 1 ;;
 	esac ;;
 log) exec qs -p "$share" log -f ;;
-*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]" >&2; exit 2 ;;
+doctor) exec "$(dirname "$0")/bead-doctor" "${2:-}" ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor]" >&2; exit 2 ;;
 esac

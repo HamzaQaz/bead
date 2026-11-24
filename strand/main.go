@@ -105,6 +105,7 @@ func headless(s system, dry bool, with, without []string) int {
 	m := newModel(s, dry)
 	m.parts = parts
 	c := m.chosen()
+	c.noconfirm = true
 	steps, repo, aur, mb := plan(s, parts, c)
 	var on []string
 	for _, p := range parts {

@@ -10,7 +10,8 @@ if ! command -v pacman >/dev/null; then
 fi
 if ! command -v go >/dev/null; then
     echo "strand is written in Go; installing go first (sudo asks for your password)."
-    sudo pacman -S --needed go
+    case " $* " in *" --yes "*) quiet=--noconfirm ;; *) quiet= ;; esac
+    sudo pacman -S --needed $quiet go
 fi
 (cd strand && go build -trimpath -o strand .)
 exec ./strand/strand --repo "$PWD" "$@"

@@ -31,6 +31,7 @@ var (
 type system struct {
 	arch      bool   // pacman present
 	helper    string // paru / yay, "" if none
+	terminal  bool   // a terminal bead-term can use is installed
 	hyprLua   bool   // Hyprland's Lua config (hyprland.lua) rather than hyprland.conf
 	hyprBinds bool   // the config already binds bead's shortcuts
 	claude    bool   // Claude Code installed (~/.claude)
@@ -44,6 +45,12 @@ func detect(repo string) system {
 	for _, h := range []string{"paru", "yay"} {
 		if have(h) {
 			s.helper = h
+			break
+		}
+	}
+	for _, t := range []string{os.Getenv("TERMINAL"), "kitty", "foot", "ghostty", "alacritty", "wezterm", "konsole", "xterm"} {
+		if t != "" && have(t) {
+			s.terminal = true
 			break
 		}
 	}
@@ -88,30 +95,47 @@ type choices struct {
 	parts  map[string]bool
 	pearl  string // claude | api | local
 	apiKey string
+	// unattended (--yes): pacman and the AUR helper take their defaults
+	noconfirm bool
 }
 
 func (c choices) has(id string) bool { return c.parts[id] }
 
-func plan(s system, parts []*part, c choices) (steps []step, repoPkgs, aurPkgs []string, downloadMB int) {
+// the packages the chosen parts need, before checking what's installed
+func wanted(s system, parts []*part, c choices) []string {
 	var want []string
 	for _, p := range parts {
 		if c.has(p.id) {
 			want = append(want, p.pkgs...)
 		}
 	}
+	// bead opens AUR builds and updates in a terminal (bin/bead-term)
+	if c.has("core") && !s.terminal {
+		want = append(want, "kitty")
+	}
 	sort.Strings(want)
-	repoPkgs, aurPkgs = missing(want)
+	return want
+}
+
+func plan(s system, parts []*part, c choices) (steps []step, repoPkgs, aurPkgs []string, downloadMB int) {
+	repoPkgs, aurPkgs = missing(wanted(s, parts, c))
+	quiet := func(args []string) []string {
+		if c.noconfirm {
+			return append(args, "--noconfirm")
+		}
+		return args
+	}
 
 	if len(repoPkgs) > 0 {
 		steps = append(steps, step{
 			title: "Packages", detail: strings.Join(repoPkgs, " "), interactive: true,
-			cmd: exec.Command("sudo", append([]string{"pacman", "-S", "--needed"}, repoPkgs...)...),
+			cmd: exec.Command("sudo", append(quiet([]string{"pacman", "-S", "--needed"}), repoPkgs...)...),
 		})
 	}
 	if len(aurPkgs) > 0 {
 		st := step{title: "AUR packages", detail: strings.Join(aurPkgs, " "), interactive: true}
 		if s.helper != "" {
-			st.cmd = exec.Command(s.helper, append([]string{"-S", "--needed"}, aurPkgs...)...)
+			st.cmd = exec.Command(s.helper, append(quiet([]string{"-S", "--needed"}), aurPkgs...)...)
 		} else {
 			st.run = func() (string, error) {
 				return "", fmt.Errorf("these come from the AUR and no helper (paru or yay) is installed: %s", strings.Join(aurPkgs, " "))
@@ -250,14 +274,26 @@ func pearlSetup(way, key string) (string, error) {
 }
 
 func tintFirst() (string, error) {
-	dir := filepath.Join(xdg("XDG_PICTURES_DIR", "Pictures"), "Wallpapers")
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		ext := strings.ToLower(filepath.Ext(e.Name()))
-		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" {
-			out, err := exec.Command(filepath.Join(home, ".local/bin/bead-tint"), filepath.Join(dir, e.Name())).CombinedOutput()
-			return string(out), err
+	// your own first, else bead's (installed with the shell)
+	w := firstWallpaper(filepath.Join(xdg("XDG_PICTURES_DIR", "Pictures"), "Wallpapers"),
+		filepath.Join(xdg("XDG_DATA_HOME", ".local/share"), "bead", "data", "wallpapers"))
+	if w == "" {
+		return "no wallpaper found yet: Tint runs when you pick one", nil
+	}
+	out, err := exec.Command(filepath.Join(home, ".local/bin/bead-tint"), w).CombinedOutput()
+	return string(out), err
+}
+
+// the first image (by name) in the first folder that has one; in bead's own, that's bead.jpg
+func firstWallpaper(dirs ...string) string {
+	for _, dir := range dirs {
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			ext := strings.ToLower(filepath.Ext(e.Name()))
+			if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" {
+				return filepath.Join(dir, e.Name())
+			}
 		}
 	}
-	return "no wallpapers in " + dir + " yet: Tint runs when you pick one", nil
+	return ""
 }

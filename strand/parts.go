@@ -25,6 +25,7 @@ func allParts() []*part {
 				"python", "jq", "curl", "fd", "libqalculate", "wtype", "wl-clipboard",
 				"grim", "slurp", "ffmpeg", "wf-recorder", "hyprpicker", "cliphist",
 				"libnotify", "pacman-contrib", "ddcutil", "pipewire", "make", "xdg-utils",
+				"expac", "bluez-utils", "hyprpolkitagent",
 			},
 		},
 		{

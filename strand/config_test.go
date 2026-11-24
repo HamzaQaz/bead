@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -71,9 +72,22 @@ func TestHyprBinds(t *testing.T) {
 		}
 		out, _ := os.ReadFile(filepath.Join(hypr, file))
 		t.Logf("%s:\n%s", file, out)
-		for _, want := range []string{"bead:launcher", "dashboard toggle", "cliphist"} {
+		for _, want := range []string{"bead:launcher", "dashboard toggle", "cliphist", "hyprpolkitagent"} {
 			if !strings.Contains(string(out), want) {
 				t.Errorf("%s lacks %q", file, want)
+			}
+		}
+		// the polkit line reaches the shell with plain quotes: escaped in Lua's
+		// string, left as they are in hyprland.conf
+		if lua && !strings.Contains(string(out), `pgrep -f \"polkit`) || !lua && !strings.Contains(string(out), `pgrep -f "polkit`) {
+			t.Errorf("%s: polkit line quoted wrongly", file)
+		}
+		// and the Lua parses
+		if lua {
+			if _, err := exec.LookPath("luac"); err == nil {
+				if b, err := exec.Command("luac", "-p", filepath.Join(hypr, file)).CombinedOutput(); err != nil {
+					t.Errorf("bead.lua doesn't parse: %s", b)
+				}
 			}
 		}
 	}
@@ -120,5 +134,54 @@ func TestKeysSheetListsEveryBind(t *testing.T) {
 		} else if what != b.what {
 			t.Errorf("%s: the sheet says %q, strand writes %q", b.keys, what, b.what)
 		}
+	}
+}
+
+// --yes runs unattended: pacman and the AUR helper mustn't stop to ask.
+// The interactive installer leaves the questions to them.
+func TestPlanNoConfirm(t *testing.T) {
+	s := system{arch: true, helper: "paru", repo: "/x"}
+	core := []*part{{id: "core", core: true, on: true, pkgs: []string{"definitely-not-a-package-xyz"}}}
+	for _, quiet := range []bool{false, true} {
+		steps, _, _, _ := plan(s, core, choices{parts: map[string]bool{"core": true}, noconfirm: quiet})
+		for _, st := range steps {
+			if st.cmd == nil {
+				continue
+			}
+			args := strings.Join(st.cmd.Args, " ")
+			if strings.Contains(args, "--noconfirm") != quiet {
+				t.Errorf("noconfirm=%v: %s", quiet, args)
+			}
+		}
+	}
+}
+
+// No terminal on the machine: the core part brings kitty (bead opens AUR
+// builds and updates in one). One already there: nothing extra.
+func TestPlanBringsATerminal(t *testing.T) {
+	core := []*part{{id: "core", core: true, on: true, pkgs: []string{"definitely-not-a-package-xyz"}}}
+	c := choices{parts: map[string]bool{"core": true}}
+	for _, has := range []bool{false, true} {
+		all := strings.Join(wanted(system{arch: true, terminal: has, repo: "/x"}, core, c), " ")
+		if strings.Contains(all, "kitty") == has {
+			t.Errorf("terminal=%v: packages %q", has, all)
+		}
+	}
+}
+
+// Tint's first run: your own wallpaper if there is one, else bead's.
+func TestFirstWallpaper(t *testing.T) {
+	mine, beads := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(beads, "bead.jpg"), []byte("x"), 0o644)
+	if got := firstWallpaper(mine, beads); got != filepath.Join(beads, "bead.jpg") {
+		t.Errorf("none of mine: got %q", got)
+	}
+	os.WriteFile(filepath.Join(mine, "notes.txt"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(mine, "sea.PNG"), []byte("x"), 0o644)
+	if got := firstWallpaper(mine, beads); got != filepath.Join(mine, "sea.PNG") {
+		t.Errorf("mine first: got %q", got)
+	}
+	if got := firstWallpaper(t.TempDir()); got != "" {
+		t.Errorf("nothing anywhere: got %q", got)
 	}
 }

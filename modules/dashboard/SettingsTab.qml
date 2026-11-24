@@ -24,7 +24,7 @@ Item {
     // Size: picking one only shows it (a sample island, at that size); Apply
     // restarts bead with it, and the island then asks whether to keep it
     property string sizePick: ""
-    onSectionChanged: sizePick = ""
+    onSectionChanged: { sizePick = ""; if (section === 3) Doctor.check(); }
     onVisibleChanged: if (!visible) sizePick = ""
     function applySize(): void {
         if (!sizePick) return;
@@ -39,7 +39,7 @@ Item {
         { t: "Idle", g: "bedtime", d: "When the screen locks, blanks and sleeps" },
         { t: "Looks", g: "palette", d: "Colours, the bar and where the island lives" },
         { t: "Assistant", g: "graphic_eq", d: "Claude in the launcher, voice and dictation" },
-        { t: "System", g: "deployed_code", d: "Updates, weather units and the settings file" }
+        { t: "System", g: "deployed_code", d: "Updates, what bead needs, the settings file" }
     ]
     readonly property real colW: (pane.width - 40 - 24) / 2
 
@@ -573,12 +573,26 @@ Item {
                     order: 5; width: root.colW; height: 44
                     Line { label: "Clipboard hints"; hint: "Tap the island after copying"; Toggle { checked: Settings.clipHints; onToggled: Settings.clipHints = !Settings.clipHints } }
                 }
+                In {
+                    order: 6; width: root.colW; height: 44
+                    // what bead needs on this machine (bin/bead-doctor)
+                    Line {
+                        readonly property int core: Doctor.problems.filter(c => c.need === "core").length
+                        label: !Doctor.checks.length ? "Checking…" : core ? core + " missing" : "All set"
+                        hint: Doctor.installing ? "Installing…" : Doctor.problems.length ? Doctor.problems.slice(0, 2).map(c => c.what.replace(/ \(.*\)$/, "")).join(" · ") + (Doctor.problems.length > 2 ? " · …" : "") : "What bead needs is all here"
+                        Row {
+                            spacing: 6
+                            Action { text: "Check"; glyph: "health_and_safety"; onHit: Doctor.check() }
+                            Action { visible: Doctor.packages.length > 0 && !Doctor.installing; accent: true; text: "Install"; glyph: "download"; onHit: Doctor.install(Doctor.packages) }
+                        }
+                    }
+                }
             }
             // the waiting updates, a few by name
             In {
                 visible: root.section === 3 && Updates.count > 0
-                order: 6
-                y: 3 * 46 + 4
+                order: 7
+                y: 4 * 46 + 4
                 width: rows.width
                 height: rows.height - y
                 clip: true

@@ -84,6 +84,9 @@ func hyprTarget(lua bool) string {
 
 type bind struct{ keys, what, global, exec string }
 
+// a polkit agent, unless one already runs (pkexec needs one to ask for the password)
+const polkitAgent = `sh -c 'pgrep -f "polkit.*agent|polkit-gnome|polkit-kde|lxpolkit|soteria" >/dev/null || exec /usr/lib/hyprpolkitagent/hyprpolkitagent'`
+
 var binds = []bind{
 	{"SUPER + SUPER_L", "launcher (release)", "launcher", ""},
 	{"SUPER + Tab", "workspace overview", "overview", ""},
@@ -115,6 +118,7 @@ func hyprBinds(lua bool) (string, error) {
 		b.WriteString(`local bead = os.getenv("HOME") .. "/.local/bin/bead"` + "\n")
 		b.WriteString("hl.on(\"hyprland.start\", function()\n")
 		b.WriteString("    hl.exec_cmd(bead .. \" start\")\n")
+		fmt.Fprintf(&b, "    hl.exec_cmd(%q) -- asks for your password when installing (if you have no agent yet)\n", polkitAgent)
 		b.WriteString("    hl.exec_cmd(\"wl-paste --type text --watch cliphist store\") -- clipboard history (Super+V)\n")
 		b.WriteString("    hl.exec_cmd(\"wl-paste --type image --watch cliphist store\")\n")
 		b.WriteString("end)\n\n")
@@ -135,6 +139,7 @@ func hyprBinds(lua bool) (string, error) {
 		file, main, include = filepath.Join(hypr, "bead.conf"), filepath.Join(hypr, "hyprland.conf"), "source = ~/.config/hypr/bead.conf"
 		b.WriteString("# bead (written by strand). Edit freely; strand won't overwrite it.\n")
 		b.WriteString("exec-once = ~/.local/bin/bead start\n")
+		b.WriteString("exec-once = " + polkitAgent + " # asks for your password when installing (if you have no agent yet)\n")
 		b.WriteString("exec-once = wl-paste --type text --watch cliphist store # clipboard history (Super+V)\n")
 		b.WriteString("exec-once = wl-paste --type image --watch cliphist store\n\n")
 		for _, k := range binds {

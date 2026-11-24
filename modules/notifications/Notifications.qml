@@ -320,9 +320,9 @@ Scope {
                     buttons: spec ? spec.buttons ?? []
                         : snoozing ? Snooze.choices
                         // (one that came back has no app behind its old buttons)
-                        : (notif ? modelData.actions.filter(a => a.id !== "default" && a.label) : [])
-                            .concat(notif?.hasInlineReply ? [{ id: "__reply", label: "Reply" }] : [])
-                            .concat([{ id: "__later", label: "Later" }])
+                        : pill.own.concat(notif?.hasInlineReply ? [{ id: "__reply", label: "Reply" }] : [])
+                            // bead's snooze, unless the app has a "Later" of its own (updates does)
+                            .concat(pill.own.some(a => /^later$/i.test(a.label.trim())) ? [] : [{ id: "__later", label: "Later" }])
                     duration: spec ? spec.duration ?? 6000 : critical ? 0
                         : modelData.timeout > 0 ? modelData.timeout : 6000
                     sticky: modelData.sticky
@@ -400,6 +400,7 @@ Scope {
                     // "Later": the buttons become how long; picking one sends it away
                     // until then (it stays in the history, marked)
                     property bool snoozing: false
+                    readonly property var own: notif ? modelData.actions.filter(a => a.id !== "default" && a.label) : []
                     onAnswered: id => {
                         if (id === "__reply") { pill.startReply(); return; }
                         if (id === "__later") { pill.snoozing = true; return; }

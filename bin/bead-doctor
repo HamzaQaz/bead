@@ -1,0 +1,86 @@
+#!/bin/sh
+# bead doctor: checks what bead needs on this machine and says how to fix
+# what's missing. Changes nothing.
+#   bead-doctor          readable, ✓ / ✗ / – per check, fixes for what's missing
+#   bead-doctor --tsv    one line per check: status \t need \t id \t what \t fix \t package
+# status: ok | missing.  need: core (bead won't work properly without it) or
+# the optional part / feature it's for. package: what pacman installs, if any.
+# Exits 1 when something core is missing.
+tsv=; [ "${1:-}" = --tsv ] && tsv=1
+share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
+cfg=${XDG_CONFIG_HOME:-$HOME/.config}
+out=$(mktemp); trap 'rm -f "$out"' EXIT
+
+# check <need> <id> <what> <fix> <package> <test...>
+check() {
+	need=$1 id=$2 what=$3 fix=$4 pkg=$5; shift 5
+	if "$@" >/dev/null 2>&1; then st=ok; else st=missing; fi
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$st" "$need" "$id" "$what" "$fix" "$pkg" >>"$out"
+}
+has() { command -v "$1"; }
+# a command, from a package
+cmd() { check "$1" "$2" "$3" "Install $4" "$4" has "$2"; }
+
+# ── the compositor and the shell ──
+check core hyprland "Hyprland is running" "Log in to a Hyprland session" "" sh -c '[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] && hyprctl version'
+check core hypr-lua "Hyprland uses a Lua config (0.57 or newer)" "Update Hyprland; bead's keybinds and Displays need hyprland.lua" "" test -f "$cfg/hypr/hyprland.lua"
+cmd core qs "Quickshell" quickshell
+check core installed "bead is installed" "Run ./install.sh from bead's folder" "" test -f "$share/shell.qml"
+check core symbols "Material Symbols font" "Install ttf-material-symbols-variable" ttf-material-symbols-variable sh -c 'fc-list | grep -qi "Material Symbols"'
+check core noto "Noto fonts" "Install noto-fonts" noto-fonts sh -c 'fc-list | grep -qi "Noto Sans"'
+check core emoji "Emoji font" "Install noto-fonts-emoji" noto-fonts-emoji sh -c 'fc-list | grep -qi "Emoji"'
+
+# ── services bead talks to ──
+check core pipewire "PipeWire is running (sound)" "Install pipewire and wireplumber, then log in again" pipewire sh -c 'pactl info || wpctl status'
+check core polkit "A polkit agent is running (asks for your password to install)" "Install hyprpolkitagent and start it from your Hyprland config" hyprpolkitagent \
+	sh -c 'pgrep -f "polkit.*agent|hyprpolkitagent|polkit-gnome|polkit-kde|lxpolkit|mate-polkit|soteria"'
+check core notifs "No other notification daemon in the way" "Stop mako, dunst or swaync: bead shows notifications itself" "" \
+	sh -c '! pgrep -x "mako|dunst|swaync|fnott"'
+check core terminal "A terminal (for AUR builds and updates)" "Install kitty, or set \$TERMINAL" kitty \
+	sh -c 'for t in ${TERMINAL:-} kitty foot ghostty alacritty wezterm konsole xterm; do command -v "$t" && exit 0; done; exit 1'
+
+# ── commands the shell runs ──
+cmd core jq "jq" jq
+cmd core curl "curl (weather, covers, popular apps)" curl
+cmd core fd "fd (file search)" fd
+cmd core qalc "qalc (maths in the launcher)" libqalculate
+cmd core wtype "wtype (typing emoji and clips)" wtype
+cmd core wl-copy "wl-clipboard" wl-clipboard
+cmd core cliphist "cliphist (clipboard history)" cliphist
+cmd core grim "grim (screenshots)" grim
+cmd core slurp "slurp (picking an area)" slurp
+cmd core wf-recorder "wf-recorder (screen recording)" wf-recorder
+cmd core ffmpeg "ffmpeg (GIFs)" ffmpeg
+cmd core hyprpicker "hyprpicker (colour picker)" hyprpicker
+cmd core notify-send "notify-send" libnotify
+cmd core checkupdates "checkupdates (update checks)" pacman-contrib
+cmd core expac "expac (app search and sizes)" expac
+cmd core bluetoothctl "bluetoothctl (pairing)" bluez-utils
+cmd core xdg-open "xdg-open" xdg-utils
+cmd core python3 "Python" python
+cmd core ddcutil "ddcutil (external monitor brightness)" ddcutil
+
+# ── optional parts and extras ──
+check tint magick "ImageMagick (Tint: colours from the wallpaper)" "Install imagemagick" imagemagick has magick
+check murmur whisper "whisper-server (Murmur)" "Install whisper-cpp" whisper-cpp has whisper-server
+check murmur llama "llama-server (Murmur)" "Install llama-cpp" llama-cpp has llama-server
+check murmur models "Murmur's models" "Re-run ./install.sh and choose Murmur" "" test -f "${XDG_DATA_HOME:-$HOME/.local/share}/bead-models/ggml-base.en.bin"
+check extra aur "An AUR helper (installing from the AUR)" "Install paru or yay" "" sh -c 'command -v paru || command -v yay'
+check extra flatpak "Flatpak (installing from Flathub)" "Install flatpak" flatpak has flatpak
+check extra satty "satty (drawing on screenshots)" "Install satty" satty has satty
+check extra hyprsunset "hyprsunset (night light)" "Install hyprsunset" hyprsunset has hyprsunset
+check extra powerprofiles "power-profiles-daemon (power modes)" "Install power-profiles-daemon" power-profiles-daemon has powerprofilesctl
+
+if [ -n "$tsv" ]; then cat "$out"; else
+	bad=0
+	while IFS="$(printf '\t')" read -r st need id what fix pkg; do
+		if [ "$st" = ok ]; then printf '  \033[32m✓\033[0m %s\n' "$what"
+		elif [ "$need" = core ]; then printf '  \033[31m✗\033[0m %s\n      → %s\n' "$what" "$fix"; bad=1
+		else printf '  \033[33m–\033[0m %s \033[2m(%s, optional)\033[0m\n      → %s\n' "$what" "$need" "$fix"
+		fi
+	done <"$out"
+	pk=$(awk -F'\t' '$1=="missing" && $6!="" {print $6}' "$out" | sort -u | tr '\n' ' ')
+	[ -n "$pk" ] && printf '\nTo install everything missing:\n  sudo pacman -S --needed %s\n' "$pk"
+	[ "$bad" = 0 ] && printf '\nbead has everything it needs.\n'
+fi
+awk -F'\t' '$1=="missing" && $2=="core" {f=1} END {exit f}' "$out"

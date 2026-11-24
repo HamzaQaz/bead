@@ -7,6 +7,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.components
 import qs.config
+import "../../services/doctor.js" as Doc
 import qs.services
 
 // The welcome: shown once, the first time bead starts (until
@@ -681,24 +682,67 @@ Scope {
                     }
                 }
 
-                // 5 · done
+                // 5 · done, after checking what bead needs (bin/bead-doctor)
                 Page {
+                    id: done
                     index: 5
+                    readonly property var missing: Doctor.problems.filter(c => c.need === "core")
+                    readonly property bool clear: Doctor.checks.length > 0 && missing.length === 0
+                    Connections {
+                        target: root
+                        function onStepChanged(): void { if (root.step === 5) Doctor.check(); }
+                    }
                     Column {
                         anchors.centerIn: parent
                         width: parent.width
                         spacing: 12
                         Icon {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            name: "check_circle"
+                            name: done.clear ? "check_circle" : "health_and_safety"
                             size: 52
                             fill: root.step === 5 ? 1 : 0
-                            color: Theme.tone("success")
+                            color: done.clear ? Theme.tone("success") : Theme.tone("warning")
                         }
-                        Heading { horizontalAlignment: Text.AlignHCenter; text: "You're set" }
+                        Heading {
+                            horizontalAlignment: Text.AlignHCenter
+                            text: !Doctor.checks.length ? "Checking…" : done.clear ? "You're set" : "Almost set"
+                        }
                         Body {
                             horizontalAlignment: Text.AlignHCenter
-                            text: "Everything here lives in the dashboard's Settings tab, where you can also see this again."
+                            text: done.clear
+                                ? "Everything here lives in the dashboard's Settings tab, where you can also see this again."
+                                    + (Doctor.problems.length ? " " + Doctor.summary.replace("All set · ", "").replace(/^./, c => c.toUpperCase()) + ": see Settings → System." : "")
+                                : Doctor.checks.length ? "bead needs a few things this machine doesn't have yet:" : ""
+                        }
+                        // what's missing, a few by name, and the fix
+                        Column {
+                            visible: !done.clear && done.missing.length > 0
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: 4
+                            Repeater {
+                                model: done.missing.slice(0, 4)
+                                Text {
+                                    required property var modelData
+                                    font.family: Theme.font; font.pixelSize: 12
+                                    color: Theme.subtext
+                                    text: "· " + modelData.what + "  →  " + modelData.fix
+                                }
+                            }
+                            Text {
+                                visible: done.missing.length > 4
+                                font.family: Theme.font; font.pixelSize: 12
+                                color: Theme.subtext
+                                text: "and " + (done.missing.length - 4) + " more (bead doctor lists them all)"
+                            }
+                        }
+                        Action {
+                            readonly property var pkgs: Doc.packages(Doctor.checks, true)
+                            visible: !done.clear && pkgs.length > 0
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            accent: true
+                            text: Doctor.installing ? "Installing…" : "Install " + pkgs.length + (pkgs.length === 1 ? " package" : " packages")
+                            glyph: "download"
+                            onHit: Doctor.install(pkgs)
                         }
                     }
                 }
