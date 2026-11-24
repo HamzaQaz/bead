@@ -4,13 +4,14 @@ import QtQuick
 import QtQuick.Effects
 import Qt.labs.folderlistmodel
 import Quickshell
+import Quickshell.Bluetooth
 import qs.components
 import qs.config
 import qs.services
 
 // Utilities: capture (a screenshot, a video or a GIF of an area, a window or
 // the screen; the latest screenshots to reopen; stop a running recording) and
-// a row of quick toggles: do not disturb, keep awake, mic, colour picker.
+// a row of quick toggles: do not disturb, keep awake, mic, Bluetooth, colour picker.
 PanelColumn {
     id: root
     property bool active: false
@@ -269,10 +270,16 @@ PanelColumn {
     Row {
         width: root.width
         spacing: 6
-        readonly property real w: (root.width - 18) / 4
+        readonly property real w: (root.width - 24) / 5
         Chip { width: parent.w; glyph: "do_not_disturb_on"; label: "Quiet"; on: Notifs.dnd; onHit: Notifs.dnd = !Notifs.dnd }
         Chip { width: parent.w; glyph: "coffee"; label: "Awake"; on: Idle.keepAwake; onHit: Idle.keepAwake = !Idle.keepAwake }
         Chip { width: parent.w; glyph: Audio.micMuted ? "mic_off" : "mic"; label: "Mic"; on: !Audio.micMuted; onHit: Audio.toggleMicMute() }
+        Chip { // the bar shows Bluetooth only while it's on
+            width: parent.w; glyph: Bluetooth.defaultAdapter?.enabled ? "bluetooth" : "bluetooth_disabled"; label: "BT"
+            visible: !!Bluetooth.defaultAdapter
+            on: !!Bluetooth.defaultAdapter?.enabled
+            onHit: Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled
+        }
         Chip { width: parent.w; glyph: "colorize"; label: "Pick"; onHit: { root.done(); Capture.pickColour(); } }
     }
 }

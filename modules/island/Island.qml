@@ -27,7 +27,7 @@ import qs.services
 //   launcher  tap Super (global shortcut bead:launcher) or IPC "launcher":
 //             apps, maths, > actions (LauncherView.qml); click outside closes
 //   open      hover it (or the top edge) a moment: it grows into the dashboard
-// It lives on one monitor ($BEAD_ISLAND_SCREEN, default DP-1). Hidden (IPC
+// It lives on one monitor ($BEAD_ISLAND_SCREEN or Settings, default the first screen). Hidden (IPC
 // "island", saved across restarts), when a window on that monitor reaches up
 // under it (so it never covers a URL bar), or under a fullscreen window, the
 // resting pill tucks into the frame; activities still show, and hovering the top edge
@@ -728,16 +728,15 @@ Scope {
                         }
                         TapHandler { onTapped: voiceChip.cmd ? (Voice.state === "listening" ? Voice.stop() : Voice.cancel()) : Dictation.state === "listening" ? Dictation.stop() : Dictation.cancel() }
                     }
-                    // live: Discord. In a call: mute and deafen buttons, then who's
+                    // live: Discord. In a call: a deafen button, then who's
                     // there (talking lights them up). Unread DMs (never servers): the
                     // latest sender and a count; tap to go read them
                     Row {
                         visible: Discord.inCall || Discord.dmCount > 0
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 6
-                        Repeater { // mute, deafen
+                        Repeater { // deafen
                             model: Discord.inCall ? [
-                                { on: Discord.mute || Discord.deaf, g: Discord.mute || Discord.deaf ? "mic_off" : "mic", act: () => Discord.toggleMute() },
                                 { on: Discord.deaf, g: Discord.deaf ? "headset_off" : "headphones", act: () => Discord.toggleDeaf() }
                             ] : []
                             Rectangle {

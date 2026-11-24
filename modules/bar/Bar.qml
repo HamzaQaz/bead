@@ -278,6 +278,7 @@ Scope {
                 property bool lit: false
                 property string iconRef: ""     // see Icon.ref
                 property bool pulsing: false    // something's happening: breathe
+                readonly property bool hovered: ma.containsMouse
                 signal clicked()
                 anchors.horizontalCenter: parent?.horizontalCenter
                 width: 32; height: 32; radius: 16
@@ -314,14 +315,25 @@ Scope {
                     width: 32; height: 32; radius: 16
                     color: Qt.alpha(Theme.text, logoMa.containsMouse ? 0.1 : 0)
                     Behavior on color { ColorAnimation { duration: 150 } }
-                    IconImage {
-                        id: logo
+                    // bead's mark: "b" and a bead for the full stop
+                    Row {
                         anchors.centerIn: parent
-                        implicitSize: 18
-                        source: Quickshell.iconPath("cachyos-pi", true)
-                        visible: status === Image.Ready
+                        anchors.horizontalCenterOffset: 1
+                        spacing: 1
+                        Text {
+                            id: markB
+                            text: "b"
+                            font.family: Theme.font
+                            font.pixelSize: 19
+                            font.weight: Font.Black
+                            color: Theme.tone("action")
+                        }
+                        Rectangle {
+                            width: 5; height: 5; radius: 2.5
+                            y: markB.baselineOffset - height
+                            color: Theme.tone("action")
+                        }
                     }
-                    Icon { anchors.centerIn: parent; visible: !logo.visible; name: "deployed_code"; size: 19; fill: 1 }
                     MouseArea { id: logoMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.ipc("launcher", "toggle") }
                 }
 
@@ -355,8 +367,10 @@ Scope {
                     // each workspace grows with its windows (up to three glyphs)
                     readonly property int glyphH: 20
                     function winsOf(id: int): list<var> { return Hyprland.toplevels.values.filter(t => t.workspace?.id === id); }
-                    // the shape on top, then a glyph per window
-                    function heightOf(id: int): real { const n = Math.min(3, winsOf(id).length); return 28 + (n ? n * glyphH + 1 : 0); }
+                    // the shape on top, then a glyph per window: the last glyph sits as far
+                    // from the bottom as the shape does from the top (14px, the pill's
+                    // radius), so the highlight's ends match
+                    function heightOf(id: int): real { const n = Math.min(3, winsOf(id).length); return n ? 26 + n * glyphH + 4 : 28; }
                     readonly property var offsets: {
                         const out = [];
                         let y = 0;
@@ -423,7 +437,7 @@ Scope {
                                     Connections { target: ws; function onActiveChanged() { marker.reshape(); } }
                                 }
                                 Column {
-                                    y: 30
+                                    y: 26
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     Repeater {
                                         model: ws.wins.slice(0, 3)
@@ -544,11 +558,20 @@ Scope {
                 anchors.horizontalCenter: body.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: win.wallW + 6
-                spacing: 8
+                spacing: 6 // the pills sit together, one cluster above power
 
-                Column {
+                // tools: utilities, the tray panel, pinned tray apps
+                Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 3
+                    width: 32
+                    height: toolsCol.height + 4
+                    radius: 16
+                    color: Qt.alpha(Theme.text, 0.05)
+                Column {
+                    id: toolsCol
+                    y: 2
+                    width: parent.width
+                    spacing: 0
                     // utilities: screenshots, recording, quick toggles
                     BarButton {
                         id: utilsBtn
@@ -571,7 +594,8 @@ Scope {
                         MouseArea {
                             id: tray
                             required property SystemTrayItem modelData
-                            width: 28; height: 28
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 32; height: 32
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -597,10 +621,18 @@ Scope {
                         }
                     }
                 }
+                }
 
                 // clock: hours, a sideways colon that fades with the seconds, minutes
-                Column {
+                Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    width: 32
+                    height: clockCol.height + 16
+                    radius: 16
+                    color: Qt.alpha(Theme.text, 0.05)
+                Column {
+                    id: clockCol
+                    anchors.centerIn: parent
                     spacing: 2
                     component ClockText: Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -623,6 +655,7 @@ Scope {
                         }
                     }
                     ClockText { font.weight: Font.Medium; color: Theme.subtext; text: Qt.formatTime(clock.date, "mm") }
+                }
                 }
 
                 // status
@@ -650,16 +683,6 @@ Scope {
                             frames: ["wifi_1_bar", "wifi_2_bar", "wifi"]
                             running: statusCol.wifiConnecting || statusCol.wifiSearching
                             interval: statusCol.wifiConnecting ? 220 : 450
-                        }
-                        // an app is recording: a pulsing mic (click for the sound panel)
-                        BarButton {
-                            id: micBtn
-                            visible: Audio.recording.length > 0
-                            icon: Audio.micMuted ? "mic_off" : "mic"
-                            iconFill: 1
-                            tone: Audio.micMuted ? Theme.subtext : Theme.tone("error")
-                            pulsing: !Audio.micMuted
-                            onClicked: win.toggle("sound", soundBtn)
                         }
                         BarButton {
                             id: soundBtn
@@ -706,7 +729,8 @@ Scope {
                         BarButton {
                             id: btBtn
                             lit: win.panel === "bt"
-                            visible: !!statusCol.bt
+                            // only while it's on (Utilities has the switch), or its panel is open
+                            visible: !!statusCol.bt && (statusCol.bt.enabled || win.panel === "bt")
                             icon: !statusCol.bt?.enabled ? "bluetooth_disabled" : statusCol.btBusy ? "bluetooth_searching"
                                 : statusCol.btConnected ? "bluetooth_connected" : "bluetooth"
                             pulsing: statusCol.btBusy
@@ -719,7 +743,8 @@ Scope {
                 BarButton {
                     id: powerBtn
                     icon: "power_settings_new"
-                    tone: Theme.tone("error")
+                    // quiet until you reach for it
+                    tone: hovered || lit ? Theme.tone("error") : Theme.subtext
                     lit: win.panel === "power"
                     onClicked: win.toggle("power", powerBtn)
                 }
