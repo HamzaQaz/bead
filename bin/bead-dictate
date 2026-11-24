@@ -16,13 +16,13 @@ Out (JSON lines): {"level": x} | {"partial": "..."} | {"state": "transcribing"} 
                  of starting whisper-cli; falls back to whisper-cli if it fails
 --partials       while recording, transcribe what's been said so far about twice
                  a second and print it as {"partial": ...} (needs --server)
---live           type as you speak (needs --partials): a word is typed once two
-                 partials in a row agree on it, and the final transcript then
-                 corrects what was typed (backspacing over revised words).
+--live           type as you speak (needs --partials): see Live below; the final
+                 transcript then corrects what was typed (backspacing over
+                 revised words).
                  Typing waits for `free` on stdin: while the shortcut is held
                  its modifier (Super) is down, and typed letters would become
                  shortcuts. `free` also makes it hands-free: it stops by itself
-                 after ~2 s of quiet
+                 after ~2 s of quiet (longer if you pause longer between words)
 --until-silence  hands-free: stop by itself about a second after you finish
                  speaking (and give up if nothing is said within 8 s)
 Only the Python standard library is used.
@@ -83,11 +83,16 @@ def wav_bytes(pcm: bytes) -> bytes:
     return b.getvalue()
 
 
-def via_server(url: str, pcm: bytes, timeout=10) -> str:
-    """POST a WAV to whisper-server's /inference (multipart, stdlib only)."""
+def via_server(url: str, pcm: bytes, timeout=10, prompt="") -> str:
+    """POST a WAV to whisper-server's /inference (multipart, stdlib only).
+    PROMPT: the text just before this audio, so a new stretch carries on the
+    sentence (its case and punctuation) instead of starting a fresh one."""
     k = uuid.uuid4().hex
     parts = []
-    for name, val in (("response_format", "json"), ("temperature", "0")):
+    fields = [("response_format", "json"), ("temperature", "0")]
+    if prompt:
+        fields.append(("prompt", prompt))
+    for name, val in fields:
         parts.append(f'--{k}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{val}\r\n'.encode())
     parts.append(f'--{k}\r\nContent-Disposition: form-data; name="file"; filename="a.wav"\r\n'
                  f'Content-Type: audio/wav\r\n\r\n'.encode() + wav_bytes(pcm) + b"\r\n")
@@ -120,14 +125,86 @@ class Typer:
             self.typed = target
 
 
-def agreed(a: str, b: str) -> list:
-    """The words two transcripts agree on, from the start."""
-    out = []
-    for x, y in zip(a.split(), b.split()):
-        if x != y:
-            break
-        out.append(x)
-    return out
+def norm(w: str) -> str:
+    """A word without case or punctuation: "Hello," and "hello" agree."""
+    return re.sub(r"[^\w']", "", w.lower())
+
+
+def same_start(a: list, b: list) -> int:
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return n
+
+
+def join(before: str, after: str) -> str:
+    """Two stretches of dictation as one text. Whisper ends every stretch
+    with a full stop; if the next one carries on in lower case, the pause
+    was mid-sentence: drop it."""
+    if not before:
+        return after
+    if not after:
+        return before
+    if after[0].islower() and before.endswith(".") and not before.endswith(".."):
+        before = before[:-1]
+    return before + " " + after
+
+
+class Live:
+    """What to type while you speak, from whisper's guesses at what's been
+    said so far (one about every half second, each from the whole stretch).
+
+    A word is typed once two guesses in a row agree on it, compared without
+    case or punctuation (whisper keeps changing "world." to "world,", which
+    used to stop live typing). While you're still talking the newest word is
+    held back: at a slow pace it's often half a word ("beauty" for
+    "beautiful"). If whisper changes its mind about a word already typed, the
+    change is typed too once two guesses agree, up to REVISE words back;
+    further back, typing waits and the final pass fixes it.
+
+    After a pause, the stretch is finished: frozen, and later guesses only
+    cover what comes after it (fast and steady however long you talk, and
+    what's typed stops shifting)."""
+
+    HOLD = 1     # words held back while you're mid-word
+    REVISE = 3   # how far back a typed word may still be corrected
+    QUIET = 0.5  # s of quiet that means the newest word is finished
+
+    def __init__(self):
+        self.frozen = ""   # finished stretches, typed
+        self.words = []    # this stretch's typed words, as whisper wrote them
+        self.prev = []     # the last guess, normalised
+        self.last = []     # the last guess, as written
+        self.stuck = False
+
+    def text(self) -> str:
+        return join(self.frozen, " ".join(self.words))
+
+    def guess(self, t: str, quiet: float):
+        cur = t.split()
+        n = [norm(w) for w in cur]
+        agree = same_start(self.prev, n)
+        self.prev, self.last = n, cur
+        if self.stuck:
+            return
+        k = min(agree, len(cur) - (0 if quiet >= self.QUIET else self.HOLD))
+        typed = [norm(w) for w in self.words]
+        d = same_start(typed, n)
+        if d < len(typed):  # it changed its mind about something typed
+            if len(typed) - d > self.REVISE:
+                self.stuck = True  # too far back to fix live: the final pass will
+            elif k > d:
+                self.words = cur[:k]  # the new version is agreed: retype from there
+            return
+        # same words so far (maybe newer case or punctuation): take them, and more
+        self.words = cur[:max(k, len(typed))]
+
+    def finish_stretch(self) -> bool:
+        """Freeze this stretch if all of it is typed (call after a pause)."""
+        if self.stuck or not self.words or len(self.words) < len(self.last):
+            return False
+        self.frozen, self.words, self.prev, self.last = self.text(), [], [], []
+        return True
 
 
 def main():
@@ -137,7 +214,7 @@ def main():
     live = partials and typing and "--live" in sys.argv
     until_silence = "--until-silence" in sys.argv
     typer = Typer()
-    committed = []  # words typed live so far
+    live_text = Live()
     wbin = whisper_bin()
     if not wbin and not server:
         say(error="whisper.cpp isn't installed (pacman -S whisper-cpp ggml-vulkan)")
@@ -178,45 +255,54 @@ def main():
     frames = bytearray()
     lock = threading.Lock()
     heard_speech = threading.Event()
+    last_loud = [started]  # when you last made a sound (time.monotonic())
+    loud_at = [0]          # ...and where in the recording (bytes)
+    seg = [0]              # where the stretch being guessed at starts (bytes)
+    # speech-level chunks since then: with the text before it as a prompt,
+    # whisper makes up a carrying-on from a cough or a click, so a stretch
+    # needs real speech before it's transcribed
+    loud_in_seg = [0]
 
     def partial_loop():
-        nonlocal committed
         last = 0
-        prev = ""
         while not stop.is_set():
             time.sleep(0.45)
             if stop.is_set() or not heard_speech.is_set():
                 continue
             with lock:
                 n = len(frames)
-                if n == last:
-                    continue
-                pcm = bytes(frames[-RATE * 2 * 30:])  # the last 30 s is plenty
+                if n == last or loud_in_seg[0] < 3:
+                    continue  # nothing new, or no speech since the last stretch
+                pcm = bytes(frames[seg[0]:][-RATE * 2 * 30:])  # the last 30 s is plenty
             last = n
+            quiet = time.monotonic() - last_loud[0]
             try:
-                t = clean(via_server(server, pcm, timeout=5))
+                t = clean(via_server(server, pcm, timeout=5, prompt=live_text.frozen[-200:]))
             except Exception:
                 continue
-            if t and not stop.is_set():
-                say(partial=t)
-                # live typing: commit the words this guess and the last agree on
-                # (only while the window still starts at the beginning: 28 s)
-                if live and free.is_set() and n < RATE * 2 * 28:
-                    words = agreed(prev, t)
-                    if len(words) > len(committed) and words[:len(committed)] == committed:
-                        with typer.lock:
-                            if stop.is_set():
-                                continue
-                        committed = words
-                        typer.to(" ".join(words) + " ")
-                prev = t
+            if stop.is_set():
+                continue
+            say(partial=join(live_text.frozen, t))
+            # live typing (only while this stretch fits whisper's 30 s window)
+            if live and free.is_set() and n - seg[0] < RATE * 2 * 28 and t:
+                live_text.guess(t, quiet)
+                if quiet >= 0.7 and n - seg[0] > RATE * 2 and live_text.finish_stretch():
+                    seg[0] = n  # a pause after it all got typed: start a new stretch
+                    loud_in_seg[0] = 0
+                with typer.lock:
+                    if stop.is_set():
+                        continue
+                if live_text.text():
+                    typer.to(live_text.text() + " ")
     if partials:
         threading.Thread(target=partial_loop, daemon=True).start()
     chunk = RATE // 20 * 2  # 50 ms of s16
     smooth = 0.0
     peak = 0.0
     loud = 0  # 50 ms chunks at speech level: silence alone makes whisper invent words ("you")
-    last_loud = started
+    # the longest pause between words so far: slow speakers pause longer, so
+    # stopping on its own waits longer for them
+    longest_gap = 0.0
     while not stop.is_set():
         b = rec.stdout.read(chunk)
         if not b:
@@ -232,20 +318,25 @@ def main():
             peak = max(peak, lvl)
             if lvl > 0.18:  # quiet headset mics sit around 0.2-0.4 when you talk
                 loud += 1
-                last_loud = time.monotonic()
+                now = time.monotonic()
+                if heard_speech.is_set() and now - last_loud[0] < 4:
+                    longest_gap = max(longest_gap, now - last_loud[0])
+                last_loud[0] = now
+                loud_at[0] = len(frames)
+                loud_in_seg[0] += 1
                 if loud >= 3:
                     heard_speech.set()
             say(level=round(smooth, 3))
             if free.is_set():
                 now = time.monotonic()
-                if heard_speech.is_set() and now - max(last_loud, free_at[0]) > 2.0:
+                if heard_speech.is_set() and now - max(last_loud[0], free_at[0]) > min(4.0, max(2.0, longest_gap * 1.5)):
                     break  # hands-free: you've stopped talking
                 if not heard_speech.is_set() and now - free_at[0] > 8:
                     cancelled.set()
                     break
             if until_silence:
                 now = time.monotonic()
-                if heard_speech.is_set() and now - last_loud > 1.1:
+                if heard_speech.is_set() and now - last_loud[0] > min(2.5, max(1.1, longest_gap * 1.5)):
                     break  # you've finished
                 if not heard_speech.is_set() and now - started > 8:
                     cancelled.set()
@@ -268,7 +359,14 @@ def main():
         text = None
         if server:
             try:
-                text = clean(via_server(server, bytes(frames), timeout=30))
+                if seg[0]:  # typed live in stretches: only the last one is left to do
+                    tail = ""
+                    if loud_in_seg[0] >= 3 and loud_at[0] > seg[0]:
+                        tail = clean(via_server(server, bytes(frames[seg[0]:]), timeout=30,
+                                                prompt=live_text.frozen[-200:]))
+                    text = join(live_text.frozen, tail)
+                else:
+                    text = clean(via_server(server, bytes(frames), timeout=30))
             except Exception:
                 text = None  # fall back to whisper-cli
         if text is None:
