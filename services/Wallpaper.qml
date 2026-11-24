@@ -145,7 +145,15 @@ Singleton {
         firstTint.restart();
     }
     // no Tint colours yet (a first run): make them
-    Timer { id: firstTint; interval: 3000; onTriggered: if (!root.tintPath) root.retint() }
+    // and colours made from some other image (a stray bead-tint): make them again
+    Timer { id: firstTint; interval: 3000; onTriggered: if (!root.tintPath || !root.tintedFrom(root.tintPath)) root.retint() }
+    // whether Tint's image is the current wallpaper: the still itself, or for a
+    // live one its capture (we-<id>-live.png) or its workshop folder's preview
+    function tintedFrom(path: string): bool {
+        if (kind === "still") return path === current;
+        if (kind === "live") return path.includes("/we-" + current + "-") || path.includes("/" + current + "/");
+        return true;
+    }
     Process {
         id: adopt
         command: ["cat", root.home + "/.local/state/wallengine-current"]
