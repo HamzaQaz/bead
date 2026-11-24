@@ -8,6 +8,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
+import "../../config/sizecheck.js" as SizeCheck
 import qs.components
 import qs.config
 import qs.modules.dashboard
@@ -51,6 +52,8 @@ Scope {
         function hide(): void { root.hidden = true; }
         // the media card without hovering (a keybind, or checking how it looks)
         function media(): void { root.mediaPinned = !root.mediaPinned; }
+        // keep the size just applied (the same as tapping the island's question)
+        function keepSize(): string { if (!root.sizePending) return "nothing to confirm"; root.sizeKeep(); return "kept"; }
     }
     property bool mediaPinned: false
     property bool hiddenLoaded: false
@@ -929,6 +932,40 @@ Scope {
     }
     // a toast you can tap (the DND digest opens the history)
     property var toastTap: null
+
+    // ── a new size, just applied (Settings → Looks → Size): keep it? Ten
+    // seconds on the island, then back to the size before, so one that turns
+    // out unusable undoes itself (config/sizecheck.js) ──
+    property int sizeLeft: 0
+    readonly property bool sizePending: SizeCheck.pending(Settings.scale, Settings.scaleWas)
+    onSizePendingChanged: if (sizePending && !sizeAsk.running) { sizeLeft = 11; sizeAsk.interval = 1800; sizeAsk.start(); }
+    function sizeKeep(): void {
+        sizeAsk.stop();
+        Settings.scaleWas = 0;
+        root.toast("check", "Keeping " + SizeCheck.percent(Settings.scale), "action", 1800);
+    }
+    Timer {
+        id: sizeAsk
+        repeat: true
+        onTriggered: {
+            interval = 1000;
+            if (!root.sizePending) return stop();
+            const n = SizeCheck.next(root.sizeLeft);
+            root.sizeLeft = n.left;
+            if (n.revert) {
+                stop();
+                const was = Settings.scaleWas;
+                Settings.scaleWas = 0;
+                Settings.scale = was;
+                root.toast("undo", "Back to " + SizeCheck.percent(was), "info", 1600);
+                Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Quickshell.env("HOME") + "/.local/bin/bead"]);
+                return;
+            }
+            // each second again: it stays up, and stays tappable, whatever else toasts
+            root.toast("aspect_ratio", SizeCheck.prompt(Settings.scale, n.left), "action", 1300);
+            root.toastTap = () => root.sizeKeep();
+        }
+    }
     property string toastColour: "" // the icon in this colour (a copied colour)
     Connections {
         target: Notifs

@@ -20,6 +20,7 @@ Singleton {
     property alias showTitle: a.showTitle           // the window title down the bar
     property alias islandScreen: a.islandScreen     // monitor name; "" = $BEAD_ISLAND_SCREEN or the first screen
     property alias scale: a.scale                   // UI size; read by `bead start` ($BEAD_SCALE wins)
+    property alias scaleWas: a.scaleWas             // the size before a change not yet confirmed (0: none), see config/sizecheck.js
     // other
     property alias units: a.units                   // "auto" | "celsius" | "fahrenheit"
     property alias askModel: a.askModel             // "sonnet" | "opus" | "haiku"
@@ -51,6 +52,7 @@ Singleton {
             property bool showTitle: true
             property string islandScreen: ""
             property real scale: 1
+            property real scaleWas: 0
             property string units: "auto"
             property string askModel: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
             property string askVia: "claude"

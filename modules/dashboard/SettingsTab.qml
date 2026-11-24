@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
+import "../../config/sizecheck.js" as SizeCheck
 import qs.components
 import qs.config
 import qs.services
@@ -18,6 +19,19 @@ Item {
     // a moment to be written, then restart from outside bead
     function restartSoon(): void {
         Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Quickshell.env("HOME") + "/.local/bin/bead"]);
+    }
+
+    // Size: picking one only shows it (a sample island, at that size); Apply
+    // restarts bead with it, and the island then asks whether to keep it
+    property string sizePick: ""
+    onSectionChanged: sizePick = ""
+    onVisibleChanged: if (!visible) sizePick = ""
+    function applySize(): void {
+        if (!sizePick) return;
+        Settings.scaleWas = Settings.scale;
+        Settings.scale = Number(sizePick);
+        sizePick = "";
+        restartSoon();
     }
 
     property int section: 0
@@ -353,11 +367,44 @@ Item {
                     order: 6; width: root.colW; height: 44
                     Line {
                         label: "Size"
-                        hint: "bead restarts to apply it"
+                        hint: root.sizePick ? SizeCheck.changeHint(Settings.scale, Number(root.sizePick)) : "Previews first"
                         Choice {
                             options: [{ v: "1", t: "100%" }, { v: "1.15", t: "115%" }, { v: "1.35", t: "135%" }, { v: "1.5", t: "150%" }]
-                            value: String(Settings.scale)
-                            onChose: v => { if (Number(v) !== Settings.scale) { Settings.scale = Number(v); root.restartSoon(); } }
+                            value: root.sizePick || String(Settings.scale)
+                            onChose: v => root.sizePick = SizeCheck.pick(v, Settings.scale)
+                        }
+                    }
+                }
+                In { // the size picked, shown on a sample island; Apply restarts bead with it
+                    order: 7; width: root.colW; height: 44
+                    Item {
+                        anchors.fill: parent
+                        opacity: root.sizePick ? 1 : 0
+                        visible: opacity > 0
+                        Behavior on opacity { NumberAnimation { duration: 160 } }
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 112; height: 26; radius: 13
+                            color: Theme.frame
+                            border.width: 1
+                            border.color: Qt.alpha(Theme.text, 0.1)
+                            transformOrigin: Item.Left
+                            scale: root.sizePick ? Number(root.sizePick) / Settings.scale : 1
+                            Behavior on scale { SpringAnimation { spring: 4; damping: 0.36; epsilon: 0.002 } }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Icon { anchors.verticalCenter: parent.verticalCenter; name: "music_note"; size: 14; fill: 1; color: Theme.tone("action") }
+                                Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; color: Theme.text; text: "The island" }
+                            }
+                        }
+                        Action {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            accent: true
+                            text: "Apply \u00b7 restarts bead"
+                            glyph: "restart_alt"
+                            onHit: root.applySize()
                         }
                     }
                 }
