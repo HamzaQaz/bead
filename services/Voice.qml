@@ -40,7 +40,7 @@ Singleton {
         volume_down: "turn the volume down",
         mute: "mute or unmute the sound",
         mic_mute: "mute or unmute the microphone",
-        open_app: "open or launch an application; app = its name",
+        open_app: "open or launch an application; app = its name only; workspace = the number, if they say which workspace (or window, desktop) to open it on; alone = true if they ask to close the other windows there",
         workspace: "go or switch to a workspace; workspace = its number",
         overview: "show all workspaces / windows",
         wallpaper: "change to a random wallpaper",
@@ -60,6 +60,7 @@ Singleton {
             level: { type: "integer", minimum: 0, maximum: 100 },
             app: { type: "string", maxLength: 40 },
             workspace: { type: "integer", minimum: 1, maximum: 20 },
+            alone: { type: "boolean" },
             text: { type: "string", maxLength: 300 }
         },
         required: ["action"]
@@ -71,6 +72,7 @@ Singleton {
         + "\"timer for two hours and five seconds\" -> {\"action\":\"timer\",\"hours\":2,\"seconds\":5}\n"
         + "\"volume to thirty\" -> {\"action\":\"volume_set\",\"level\":30}\n"
         + "\"open firefox\" -> {\"action\":\"open_app\",\"app\":\"firefox\"}\n"
+        + "\"open spotify on workspace five and close the other windows there\" -> {\"action\":\"open_app\",\"app\":\"spotify\",\"workspace\":5,\"alone\":true}\n"
         + "\"go to workspace three\" -> {\"action\":\"workspace\",\"workspace\":3}\n"
         + "\"skip this song\" -> {\"action\":\"next_track\"}\n"
         + "\"who wrote hamlet\" -> {\"action\":\"ask\",\"text\":\"who wrote hamlet\"}\n"

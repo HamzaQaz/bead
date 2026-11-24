@@ -240,10 +240,29 @@ Scope {
         case "mute": Audio.toggleMute(); root.flash("volume", ""); return;
         case "mic_mute": Audio.toggleMicMute(); root.flash("mic", ""); return;
         case "open_app": {
-            const e = a.app ? Apps.search(a.app)[0] : null;
-            if (!e) return root.toast("search_off", "No app called \u201c" + (a.app ?? heard) + "\u201d", "error", 2600);
-            Apps.launch(e);
-            return say("open_in_new", "Opening " + e.name);
+            // small models sometimes leave the place in the name ("x on window 5"):
+            // take it off, and read the workspace and "close the rest" from the
+            // words too in case the model missed them
+            const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+            const place = /\s+(?:on|in|to|at)\s+(?:the\s+)?(?:workspace|window|desktop|screen)\s+(\w+).*$/i;
+            const name = (a.app ?? "").replace(place, "").trim();
+            const m = heard.match(/(?:workspace|window|desktop|screen)\s+(?:number\s+)?(\w+)/i);
+            const spoken = m ? (parseInt(m[1]) || words.indexOf(m[1].toLowerCase())) : -1;
+            const ws = a.workspace > 0 ? a.workspace : spoken > 0 ? spoken : 0;
+            const alone = a.alone === true || /close\s+(?:all\s+)?(?:the\s+)?(?:other|rest|everything)/i.test(heard);
+            const e = name ? Apps.search(name)[0] : null;
+            if (!e) return root.toast("search_off", "No app called \u201c" + (name || heard) + "\u201d", "error", 2600);
+            if (!ws) { Apps.launch(e); return say("open_in_new", "Opening " + e.name); }
+            let closed = 0;
+            if (alone) for (const t of Hyprland.toplevels.values) {
+                if (t.workspace?.id !== ws) continue;
+                const ad = t.address.startsWith("0x") ? t.address : "0x" + t.address;
+                dispatch(`hl.dsp.window.close({ window = "address:${ad}" })`);
+                closed++;
+            }
+            Apps.launchOn(e, ws);
+            dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
+            return say("open_in_new", "Opening " + e.name + " on " + ws + (closed ? " \u00b7 closed " + closed : ""));
         }
         case "workspace": if (!(a.workspace > 0)) break; dispatch(`hl.dsp.focus({ workspace = "${a.workspace}" })`); return;
         case "overview": root.overviewOpen = true; return;

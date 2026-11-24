@@ -52,7 +52,25 @@ Singleton {
         for (let k = 0; k < t.length && i < q.length; k++) {
             if (t[k] === q[i]) { if (last >= 0) gaps += k - last - 1; last = k; i++; }
         }
-        return i === q.length ? Math.max(5, 40 - gaps * 2) : 0;
+        if (i === q.length) return Math.max(5, 40 - gaps * 2);
+        // a near miss, for speech ("course forge" is CurseForge): letters and
+        // digits only, within a typo or two of the whole name or one word
+        return 45 * Math.max(similar(q, t), ...words.map(w => similar(q, w)));
+    }
+    // 0-1: how alike two names are by edit distance (Damerau: a swap is one
+    // edit), ignoring spaces and punctuation; under 0.75 counts as nothing
+    function similar(a: string, b: string): real {
+        a = a.replace(/[^a-z0-9]/g, ""); b = b.replace(/[^a-z0-9]/g, "");
+        if (a.length < 4 || b.length < 4 || Math.abs(a.length - b.length) > 3) return 0;
+        const d = [];
+        for (let i = 0; i <= a.length; i++) { d.push([i]); for (let j = 1; j <= b.length; j++) d[i].push(i ? 0 : j); }
+        for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        }
+        const sim = 1 - d[a.length][b.length] / Math.max(a.length, b.length);
+        return sim >= 0.75 ? sim : 0;
     }
 
     function search(query: string): list<var> {
@@ -77,11 +95,20 @@ Singleton {
     }
 
     function launch(e: DesktopEntry): void {
+        used(e);
+        e.execute();
+    }
+    // open it on workspace `ws` (Hyprland's exec rule), wherever you are now
+    function launchOn(e: DesktopEntry, ws: int): void {
+        used(e);
+        const cmd = e.command.map(a => /^[\w@%+=:,./-]+$/.test(a) ? a : "'" + a.replace(/'/g, "'\\''") + "'").join(" ");
+        Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.exec_cmd(${JSON.stringify(`[workspace ${ws}] ${cmd}`)})`]);
+    }
+    function used(e: DesktopEntry): void {
         const c = Object.assign({}, counts);
         c[e.id] = (c[e.id] ?? 0) + 1;
         counts = c;
         last = Object.assign({}, last, { [e.id]: Date.now() });
-        e.execute();
     }
 
     property bool loaded: false
