@@ -10,16 +10,16 @@ import qs.config
 import qs.services
 
 // The welcome: shown once, the first time bead starts (until
-// $XDG_STATE_HOME/bead/welcomed exists). Five steps on one card: hello, a
+// $XDG_STATE_HOME/bead/welcomed exists). Six steps on one card: hello, a
 // wallpaper and how much colour to take from it (the card recolours as you
-// pick), size, the keys, done. Enter / → next, ← back, Esc skips.
+// pick), a look (ready-made ones), size, the keys, done. Enter / → next, ← back, Esc skips.
 // `bead welcome` (IPC: welcome open) shows it again.
 Scope {
     id: root
 
     property bool open: false
     property int step: 0
-    readonly property int steps: 5
+    readonly property int steps: 6
     property string size: String(Settings.scale) // applied at the end: it needs a restart
     property bool murmur: false
     property real ready: 1   // 0 → 1 as the intro hands over: the words and buttons come in
@@ -361,9 +361,91 @@ Scope {
                     }
                 }
 
-                // 2 · size
+                // 2 · a look: ready-made ones, applied as you pick (the card shows it)
                 Page {
+                    id: lookPage
                     index: 2
+                    readonly property var looks: [
+                        { name: "Vivid", hint: "Bold colour from your wallpaper", glyph: "palette", theme: "wallpaper", tint: "vibrant" },
+                        { name: "Soft", hint: "A quieter tint of it", glyph: "water_drop", theme: "wallpaper", tint: "muted" },
+                        { name: "Ink", hint: "Greys, with one accent", glyph: "ink_pen", theme: "wallpaper", tint: "mono" },
+                        { name: "Sileo", hint: "sileo's own palette, any wallpaper", glyph: "contrast", theme: "sileo", tint: "" }
+                    ]
+                    Column {
+                        width: parent.width
+                        spacing: 6
+                        Heading { text: "Pick a look" }
+                        Body { text: "Each one applies as you tap it. Change it any time in Settings, Looks." }
+                    }
+                    Grid {
+                        id: lookGrid
+                        y: 74
+                        columns: 2
+                        spacing: 10
+                        Repeater {
+                            model: lookPage.looks
+                            Rectangle {
+                                id: look
+                                required property var modelData
+                                readonly property bool chosen: Settings.theme === modelData.theme && (modelData.theme === "sileo" || Settings.tint === modelData.tint)
+                                width: (pages.width - 10) / 2
+                                height: 62
+                                radius: 16
+                                color: lma.containsMouse || chosen ? Qt.alpha(Theme.tone("action"), 0.12) : Qt.alpha(Theme.text, 0.05)
+                                border.width: 2
+                                border.color: chosen ? Theme.tone("action") : "transparent"
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                                scale: lma.pressed ? 0.97 : 1
+                                Behavior on scale { SpringAnimation { spring: 6; damping: 0.3; epsilon: 0.002 } }
+                                Row {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    x: 16
+                                    spacing: 12
+                                    Rectangle {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: 34; height: 34; radius: 17
+                                        color: Qt.alpha(Theme.tone("action"), look.chosen ? 0.25 : 0.12)
+                                        Icon { anchors.centerIn: parent; name: look.modelData.glyph; size: 18; fill: look.chosen ? 1 : 0; color: Theme.tone("action") }
+                                    }
+                                    Column {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: 2
+                                        Text { font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold; color: Theme.text; text: look.modelData.name }
+                                        Text { font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext; text: look.modelData.hint }
+                                    }
+                                }
+                                MouseArea {
+                                    id: lma
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        Settings.theme = look.modelData.theme;
+                                        if (look.modelData.tint) Settings.tint = look.modelData.tint;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Row { // the palette it gives, live
+                        anchors.bottom: parent.bottom
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 6
+                        Repeater {
+                            model: [Theme.tone("action"), Theme.text, Theme.subtext, Theme.tone("success"), Theme.tone("warning"), Theme.tone("error")]
+                            Rectangle {
+                                required property var modelData
+                                width: 18; height: 18; radius: 9
+                                color: modelData
+                                Behavior on color { ColorAnimation { duration: 500 } }
+                            }
+                        }
+                    }
+                }
+
+                // 3 · size
+                Page {
+                    index: 3
                     Column {
                         width: parent.width
                         spacing: 6
@@ -398,9 +480,9 @@ Scope {
                     }
                 }
 
-                // 3 · keys
+                // 4 · keys
                 Page {
-                    index: 3
+                    index: 4
                     Column {
                         width: parent.width
                         spacing: 6
@@ -444,9 +526,9 @@ Scope {
                     }
                 }
 
-                // 4 · done
+                // 5 · done
                 Page {
-                    index: 4
+                    index: 5
                     Column {
                         anchors.centerIn: parent
                         width: parent.width
@@ -455,7 +537,7 @@ Scope {
                             anchors.horizontalCenter: parent.horizontalCenter
                             name: "check_circle"
                             size: 52
-                            fill: root.step === 4 ? 1 : 0
+                            fill: root.step === 5 ? 1 : 0
                             color: Theme.tone("success")
                         }
                         Heading { horizontalAlignment: Text.AlignHCenter; text: "You're set" }
