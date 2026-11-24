@@ -7,6 +7,7 @@ import Quickshell.Io
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import "../../services/snooze.js" as Snooze
+import "stacks.js" as Stacks
 import qs.components
 import qs.config
 import qs.services
@@ -66,6 +67,12 @@ Scope {
     // Newest first, but interactive ones (questions, prompts) stay above the rest.
     function add(entry: var): void {
         if (popups.length === 0) win.held = win.focused; // stay put while shown
+        // one from an app already on screen takes its pill's place (stacks.js)
+        const merged = Stacks.merge(popups, entry);
+        if (merged) {
+            popups = popups.filter(p => p.key !== merged.gone);
+            entry = merged.entry;
+        }
         const pinned = popups.filter(p => p.sticky);
         const rest = popups.filter(p => !p.sticky);
         popups = entry.sticky ? [entry, ...pinned, ...rest] : [...pinned, entry, ...rest];
@@ -298,9 +305,14 @@ Scope {
 
                     kind: spec ? (asking ? "action" : spec.type) : critical ? "error" : "notify"
                     title: asking ? (question?.header || spec.title) + (questions.length > 1 ? "  ·  " + (step + 1) + "/" + questions.length : "")
-                        : spec ? spec.title : modelData.summary || modelData.appName || "Notification"
+                        : spec ? spec.title : (modelData.summary || modelData.appName || "Notification") + (Stacks.label(modelData) ? "  \u00b7  " + Stacks.label(modelData) : "")
                     desc: asking ? (spec.desc ? spec.desc + "<br>" : "") + root.esc(question?.question ?? "")
-                        : spec ? spec.desc ?? "" : modelData.body
+                        : spec ? spec.desc ?? "" : pill.withEarlier(modelData.body)
+                    // a stack: the earlier ones, faint, under the newest
+                    function withEarlier(body: string): string {
+                        const f = Stacks.fan(modelData, Qt.alpha(Theme.text, 0.5).toString());
+                        return f ? (body ? body + "<br>" : "") + f : body;
+                    }
                     iconSource: spec ? (iconIsPath ? "file://" + icon : "")
                         : modelData.image ? modelData.image
                         : modelData.appIcon ? Quickshell.iconPath(modelData.appIcon, true) : ""
@@ -376,8 +388,8 @@ Scope {
                     function resync(): void {
                         if (!notif) return;
                         Notifs.refresh(modelData.key);
-                        title = notif.summary || notif.appName || "Notification";
-                        desc = notif.body;
+                        title = (notif.summary || notif.appName || "Notification") + (Stacks.label(modelData) ? "  \u00b7  " + Stacks.label(modelData) : "");
+                        desc = pill.withEarlier(notif.body);
                         refresh();
                     }
 
