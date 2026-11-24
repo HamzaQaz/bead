@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bead · a desktop shell for Hyprland</title>
+<meta name="description" content="bead is a desktop shell for Hyprland, built with Quickshell: soft pills that morph instead of pop, an island that grows into a launcher, a dashboard, voice, all coloured by your wallpaper.">
+<meta property="og:title" content="bead · a desktop shell for Hyprland">
+<meta property="og:description" content="Soft pills that morph instead of pop: a bar, an island launcher, a dashboard, voice, all coloured by your wallpaper.">
+<meta property="og:image" content="https://hamzaqaz.github.io/bead/screenshots/dashboard.webp">
+<meta name="theme-color" content="#0c0a10">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0a10;
+  --bg-2: #13101a;
+  --card: #1a1622;
+  --line: #2a2433;
+  --text: #efe9f3;
+  --sub: #a89fb2;
+  --faint: #918a9b;
+  --accent: #f0a6d8;      /* bead's pink, from the default wallpaper */
+  --accent-2: #b3baeb;    /* and its lavender */
+  --on-accent: #1a0f18;
+  --good: #86d6a0;
+  --radius: 22px;
+  --ease: cubic-bezier(.34, 1.3, .64, 1);   /* a little overshoot, like bead's springs */
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 "Noto Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--text); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+h1, h2, h3 { font-family: Outfit, "Noto Sans", sans-serif; letter-spacing: -0.02em; line-height: 1.1; margin: 0; }
+code, kbd, pre { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+/* ── nav ── */
+nav {
+  position: sticky; top: 0; z-index: 10;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
+.mark { font: 700 22px Outfit, sans-serif; color: var(--text); text-decoration: none; letter-spacing: -0.03em; }
+.mark span { color: var(--accent); }
+nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+nav .links a { color: var(--sub); text-decoration: none; }
+nav .links a:hover { color: var(--text); }
+.gh {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line);
+  color: var(--text) !important; font-weight: 500;
+}
+.gh svg { width: 16px; height: 16px; fill: currentColor; }
+@media (max-width: 640px) { nav .links a:not(.gh) { display: none; } }
+
+/* ── hero ── */
+.hero { position: relative; padding: 72px 0 40px; overflow: hidden; }
+.hero::before {   /* the wallpaper's glow, behind it all */
+  content: ""; position: absolute; inset: -20% -10% auto;
+  height: 720px; z-index: -1;
+  background:
+    radial-gradient(40% 50% at 75% 30%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    radial-gradient(35% 45% at 20% 10%, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 70%);
+}
+.hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; align-items: center; }
+@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; gap: 36px; } }
+.eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--sub); margin-bottom: 18px; }
+.eyebrow b { color: var(--good); font-weight: 600; }
+.eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+h1 { font-size: clamp(44px, 7vw, 76px); font-weight: 700; }
+h1 em { font-style: normal; color: var(--accent); }
+.lede { font-size: 19px; color: var(--sub); max-width: 34em; margin: 22px 0 30px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 13px 22px; border-radius: 999px;
+  font-weight: 600; text-decoration: none;
+  transition: transform .25s var(--ease), background .2s;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { color: var(--on-accent); background: #f6bce3; }
+.btn.ghost { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+
+/* the island: a pill that morphs between what bead shows */
+.stage {
+  position: relative; aspect-ratio: 16 / 11;
+  border-radius: 28px; overflow: hidden;
+  background: #0d0b12 url("screenshots/desktop.webp") center / cover;
+  border: 1px solid var(--line);
+  box-shadow: 0 40px 80px -30px rgba(0,0,0,.7);
+}
+.stage::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,10,16,.25), rgba(12,10,16,.55)); }
+.island {
+  position: absolute; z-index: 2; left: 50%; top: 14px;
+  transform: translateX(-50%);
+  width: 150px; height: 36px; border-radius: 18px;
+  background: #0b0910;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.05);
+  transition: width .6s var(--ease), height .6s var(--ease), border-radius .6s var(--ease);
+  overflow: hidden;
+}
+.island .face {
+  position: absolute; inset: 0; padding: 0 14px;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0; transform: scale(.96); filter: blur(4px);
+  transition: opacity .3s, transform .45s var(--ease), filter .3s;
+  pointer-events: none; font-size: 13px; white-space: nowrap;
+}
+.island[data-state="clock"]  { width: 150px; height: 36px; }
+.island[data-state="media"]  { width: min(340px, 88%); height: 76px; border-radius: 24px; }
+.island[data-state="launch"] { width: min(440px, 92%); height: 214px; border-radius: 26px; }
+.island[data-state="toast"]  { width: min(280px, 86%); height: 44px; border-radius: 22px; }
+.island[data-state="clock"]  .f-clock,
+.island[data-state="media"]  .f-media,
+.island[data-state="launch"] .f-launch,
+.island[data-state="toast"]  .f-toast { opacity: 1; transform: none; filter: none; transition-delay: .18s; }
+.island .f-clock { justify-content: center; font-weight: 600; letter-spacing: .02em; }
+.f-clock .wv { display: flex; gap: 2px; align-items: center; height: 12px; }
+.f-clock .wv i { width: 2px; border-radius: 1px; background: var(--accent); animation: wave 1s ease-in-out infinite; }
+.f-clock .wv i:nth-child(2) { animation-delay: .15s } .f-clock .wv i:nth-child(3) { animation-delay: .3s }
+@keyframes wave { 0%,100% { height: 4px } 50% { height: 12px } }
+.f-media .art { width: 48px; height: 48px; border-radius: 12px; flex: none; background: linear-gradient(135deg, #f0a6d8, #7a5cc9 60%, #2b1e44); }
+.f-media .meta { flex: 1; min-width: 0; }
+.f-media .meta b { display: block; font-weight: 600; }
+.f-media .meta span { color: var(--sub); font-size: 12px; }
+.f-media .bar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.12); margin-top: 6px; overflow: hidden; }
+.f-media .bar i { display: block; height: 100%; width: 38%; background: var(--accent); }
+.f-media .pp { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); flex: none; display: grid; place-items: center; }
+.f-media .pp::before { content: ""; width: 10px; height: 12px; border-left: 3px solid var(--on-accent); border-right: 3px solid var(--on-accent); box-sizing: border-box; }
+.island .f-launch { flex-direction: column; align-items: stretch; padding: 14px; gap: 6px; justify-content: flex-start; }
+.f-launch .q { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,.06); color: var(--text); }
+.f-launch .q .cur { width: 1px; height: 14px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0 } }
+.f-launch .row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; color: var(--sub); }
+.f-launch .row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); }
+.f-launch .row .ic { width: 22px; height: 22px; border-radius: 7px; flex: none; }
+.f-launch .row small { margin-left: auto; color: var(--faint); font-size: 11px; }
+.island .f-toast { justify-content: center; }
+.f-toast .ok { width: 18px; height: 18px; border-radius: 50%; background: var(--good); display: grid; place-items: center; color: #0b1a10; font-size: 11px; font-weight: 700; }
+@media (max-width: 560px) {
+  .stage { aspect-ratio: 4 / 5; }
+  .island[data-state="launch"] { height: 196px; }
+  .f-launch .row:nth-of-type(n+5) { display: none; }
+}
+.stage .caption {
+  position: absolute; z-index: 2; left: 0; right: 0; bottom: 16px;
+  text-align: center; font-size: 13px; color: var(--sub);
+}
+.stage .caption kbd { color: var(--text); }
+.dots { display: inline-flex; gap: 6px; margin-left: 10px; vertical-align: middle; }
+.dots button { width: 8px; height: 8px; padding: 0; border-radius: 4px; border: 0; background: rgba(255,255,255,.25); cursor: pointer; transition: width .4s var(--ease), background .3s; }
+.dots button[aria-current="true"] { width: 22px; background: var(--accent); }
+
+/* ── install ── */
+.install { margin-top: 56px; }
+.term {
+  background: #09070c; border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px 18px; display: flex; align-items: center; gap: 14px;
+  overflow-x: auto;
+}
+.term[hidden] { display: none; }
+.term code { font-size: 14px; color: var(--text); flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.term code .p { color: var(--faint); user-select: none; }
+.copy {
+  flex: none; border: 1px solid var(--line); background: var(--card); color: var(--sub);
+  border-radius: 10px; padding: 7px 12px; font: 500 13px "Noto Sans", sans-serif; cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.copy:hover { color: var(--text); border-color: var(--faint); }
+.copy.done { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.tabs button {
+  border: 0; background: transparent; color: var(--sub); cursor: pointer;
+  padding: 7px 14px; border-radius: 999px; font: 500 14px "Noto Sans", sans-serif;
+}
+.tabs button[aria-selected="true"] { background: var(--card); color: var(--text); }
+.install .note { color: var(--faint); font-size: 14px; margin: 12px 2px 0; }
+
+/* ── sections ── */
+section { padding: 96px 0 0; }
+h2 { font-size: clamp(32px, 4.4vw, 46px); font-weight: 700; max-width: 18em; }
+.intro { color: var(--sub); font-size: 18px; max-width: 38em; margin: 16px 0 0; }
+
+.shot {
+  margin-top: 40px; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--line); box-shadow: 0 50px 100px -40px rgba(0,0,0,.8);
+}
+
+/* feature rows: picture and words, alternating */
+.feature { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; margin-top: 88px; }
+.feature.flip .pic { order: 2; }
+@media (max-width: 860px) { .feature { grid-template-columns: 1fr; gap: 28px; margin-top: 64px; } .feature.flip .pic { order: 0; } }
+.feature h3 { font-size: 30px; font-weight: 600; margin-bottom: 14px; }
+.feature p { color: var(--sub); margin: 0 0 16px; }
+.feature ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.feature li { display: flex; gap: 12px; color: var(--text); }
+.feature li::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 9px; border-radius: 50%; background: var(--accent); }
+.feature li span { color: var(--sub); }
+.pic { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: var(--bg-2); }
+.pic.pad { padding: 28px; display: grid; gap: 14px; place-items: center; background:
+  radial-gradient(70% 80% at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent), var(--bg-2); }
+.pic.pad img { border-radius: 16px; box-shadow: 0 20px 40px -18px rgba(0,0,0,.8); }
+
+/* the smaller things, in a dense list rather than cards */
+.more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 40px; border-top: 1px solid var(--line); }
+@media (max-width: 860px) { .more { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .more { grid-template-columns: 1fr; } }
+.more div { padding: 22px 24px 22px 0; border-bottom: 1px solid var(--line); }
+.more b { display: block; font-weight: 600; margin-bottom: 4px; }
+.more span { color: var(--sub); font-size: 15px; }
+
+/* keys */
+.keys { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 48px; margin-top: 36px; }
+@media (max-width: 700px) { .keys { grid-template-columns: 1fr; } }
+.keys div { display: flex; justify-content: space-between; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.keys span { color: var(--sub); }
+kbd {
+  display: inline-block; min-width: 26px; text-align: center;
+  padding: 4px 10px; border-radius: 8px; font-size: 13px; line-height: 1.3;
+  background: var(--card); border: 1px solid var(--line); border-bottom-width: 2px; color: var(--text);
+}
+
+/* closing */
+.end { text-align: center; padding: 120px 0 40px; }
+.end h2 { margin-inline: auto; }
+.end .cta { justify-content: center; margin-top: 30px; }
+footer { border-top: 1px solid var(--line); margin-top: 80px; padding: 28px 0 40px; color: var(--faint); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
+footer a { color: var(--sub); }
+
+/* things arrive softly as you scroll */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .9s var(--ease); }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<nav aria-label="Main">
+  <div class="wrap">
+    <a class="mark" href="#">bead<span>.</span></a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#keys">Keys</a>
+      <a href="#install">Install</a>
+      <a class="gh" href="https://github.com/HamzaQaz/bead">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow"><i class="dot"></i><b>v0.1.0</b> · free and open source · GPL-3.0</div>
+        <h1>A desktop that <em>morphs</em>, not pops.</h1>
+        <p class="lede">bead is a desktop shell for Hyprland. A bar, an island that grows into a launcher, a dashboard, notifications and a lock screen, every piece a soft pill on springs, all coloured by your wallpaper.</p>
+        <div class="cta">
+          <a class="btn primary" href="#install">Install bead</a>
+          <a class="btn ghost" href="https://github.com/HamzaQaz/bead">View the source</a>
+        </div>
+      </div>
+      <div class="stage" role="img" aria-label="bead's island at the top of the screen, changing shape: a clock, then what's playing, then the launcher, then a notification">
+        <div class="island" id="island" data-state="clock">
+          <div class="face f-clock"><span>16:42</span><span class="wv" aria-hidden="true"><i></i><i></i><i></i></span></div>
+          <div class="face f-media">
+            <div class="art"></div>
+            <div class="meta"><b>Daydreamin'</b><span>Lupe Fiasco</span><div class="bar"><i></i></div></div>
+            <div class="pp"></div>
+          </div>
+          <div class="face f-launch">
+            <div class="q">term<i class="cur"></i></div>
+            <div class="row on"><i class="ic" style="background:linear-gradient(135deg,#f0a6d8,#9a6fd1)"></i>kitty<small>Tab · more</small></div>
+            <div class="row"><i class="ic" style="background:#3b3446"></i>Foot</div>
+            <div class="row"><i class="ic" style="background:#3b3446"></i>Alacritty</div>
+            <div class="row"><i class="ic" style="background:#3b3446"></i>Warp</div>
+          </div>
+          <div class="face f-toast"><i class="ok">✓</i><span>Deployed to staging</span></div>
+        </div>
+        <p class="caption"><span id="cap">The island, resting</span><span class="dots" id="dots"></span></p>
+      </div>
+    </div>
+
+    <div class="install" id="install">
+      <div class="tabs" role="tablist" aria-label="How to install">
+        <button role="tab" aria-selected="true" aria-controls="i-script" id="t-script">Installer</button>
+        <button role="tab" aria-selected="false" aria-controls="i-pkg" id="t-pkg" tabindex="-1">pacman package</button>
+      </div>
+      <div class="term" role="tabpanel" id="i-script" aria-labelledby="t-script">
+        <code><span class="p">$ </span>git clone https://github.com/HamzaQaz/bead &amp;&amp; cd bead &amp;&amp; ./install.sh</code>
+        <button class="copy" data-copy="git clone https://github.com/HamzaQaz/bead && cd bead && ./install.sh">Copy</button>
+      </div>
+      <div class="term" role="tabpanel" id="i-pkg" aria-labelledby="t-pkg" hidden>
+        <code><span class="p">$ </span>git clone https://github.com/HamzaQaz/bead &amp;&amp; cd bead/packaging &amp;&amp; makepkg -si &amp;&amp; bead-setup</code>
+        <button class="copy" data-copy="git clone https://github.com/HamzaQaz/bead && cd bead/packaging && makepkg -si && bead-setup">Copy</button>
+      </div>
+      <p class="note">Arch and Arch-based distros (CachyOS, EndeavourOS, Manjaro…) on Hyprland 0.57 or newer. The installer opens a window that shows the whole plan before it changes anything. Coming to the AUR as <code>bead-shell-git</code>.</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="features">
+    <div class="wrap">
+      <div class="reveal">
+        <h2>One design language, from the bar to the lock screen.</h2>
+        <p class="intro">bead replaces your bar, launcher, notification daemon and lock screen with pieces that share one look and one motion: springs, gooey edges, colours from the wallpaper.</p>
+      </div>
+      <img class="shot reveal" src="screenshots/dashboard.webp" width="1920" height="1080" loading="lazy" alt="bead's dashboard open from the island: a clock and greeting, the weather, a calendar, what's playing with its controls, and CPU, memory, GPU and disk gauges, over a wallpaper of glowing glass beads">
+
+      <div class="feature reveal">
+        <div class="pic pad">
+          <img src="screenshots/launcher.webp" width="900" height="520" loading="lazy" alt="The launcher searching for 'term', listing Foot, kitty, Alacritty and other terminals">
+          <img src="screenshots/launcher-maths.webp" width="900" height="260" loading="lazy" alt="The launcher converting a currency">
+        </div>
+        <div>
+          <h3>Press Super. The island becomes everything.</h3>
+          <p>The pill at the top of the screen shows what's playing, timers, recordings and calls. Press <kbd>Super</kbd> and it grows into a launcher that does more than open apps.</p>
+          <ul>
+            <li><div>Apps, with the ones you use most floating up <span>· press Tab on one for actions</span></div></li>
+            <li><div>Maths and units <span>· <code>5 usd to eur</code></span></div></li>
+            <li><div>Open windows, files, clipboard history and emoji</div></li>
+            <li><div>Ask Claude a question <span>· start with <code>?</code></span></div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="feature flip reveal">
+        <div class="pic pad">
+          <img src="screenshots/voice.webp" width="520" height="172" loading="lazy" alt="A voice command in the island, the words it understood lit up">
+          <img src="screenshots/toast.webp" width="520" height="60" loading="lazy" alt="A toast in the island saying 'Deployed to staging'">
+        </div>
+        <div>
+          <h3>Talk to your desktop, offline.</h3>
+          <p>Optional: Murmur runs speech recognition and a small model on your own GPU. Nothing leaves the machine.</p>
+          <ul>
+            <li><div>"Open Thunar on workspace 3, close the rest"</div></li>
+            <li><div>Dictate into any window, or reply to a notification by voice</div></li>
+            <li><div>Teach it: do a few things, then say <span>"save that as focus"</span></div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="more reveal" aria-label="More of what's in bead">
+        <div><b>Tint</b><span>Colours drawn from your wallpaper, vibrant, muted or mono, rippling out from the island when they change.</span></div>
+        <div><b>Notifications</b><span>Grow out of the frame, stack per app, reply inline, Do Not Disturb with a digest.</span></div>
+        <div><b>Settings</b><span>A window of its own, fourteen pages, and a search across every setting.</span></div>
+        <div><b>Overview</b><span>Super+Tab: every workspace, drag windows between them, float, pin or close from the keys.</span></div>
+        <div><b>Displays</b><span>Drag your monitors to arrange them. Every change is a trial that undoes itself unless you keep it.</span></div>
+        <div><b>Lock screen</b><span>bead's own, with idle handling that waits while something's playing.</span></div>
+        <div><b>Wallpapers</b><span>Six of bead's own, your stills, or live Wallpaper Engine scenes.</span></div>
+        <div><b>Glint</b><span>Toasts from the terminal and from Claude Code: done, approve, choose.</span></div>
+        <div><b>bead doctor</b><span>Checks everything bead needs and gives a one-line fix for anything missing.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="keys">
+    <div class="wrap reveal">
+      <h2>Everything is a key away.</h2>
+      <div class="keys">
+        <div><span>Launcher</span><kbd>Super</kbd></div>
+        <div><span>Overview</span><span><kbd>Super</kbd> <kbd>Tab</kbd></span></div>
+        <div><span>Dashboard</span><span><kbd>Super</kbd> <kbd>K</kbd></span></div>
+        <div><span>Notifications</span><span><kbd>Super</kbd> <kbd>N</kbd></span></div>
+        <div><span>Clipboard · emoji</span><span><kbd>Super</kbd> <kbd>V</kbd> · <kbd>Super</kbd> <kbd>.</kbd></span></div>
+        <div><span>Screenshot an area</span><span><kbd>Super</kbd> <kbd>Shift</kbd> <kbd>S</kbd></span></div>
+        <div><span>Voice command (hold)</span><span><kbd>Super</kbd> <kbd>Space</kbd></span></div>
+        <div><span>Dictate</span><span><kbd>Super</kbd> <kbd>A</kbd></span></div>
+        <div><span>Lock</span><span><kbd>Super</kbd> <kbd>L</kbd></span></div>
+        <div><span>Every key, in bead</span><span>type <code>keys</code> in the launcher</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="end">
+    <div class="wrap reveal">
+      <h2>Make Hyprland feel soft.</h2>
+      <p class="intro" style="margin-inline:auto">Free, open source, and yours to change. Keeping it current is <code>bead update</code>; taking it off is <code>bead uninstall</code>.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install">Install bead</a>
+        <a class="btn ghost" href="https://github.com/HamzaQaz/bead/blob/master/CHANGELOG.md">What's in 0.1.0</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>bead · GPL-3.0 · built with <a href="https://quickshell.org">Quickshell</a> for <a href="https://hyprland.org">Hyprland</a></span>
+    <span><a href="https://github.com/HamzaQaz/bead">Source</a> · <a href="https://github.com/HamzaQaz/bead/issues">Issues</a> · <a href="https://github.com/HamzaQaz/bead/releases">Releases</a></span>
+  </div>
+</footer>
+
+<script>
+// the island cycles through what bead shows; the dots pick one
+(() => {
+  const island = document.getElementById("island");
+  const cap = document.getElementById("cap");
+  const dots = document.getElementById("dots");
+  const states = [
+    ["clock", "The island, resting"],
+    ["media", "What's playing"],
+    ["launch", "Press Super: the launcher"],
+    ["toast", "A toast from the terminal"],
+  ];
+  let at = 0, timer;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  states.forEach(([, label], i) => {
+    const b = document.createElement("button");
+    b.setAttribute("aria-label", label);
+    b.onclick = () => { show(i); restart(); };
+    dots.append(b);
+  });
+  function show(i) {
+    at = i;
+    island.dataset.state = states[i][0];
+    cap.textContent = states[i][1];
+    [...dots.children].forEach((b, k) => b.setAttribute("aria-current", k === i));
+  }
+  function restart() { clearInterval(timer); if (!still) timer = setInterval(() => show((at + 1) % states.length), 2600); }
+  show(0); restart();
+})();
+
+// install tabs (arrow keys move between them)
+(() => {
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function select(t) {
+    tabs.forEach(x => {
+      const on = x === t;
+      x.setAttribute("aria-selected", on);
+      x.tabIndex = on ? 0 : -1;
+      document.getElementById(x.getAttribute("aria-controls")).hidden = !on;
+    });
+    t.focus();
+  }
+  tabs.forEach((t, i) => {
+    t.onclick = () => select(t);
+    t.onkeydown = e => {
+      if (e.key === "ArrowRight") select(tabs[(i + 1) % tabs.length]);
+      if (e.key === "ArrowLeft") select(tabs[(i - 1 + tabs.length) % tabs.length]);
+    };
+  });
+})();
+
+// copy buttons
+document.querySelectorAll(".copy").forEach(b => b.onclick = async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; b.classList.add("done"); }
+  catch { b.textContent = "Select and copy"; }
+  setTimeout(() => { b.textContent = "Copy"; b.classList.remove("done"); }, 1800);
+});
+
+// sections arrive as they scroll in
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+</script>
+</body>
+</html>

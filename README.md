@@ -26,11 +26,16 @@ git clone https://github.com/HamzaQaz/bead && cd bead
 ./install.sh            # a window in a graphical session; --tui for the terminal, --dry-run to look around
 ```
 
-Or from the AUR, then `bead-setup` once for your keybinds and the optional parts:
+Or as a pacman package, built from the PKGBUILD in this repo, then
+`bead-setup` once for your keybinds and the optional parts:
 
 ```sh
-paru -S bead-shell-git && bead-setup
+git clone https://github.com/HamzaQaz/bead && cd bead/packaging
+makepkg -si && bead-setup
 ```
+
+The same package is coming to the AUR as `bead-shell-git` (`paru -S
+bead-shell-git`) once AUR registration reopens.
 
 In a graphical session `install.sh` installs Quickshell first, then opens
 bead's installer as a window: welcome, choose the parts, review, your
@@ -54,7 +59,8 @@ bead uninstall           # keeps your settings; --purge takes those too, --dry-r
 
 `bead update` moves a git checkout to the newest release and reinstalls; if
 the new bead won't start, the old one comes back. It leaves a checkout with
-changes of its own alone. An AUR install updates with `paru -Syu`. Settings →
+changes of its own alone. A package install updates by building it again (`makepkg -si` in
+`packaging/`), or with `paru -Syu` once it's on the AUR. Settings →
 System says when a new release is out.
 
 ## What's in it
