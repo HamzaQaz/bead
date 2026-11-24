@@ -9,6 +9,7 @@ import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
 import "../../config/sizecheck.js" as SizeCheck
+import "hover.js" as Hover
 import qs.components
 import qs.config
 import qs.modules.dashboard
@@ -1168,8 +1169,10 @@ Scope {
                 if (root.fullscreen && !open) return;
                 leaveTimer.stop();
                 hovered = true;
-                if (!expanded && Date.now() - closedAt > 600) openTimer.restart();
+                if (Hover.opens({ expanded: expanded, popup: showsActivity, fullscreen: false, sinceClosed: Date.now() - closedAt })) openTimer.restart();
             }
+            // a popup arriving under the pointer: it isn't swapped for the media card
+            onShowsActivityChanged: if (showsActivity) openTimer.stop()
             function leaveHover(): void {
                 openTimer.stop();
                 leaveTimer.restart();
