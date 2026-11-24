@@ -6,6 +6,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
+import "../../services/snooze.js" as Snooze
 import qs.components
 import qs.config
 import qs.services
@@ -121,6 +122,17 @@ Scope {
 
     function remove(key: real): void { // real: keys (ms × 1000) overflow a 32-bit int
         popups = popups.filter(p => p.key !== key);
+    }
+
+    // a snoozed one's time has come: it pops up again, by the same rules as a new one
+    Connections {
+        target: Notifs
+        function onReturned(e) {
+            if (Notifs.panelOpen || Notifs.dnd) return;
+            if (root.quiet) { root.dot(e, false); return; }
+            root.add(Object.assign({}, e, { notif: Notifs.live[e.key] ?? null, sticky: false, timeout: 0 }));
+            Notifs.posted(e);
+        }
     }
 
     NotificationServer {
@@ -294,8 +306,11 @@ Scope {
                         : modelData.appIcon ? Quickshell.iconPath(modelData.appIcon, true) : ""
                     iconGlyph: spec && !iconIsPath ? icon : ""
                     buttons: spec ? spec.buttons ?? []
-                        : modelData.actions.filter(a => a.id !== "default" && a.label)
+                        : snoozing ? Snooze.choices
+                        // (one that came back has no app behind its old buttons)
+                        : (notif ? modelData.actions.filter(a => a.id !== "default" && a.label) : [])
                             .concat(notif?.hasInlineReply ? [{ id: "__reply", label: "Reply" }] : [])
+                            .concat([{ id: "__later", label: "Later" }])
                     duration: spec ? spec.duration ?? 6000 : critical ? 0
                         : modelData.timeout > 0 ? modelData.timeout : 6000
                     sticky: modelData.sticky
@@ -370,8 +385,13 @@ Scope {
                         if (notif) Notifs.invoke(modelData.key, "default");
                         dismiss(spec ? "clicked" : "dismissed"); // toast --wait exits 0 on a click
                     }
+                    // "Later": the buttons become how long; picking one sends it away
+                    // until then (it stays in the history, marked)
+                    property bool snoozing: false
                     onAnswered: id => {
                         if (id === "__reply") { pill.startReply(); return; }
+                        if (id === "__later") { pill.snoozing = true; return; }
+                        if (Snooze.choiceOf(id)) { Notifs.snooze(modelData.key, Snooze.choiceOf(id)); pill.dismiss("timeout"); return; }
                         if (spec) root.report(spec.id, "result", id);
                         else Notifs.invoke(modelData.key, id);
                     }

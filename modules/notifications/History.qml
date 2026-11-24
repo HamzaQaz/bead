@@ -7,6 +7,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
+import "../../services/snooze.js" as Snooze
 import qs.components
 import qs.config
 import qs.services
@@ -614,6 +615,19 @@ Scope {
                                 color: Theme.subtext
                                 textFormat: Text.StyledText
                                 text: row.modelData.body ?? ""
+                            }
+                            Row { // snoozed: when it comes back
+                                readonly property real until: Notifs.snoozedUntil(row.modelData.key ?? 0)
+                                visible: until > 0
+                                topPadding: 4
+                                spacing: 4
+                                Icon { anchors.verticalCenter: parent.verticalCenter; name: "snooze"; size: 13; color: Theme.tone("action") }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
+                                    color: Theme.tone("action")
+                                    text: parent.until > 0 ? Snooze.label(parent.until, Date.now()) : ""
+                                }
                             }
                             Flow {
                                 width: parent.width

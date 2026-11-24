@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
+import "snooze.js" as Snooze
 
 // Notification history and Do Not Disturb.
 //
@@ -48,6 +49,39 @@ Singleton {
 
     // live notification objects by entry key (not saved)
     property var live: ({})
+
+    // ── snoozed: gone from the screen, back later as a fresh pop-up
+    // (snooze.js; saved, so a restart doesn't lose them) ──
+    property var snoozed: []        // [{ key, until }]
+    signal returned(var entry)      // one's time has come: pop it up again
+    function snooze(key: real, choice: string): bool {
+        const u = Snooze.until(choice, Date.now());
+        if (!u || !entries.some(e => e.key === key)) return false;
+        snoozed = Snooze.add(snoozed, key, u);
+        saveTimer.restart();
+        return true;
+    }
+    function snoozedUntil(key: real): real { return Snooze.when(snoozed, key); }
+    Timer {
+        interval: 5000
+        repeat: true
+        running: root.loaded && root.snoozed.length > 0
+        onTriggered: {
+            const keys = root.entries.map(e => e.key);
+            const r = Snooze.split(Snooze.prune(root.snoozed, keys), Date.now());
+            if (r.waiting.length === root.snoozed.length) return;
+            root.snoozed = r.waiting;
+            saveTimer.restart();
+            for (const k of r.due) {
+                const e = root.entries.find(x => x.key === k);
+                if (!e) continue;
+                // it comes back as new: on top of the history, with the time now
+                const back = Object.assign({}, e, { time: Date.now() });
+                root.entries = [back, ...root.entries.filter(x => x.key !== k)];
+                root.returned(back);
+            }
+        }
+    }
 
     function record(n: Notification): var {
         const e = {
@@ -117,6 +151,7 @@ Singleton {
         onTriggered: store.setText(JSON.stringify({
             dnd: root.dnd,
             dndSince: root.dndSince,
+            snoozed: root.snoozed,
             // images from image-data hints don't survive a restart
             entries: root.entries.map(e => Object.assign({}, e, {
                 image: /^(\/|file:)/.test(e.image ?? "") ? e.image : "",
@@ -136,6 +171,7 @@ Singleton {
                 root.entries = d.entries ?? [];
                 root.dnd = !!d.dnd;
                 root.dndSince = root.dnd ? (d.dndSince || Date.now()) : 0;
+                root.snoozed = Array.isArray(d.snoozed) ? d.snoozed.filter(x => x && x.key && x.until) : [];
             } catch (e) {}
             root.loaded = true;
         }
