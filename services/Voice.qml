@@ -146,6 +146,49 @@ Singleton {
         }
         return null;
     }
+    // ── teaching: "save that as focus" (modules/island/Island.qml keeps what
+    // you last said and hands the steps over) ──
+    // a spoken name as an action's name: "Deep Work" → deep_work
+    function slug(name: string): string { return norm(name).replace(/'/g, "").replace(/ /g, "_").slice(0, 40); }
+    // the file as it is now, or why it can't be added to
+    function customDoc(): var {
+        if (!customFile.loaded) return { actions: [] };
+        try { const d = JSON.parse(customFile.text()); return Array.isArray(d.actions) ? d : Object.assign(d, { actions: [] }); }
+        catch (e) { return null; }
+    }
+    // add (or replace) an action called by its name; returns "" or why not
+    function teach(name: string, steps: var): string {
+        const phrase = norm(name), id = slug(name);
+        if (!/^[a-z][a-z0-9_]{0,39}$/.test(id)) return "That name won't work: try a word or two";
+        if (builtins[id] !== undefined || /^(undo|again|save|forget)\b/.test(phrase)) return "\u201c" + phrase + "\u201d is already a command";
+        const d = customDoc();
+        if (!d) return "voice.json has a mistake in it: fix that first";
+        d.actions = d.actions.filter(c => c.name !== id);
+        d.actions.push({ name: id, when: "run my saved command \"" + phrase + "\"", phrases: [phrase], say: phrase.charAt(0).toUpperCase() + phrase.slice(1), steps: steps });
+        writeCustom(d);
+        return "";
+    }
+    // our own writes don't come back through the file watcher
+    function writeCustom(d: var): void {
+        const txt = JSON.stringify(d, null, 2) + "\n";
+        customFile.setText(txt);
+        customFile.loaded = true;
+        parseCustom(txt);
+    }
+    // one of yours, by its name or a phrase of its
+    function findCustom(said: string): var {
+        const n = norm(said), id = slug(said);
+        return custom.find(c => c.name === id || c.phrases.includes(n)) ?? null;
+    }
+    function forget(name: string): bool {
+        const d = customDoc();
+        if (!d || !d.actions.some(c => c.name === name)) return false;
+        d.actions = d.actions.filter(c => c.name !== name);
+        writeCustom(d);
+        return true;
+    }
+    readonly property var counts: ({ one: 1, two: 2, three: 3, four: 4, five: 5 })
+
     // a starting point for the file, if you don't have one yet
     function ensureCustom(): void {
         if (customFile.loaded) return;
@@ -415,7 +458,12 @@ Singleton {
         const n = norm(heard);
         const quick = /^(undo|undo (that|it|this)|take (that|it) back|revert (that|it))$/.test(n) ? { action: "undo" }
             : /^(again|do (that|it) again|repeat( that| it)?|one more time|same again)$/.test(n) ? { action: "again" } : null;
-        const hit = quick ?? byPhrase(heard);
+        // nor does teaching: "save that as focus", "save the last three as focus", "forget focus"
+        const save = /^(?:save|remember|keep|store) (?:that|this|it|those|the last (\w+)(?: (?:commands?|ones?|things?|steps?))?) as (?:a |my )?(.+)$/.exec(n);
+        const gone = /^forget (?:the |my )?(?:command |action )?(.+)$/.exec(n);
+        const teachHit = save ? { action: "teach", count: save[1] ? (counts[save[1]] ?? (parseInt(save[1]) || 1)) : 1, text: save[2] }
+            : gone && findCustom(gone[1]) ? { action: "forget", text: findCustom(gone[1]).name } : null;
+        const hit = quick ?? teachHit ?? byPhrase(heard);
         if (hit) {
             console.info("voice: phrase", JSON.stringify(hit), "for", JSON.stringify(heard));
             root.state = "done";

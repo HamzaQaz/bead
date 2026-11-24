@@ -304,8 +304,44 @@ Scope {
     property var undoLog: []       // [{ label, run }] of the last command
     property var recording: null   // where remember() writes while a command runs
     function remember(label: string, undo: var): void { if (root.recording) root.recording.push({ label: label, run: undo }); }
+    // ── teaching: the last few commands, to save as one of your own ──
+    property var said: []          // [{ a, heard }], newest last
+    // a command as a step of a saved action. A toggle is saved as where it
+    // ended up, so running it later can't flip it the wrong way
+    function asSteps(e: var): var {
+        const mine = Voice.custom.find(c => c.name === e.a.action);
+        if (mine) return mine.steps.map(st => Object.assign({}, st, mine.text && st.text === undefined && st.do ? { text: e.a.text || e.heard } : {}));
+        const st = { do: e.a.action };
+        for (const k in e.a) if (k !== "action" && e.a[k] !== undefined && e.a[k] !== null && e.a[k] !== "") st[k] = e.a[k];
+        if (e.on !== undefined) st.on = e.on;
+        return [st];
+    }
+    readonly property var unteachable: ["ask", "look", "click", "reply", "layout_save"]
+    function teachVoice(a: var): void {
+        const name = String(a.text ?? "").trim();
+        const take = root.said.slice(-Math.max(1, Math.min(5, a.count || 1)));
+        if (!name) return root.toast("bolt", "Save it as what? \u201csave that as focus\u201d", "info", 3000);
+        if (!take.length) return root.toast("bolt", "Nothing to save yet: say a command first", "info", 3000);
+        const no = take.find(e => root.unteachable.includes(e.a.action));
+        if (no) return root.toast("bolt", "\u201c" + no.heard + "\u201d can't be saved in a command", "info", 3200);
+        const steps = [].concat(...take.map(e => root.asSteps(e)));
+        root.confirmThen("bolt", "Saving \u201c" + Voice.norm(name) + "\u201d: " + take.map(e => e.heard.replace(/[.!?]+$/, "")).join(" \u2192 "), () => {
+            const why = Voice.teach(name, steps);
+            root.toast(why ? "error" : "bolt", why || "Saved \u00b7 say \u201c" + Voice.norm(name) + "\u201d", why ? "error" : "action", 2800);
+        }, 3200);
+    }
+    function forgetVoice(a: var): void {
+        const c = Voice.custom.find(x => x.name === a.text);
+        if (!c) return;
+        const label = c.phrases[0] ?? c.name.replace(/_/g, " ");
+        root.confirmThen("delete", "Forgetting \u201c" + label + "\u201d", () => {
+            root.toast("delete", Voice.forget(c.name) ? "Forgot \u201c" + label + "\u201d" : "Couldn't change voice.json", "info", 2200);
+        }, 2600);
+    }
     function doVoice(a: var, heard: string): void {
         if (a.action === "undo") return root.undoLast();
+        if (a.action === "teach") return root.teachVoice(a);
+        if (a.action === "forget") return root.forgetVoice(a);
         if (a.action === "again") {
             if (!root.lastVoice) return root.toast("replay", "Nothing to do again", "info", 2000);
             a = root.lastVoice.a;
@@ -318,6 +354,8 @@ Scope {
         if (a.action === "none") return;
         root.lastVoice = { a: a, heard: heard };
         root.undoLog = rec;
+        const on = a.action === "dnd" ? Notifs.dnd : a.action === "mute" ? Audio.muted : a.action === "mic_mute" ? Audio.micMuted : undefined;
+        root.said = [...root.said.slice(-4), { a: a, heard: heard, on: on }];
     }
     function undoLast(): void {
         const log = root.undoLog;
@@ -435,8 +473,9 @@ Scope {
             root.flash("volume", "");
             return;
         }
-        case "mute": Audio.toggleMute(); remember("mute", () => Audio.toggleMute()); root.flash("volume", ""); return;
-        case "mic_mute": Audio.toggleMicMute(); remember("mic mute", () => Audio.toggleMicMute()); root.flash("mic", ""); return;
+        // `on` (in a saved command): which way, instead of the other way
+        case "mute": if (a.on !== undefined && a.on === Audio.muted) return; Audio.toggleMute(); remember("mute", () => Audio.toggleMute()); root.flash("volume", ""); return;
+        case "mic_mute": if (a.on !== undefined && a.on === Audio.micMuted) return; Audio.toggleMicMute(); remember("mic mute", () => Audio.toggleMicMute()); root.flash("mic", ""); return;
         case "open_app": {
             // small models sometimes leave the place in the name ("x on window 5"):
             // take it off, and read the workspace and "close the rest" from the
@@ -684,7 +723,7 @@ Scope {
             if (c) remember("the wallpaper", () => k === "live" ? Wallpaper.setLive(c) : Wallpaper.setStill(c));
             Wallpaper.random("");
         } return say("wallpaper", "New wallpaper");
-        case "dnd": Notifs.dnd = !Notifs.dnd; remember("do not disturb", () => Notifs.dnd = !Notifs.dnd); return say(Notifs.dnd ? "do_not_disturb_on" : "notifications", Notifs.dnd ? "Do not disturb on" : "Do not disturb off");
+        case "dnd": if (a.on !== undefined && a.on === Notifs.dnd) return; Notifs.dnd = !Notifs.dnd; remember("do not disturb", () => Notifs.dnd = !Notifs.dnd); return say(Notifs.dnd ? "do_not_disturb_on" : "notifications", Notifs.dnd ? "Do not disturb on" : "Do not disturb off");
         case "screenshot_area": Capture.shot("area"); return;
         case "screenshot_screen": Capture.shot("screen"); return;
         case "ask": {

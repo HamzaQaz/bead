@@ -225,7 +225,13 @@ Item {
         { m: 10, n: "10 minutes" }, { m: 15, n: "15 minutes" }, { m: 25, n: "25 minutes", note: "Focus" },
         { m: 45, n: "45 minutes" }, { m: 60, n: "1 hour" }
     ]
+    // your voice commands (services/Voice.qml), to run without saying them;
+    // not the ones that need words after them
+    readonly property list<var> yours: Voice.custom.filter(c => !c.text).map(c => ({ id: "voice:" + c.name,
+        title: (c.phrases[0] ?? c.name.replace(/_/g, " ")).replace(/^./, m => m.toUpperCase()),
+        sub: "Your command \u00b7 " + c.steps.length + (c.steps.length === 1 ? " step" : " steps"), glyph: "bolt" }))
     readonly property list<var> actions: [
+        ...yours,
         ...timeActions,
         ...Session.actions,
         { id: "dnd", title: Notifs.dnd ? "Turn off Do Not Disturb" : "Do Not Disturb", sub: "Hold notification popups", glyph: Notifs.dnd ? "notifications_active" : "notifications_off" },
@@ -260,6 +266,7 @@ Item {
             }
             return;
         }
+        if (String(a.id).startsWith("voice:")) { Voice.decided({ action: a.id.slice(6), text: "" }, ""); return; }
         switch (a.id) {
         case "dnd": Notifs.dnd = !Notifs.dnd; break;
         case "clear": Notifs.clear(); break;
