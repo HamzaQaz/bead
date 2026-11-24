@@ -5,7 +5,7 @@ import Quickshell
 import Quickshell.Io
 import qs.config
 
-// Wallpapers: stills from ~/Pictures/Wallpapers (bead draws them, see
+// Wallpapers: bead's own still, stills from ~/Pictures/Wallpapers (bead draws them, see
 // modules/background) and live Wallpaper Engine items from Steam's workshop
 // (played by ~/.local/bin/wallengine through linux-wallpaperengine). Picking
 // either rebuilds the colours with Tint (bin/bead-tint), which bead's Theme
@@ -111,7 +111,9 @@ Singleton {
             done`, "sh", root.stillDir, root.workshop, root.engine]
         stdout: StdioCollector {
             onStreamFinished: {
-                const s = [], l = [];
+                // bead's own (data/wallpapers, made by tools/make-wallpaper.py) comes
+                // first, so a first run with no wallpapers of its own starts on it
+                const s = [{ path: Quickshell.shellPath("data/wallpapers/bead.jpg"), name: "bead" }], l = [];
                 for (const line of text.split("\n")) {
                     const f = line.split("\t");
                     if (f[0] === "S" && f[1]) s.push({ path: f[1], name: f[1].split("/").pop().replace(/\.[^.]+$/, "").replace(/^od_/, "").replace(/[_-]+/g, " ") });
