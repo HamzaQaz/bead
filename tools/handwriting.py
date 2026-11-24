@@ -1,78 +1,116 @@
 #!/usr/bin/env python3
-# Makes modules/welcome/script.js, the welcome title's pen path:
-#   python3 tools/handwriting.py js modules/welcome/script.js
-# With no arguments it writes hello.svg (the path, its points in red) for tuning.
-import math, sys, json
-# "bead." in one connected pen line; x-height 1, ascenders 2, baseline 0, y up
-# Drawn upright: every downstroke is vertical (b's stem, the bowls' right
-# sides, a's and d's stems) and SLANT then leans the whole word by one angle,
-# so all the strokes run the same way; loops lean only by their upstrokes.
-P = [
- # b: lead-in from the baseline up into a tall loop, straight down the stem
- (-0.20,0.05),(0.10,0.30),(0.38,0.90),(0.50,1.50),(0.48,1.90),(0.36,2.06),(0.24,1.95),(0.20,1.50),(0.20,0.80),(0.20,0.15),
- # …its bowl round to a little tie at the top right
- (0.30,0.03),(0.60,0.00),(0.88,0.18),(0.97,0.52),(0.87,0.86),(0.62,0.92),(0.50,0.78),(0.70,0.66),(1.05,0.62),
- # e: up into its loop, round, and out along the bottom
- (1.4,0.62),(1.7,0.78),(1.82,0.96),(1.68,1.06),(1.45,0.96),(1.3,0.62),(1.32,0.25),(1.55,0.02),(1.85,0.02),(2.1,0.2),
- # a and d: the connector rises up the bowl's left side and over its top, the
- # pen turns back along exactly that line and goes round; then the stem
- (2.18,0.45),(2.26,0.80),(2.46,0.99),(2.73,0.98),(2.88,0.90),(2.73,0.98),(2.46,0.99),(2.26,0.80),(2.18,0.45),(2.24,0.12),(2.46,0.00),(2.73,0.10),(2.86,0.45),(2.90,0.98),(2.90,0.55),(2.91,0.15),(3.08,0.00),(3.30,0.12),(3.33,0.45),(3.41,0.80),(3.61,0.99),(3.88,0.98),(4.03,0.90),(3.88,0.98),(3.61,0.99),(3.41,0.80),(3.33,0.45),(3.39,0.12),(3.61,0.00),(3.88,0.10),(4.01,0.45),(4.07,1.40),(4.12,1.95),(4.06,2.08),(4.01,1.90),(4.01,1.30),(4.01,0.55),(4.03,0.12),(4.21,0.00),(4.46,0.15),
-]
-DOT = (4.98, 0.09)
-SLANT = 0.14
-def cr(pts, n=24, alpha=0.5):
-    out=[]; P=[(2*pts[0][0]-pts[1][0],2*pts[0][1]-pts[1][1])]+pts+[(2*pts[-1][0]-pts[-2][0],2*pts[-1][1]-pts[-2][1])]
-    for i in range(1,len(P)-2):
-        p0,p1,p2,p3=P[i-1],P[i],P[i+1],P[i+2]
-        t0=0; t1=t0+math.dist(p0,p1)**alpha; t2=t1+math.dist(p1,p2)**alpha; t3=t2+math.dist(p2,p3)**alpha
-        for k in range(n):
-            t=t1+(t2-t1)*k/n
-            def L(a,b,ta,tb): return tuple(((tb-t)*a[j]+(t-ta)*b[j])/(tb-ta) for j in range(2))
-            A1=L(p0,p1,t0,t1);A2=L(p1,p2,t1,t2);A3=L(p2,p3,t2,t3)
-            B1=L(A1,A2,t0,t2);B2=L(A2,A3,t1,t3)
-            out.append(L(B1,B2,t1,t2))
-    out.append(pts[-1]); return out
-def resample(pts,step):
-    o=[pts[0]]; acc=0
-    for i in range(1,len(pts)):
-        a,b=pts[i-1],pts[i]; L=math.dist(a,b)
-        while acc+L>=step and L>0:
-            t=(step-acc)/L; a=(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t); o.append(a); L=math.dist(a,b); acc=0
-        acc+=L
-    o.append(pts[-1]); return o
-def smooth(pts, win=7, passes=2):
-    for _ in range(passes):
-        q=list(pts); h=win//2
-        for i in range(h,len(pts)-h):
-            q[i]=(sum(p[0] for p in pts[i-h:i+h+1])/win, sum(p[1] for p in pts[i-h:i+h+1])/win)
-        pts=q
-    return pts
-line=[(x+y*SLANT,y) for x,y in smooth(resample(cr(P),0.01))]
-dot=(DOT[0]+DOT[1]*SLANT,DOT[1])
-xs=[p[0] for p in line]+[dot[0]+0.1]; ys=[p[1] for p in line]
-x0,y1=min(xs),max(ys); H=y1-min(ys+[0])
-norm=lambda p: ((p[0]-x0)/H,(y1-p[1])/H)
-line=resample([norm(p) for p in line],0.008); dot=norm(dot); W=(max(xs)-x0)/H
-if len(sys.argv)>1 and sys.argv[1]=='js':
-    f=lambda v: ('%.4f'%v).rstrip('0').rstrip('.')
-    L=sum(math.dist(line[i-1],line[i]) for i in range(1,len(line)))
-    open(sys.argv[2],'w').write('''.pragma library
-// "bead." as handwriting, in one connected pen line: points spaced evenly
-// along it (so the pen moves at an even pace), x then y, in units of the
-// word's height (y down). Made by tools/handwriting.py (a centripetal
-// Catmull-Rom spline through hand-placed points). The full stop is a bead instead: `dot`.
-var aspect = %s;
-var lengths = [%s];
-var dot = [%s, %s];
-var strokes = [
-    [%s]
-];
-'''%(f(W),f(L),f(dot[0]),f(dot[1]),', '.join(f(c) for p in line for c in p)))
-    print('js',len(line),W,L); sys.exit()
-S=300; pad=40; w=0.062
-svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="{W*S+2*pad:.0f}" height="{S+2*pad}"><rect width="100%" height="100%" fill="#26242e"/>'
-svg+='<polyline fill="none" stroke="#ece8ff" stroke-width="%.1f" stroke-linecap="round" stroke-linejoin="round" points="%s"/>'%(w*S,' '.join(f'{p[0]*S+pad:.1f},{p[1]*S+pad:.1f}' for p in line))
-svg+=f'<circle cx="{dot[0]*S+pad}" cy="{dot[1]*S+pad-0.03*S}" r="{0.075*S}" fill="#ece8ff"/>'
-# control points, for tuning
-for x,y in P: q=norm((x+y*SLANT,y)); svg+=f'<circle cx="{q[0]*S+pad}" cy="{q[1]*S+pad}" r="3" fill="#f55"/>'
-open('hello.svg','w').write(svg+'</svg>'); print(W)
+"""Makes modules/welcome/script.js, the welcome title's pen path, from EMS
+Allure: a single-line script font drawn as pen strokes (Sheldon B. Michaels,
+from Allura by Rob Leuschke; SIL Open Font License; part of Evil Mad
+Scientist's Hershey Text, github.com/evil-mad/EggBot):
+
+    python3 tools/handwriting.py EMSAllure.svg modules/welcome/script.js
+
+Each letter is already one pen stroke (the d's ascender a loop), so the word
+needs no tracing, only putting in writing order and joining: the a and d are
+stored back to front, the b's bowl is turned to end in a little tie, and each
+join runs from one letter's exit to the next one's start. A bowl starts at its
+top right, so the join into it rides just under the bowl's top, and the pen
+comes back over it to fill it in, never across the middle. Smoothed through
+the font's points, then evenly spaced, so the pen moves at an even pace.
+"""
+import math, re, sys
+
+def load(path):
+    s, g = open(path).read(), {}
+    for m in re.finditer(r'<glyph\b([^>]*)/?>', s):
+        a = m.group(1)
+        u, d, w = (re.search(rf'{k}="([^"]*)"', a) for k in ('unicode', r'\bd', 'horiz-adv-x'))
+        if u and d:
+            pts = [(float(x), -float(y)) for x, y in re.findall(r'(-?[\d.]+)\s+(-?[\d.]+)', d.group(1))]
+            g[u.group(1)] = (pts, float(w.group(1)))
+    return g
+
+def hermite(p0, t0, p1, t1, n=12):
+    out = []
+    for k in range(1, n):
+        s = k / n
+        h = (2*s**3 - 3*s**2 + 1, -2*s**3 + 3*s**2, s**3 - 2*s**2 + s, s**3 - s**2)
+        out.append(tuple(h[0]*p0[i] + h[1]*p1[i] + h[2]*t0[i] + h[3]*t1[i] for i in (0, 1)))
+    return out
+
+def unit(p, q, scale=1.0):
+    l = math.dist(p, q) or 1
+    return ((q[0] - p[0]) / l * scale, (q[1] - p[1]) / l * scale)
+
+def join(line, nxt, under=()):
+    """From the line's end to nxt's start: a smooth curve, or (into a bowl) one
+    through `under`, the points just below the bowl's top."""
+    way = [line[-1], *under, nxt[0]]
+    t = unit(line[-2], line[-1])
+    for p, q in zip(way, way[1:]):
+        last = q is way[-1]
+        t1 = unit(nxt[0], nxt[1]) if last else unit(p, q)
+        L = math.dist(p, q) * 1.1
+        line += hermite(p, (t[0] * L, t[1] * L), q, (t1[0] * L, t1[1] * L)) + ([] if last else [q])
+        t = t1
+    return line + nxt
+
+def catmull(pts, n=6):  # a smooth curve through the font's points
+    out = [pts[0]]
+    for i in range(len(pts) - 1):
+        p0, p1, p2, p3 = pts[max(i - 1, 0)], pts[i], pts[i + 1], pts[min(i + 2, len(pts) - 1)]
+        for k in range(1, n + 1):
+            t = k / n
+            out.append(tuple(0.5 * (2*p1[j] + (-p0[j] + p2[j])*t + (2*p0[j] - 5*p1[j] + 4*p2[j] - p3[j])*t*t
+                                    + (-p0[j] + 3*p1[j] - 3*p2[j] + p3[j])*t**3) for j in (0, 1)))
+    return out
+
+def resample(p, step):
+    o, acc = [p[0]], 0.0
+    for a, b in zip(p, p[1:]):
+        L = math.dist(a, b)
+        while acc + L >= step and L > 0:
+            t = (step - acc) / L
+            a = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+            o.append(a)
+            L, acc = math.dist(a, b), 0.0
+        acc += L
+    if math.dist(o[-1], p[-1]) > step * 0.3:
+        o.append(p[-1])
+    return o
+
+STEP = 0.008  # between points, in heights
+DROP = 34     # how far under a bowl's top its join runs, in font units
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    g = load(sys.argv[1])
+    x, glyphs = 0.0, {}
+    for c in "bead":
+        glyphs[c] = [(px + x, py) for px, py in g[c][0]]
+        x += g[c][1]
+    b, e, a, d = glyphs['b'], glyphs['e'], glyphs['a'][::-1], glyphs['d']
+    # b: loop and stem, then from the stem's foot round the bowl to its top, and a tie out of it
+    b = b[:14] + [b[i] for i in (23, 22, 21, 20, 19, 18, 17, 16)] + [(215, -300), (212, -272), (240, -262), (300, -268)]
+    under = lambda pts: [(px, py + DROP) for px, py in pts]
+    line = join(list(b), e)
+    line = join(line, a, under(a[1:5][::-1]))  # under the a's top, left to right
+    line = join(line, d, under(d[1:4][::-1]))  # under the d's top
+    line = catmull(line)
+    ys = [p[1] for p in line]
+    x0, y0 = min(p[0] for p in line), min(ys)
+    h = max(ys) - y0
+    pts = resample([((px - x0) / h, (py - y0) / h) for px, py in line], STEP)
+    baseline = (0 - y0) / h
+    width = max(p[0] for p in pts)
+    dot = (width + 0.03, baseline - 0.03)  # the full stop: a bead on the baseline, past the d
+    with open(sys.argv[2], "w") as f:
+        f.write('.pragma library\n'
+                '// "bead." as handwriting, one pen line written left to right: EMS Allure\n'
+                '// (Sheldon B. Michaels, from Allura by Rob Leuschke; SIL Open Font License),\n'
+                '// its letters put in writing order and joined. Points are evenly spaced, so\n'
+                '// the pen moves at an even pace; x then y, in units of the word\'s height\n'
+                '// (y down). Made by tools/handwriting.py. The full stop is a bead: `dot`.\n')
+        f.write(f"var aspect = {dot[0] + 0.1:.4f};\nvar lengths = [{(len(pts) - 1) * STEP:.4f}];\n")
+        f.write(f"var dot = [{dot[0]:.4f}, {dot[1]:.4f}];\nvar strokes = [\n")
+        f.write("    [" + ", ".join(f"{px:.4f}, {py:.4f}" for px, py in pts) + "]\n];\n")
+
+if __name__ == "__main__":
+    main()

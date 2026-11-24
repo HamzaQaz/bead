@@ -3,8 +3,8 @@ import QtQuick.Effects
 import QtQuick.Shapes
 import "script.js" as Script
 
-// "bead." written by hand, in the manner of a "hello" screen: one thick,
-// round, connected pen line drawn at an even pace. The pen draws the strokes in order (`progress`
+// "bead." written by hand, in the manner of a "hello" screen: EMS Allure's
+// pen line (script.js), one round pen moving left to right (`progress`
 // 0 → 1 along the whole line, at an even pace), then the full stop drops in
 // as a bead (`dot` 0 → 1). The ink runs from `from` to `to` across the word
 // and glows softly. Size it by height; the width follows.
@@ -14,7 +14,7 @@ Item {
     property real dot: 1
     property color from: "white"
     property color to: "white"
-    property real weight: 0.074 // the pen's width, in heights
+    property real weight: 0.062 // the pen's width, in heights (fine, for a script)
     // the halo round the ink: 0 a soft dark shadow (for a bright backdrop),
     // 1 a glow in the ink's colour (for a dark one)
     property real glow: 1
