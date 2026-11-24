@@ -367,7 +367,7 @@ Item {
         case "stopwatch": Countdown.startStopwatch(); break;
         case "awake": Idle.keepAwake = !Idle.keepAwake; break;
         case "walls": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "5"]); break;
-        case "settings": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "7"]); break;
+        case "settings": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "8"]); break;
         case "wallshuffle": Wallpaper.random("all"); break;
         case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
         case "wifi": Networking.wifiEnabled = !Networking.wifiEnabled; break;
