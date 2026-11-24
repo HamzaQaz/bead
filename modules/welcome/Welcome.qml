@@ -414,19 +414,22 @@ Scope {
                         width: parent.width
                         spacing: 6
                         Heading { text: "Pick a wallpaper" }
-                        Body { text: Wallpaper.stills.length ? "bead takes its colours from it: watch this card change." : "" }
+                        Body { text: "One of bead's, or your own. bead takes its colours from it: watch this card change." }
                     }
+                    // your own while you add them: look again every few seconds on this page
+                    Timer { running: root.open && root.step === 1; interval: 3000; repeat: true; onTriggered: Wallpaper.refresh() }
                     Grid {
-                        visible: Wallpaper.stills.length > 0
                         y: 74
                         columns: 4
                         spacing: 10
                         Repeater {
-                            model: Wallpaper.stills.slice(0, 8)
+                            // yours first (up to four), then bead's, seven in all; then a way to add more
+                            model: [...Wallpaper.own.slice(0, 4), ...Wallpaper.stills.filter(w => w.bead)].slice(0, 7).concat([{ add: true }])
                             Item {
                                 id: thumb
                                 required property var modelData
-                                readonly property bool chosen: Wallpaper.isCurrent(modelData)
+                                readonly property bool adder: !!modelData.add
+                                readonly property bool chosen: !adder && Wallpaper.isCurrent(modelData)
                                 width: (pages.width - 30) / 4
                                 height: 84
                                 scale: tma.pressed ? 0.95 : tma.containsMouse ? 1.03 : 1
@@ -442,7 +445,8 @@ Scope {
                                     layer.effect: MultiEffect { maskEnabled: true; maskSource: picMask; maskThresholdMin: 0.5; maskSpreadAtMin: 1 }
                                     Image {
                                         anchors.fill: parent
-                                        source: Wallpaper.url(thumb.modelData.path)
+                                        visible: !thumb.adder
+                                        source: thumb.adder ? "" : Wallpaper.url(thumb.modelData.path)
                                         sourceSize.width: 240
                                         fillMode: Image.PreserveAspectCrop
                                         asynchronous: true
@@ -458,21 +462,32 @@ Scope {
                                     opacity: thumb.chosen ? 1 : 0
                                     Behavior on opacity { NumberAnimation { duration: 160 } }
                                 }
-                                MouseArea { id: tma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Wallpaper.setStill(thumb.modelData.path) }
+                                Column { // "add your own": opens the folder; what you put there turns up here
+                                    visible: thumb.adder
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "add_photo_alternate"; size: 22; color: Theme.subtext }
+                                    Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext; text: "Add your own" }
+                                }
+                                Rectangle { // a dashed-looking edge for the add tile
+                                    visible: thumb.adder
+                                    anchors.fill: parent
+                                    radius: 12
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: Qt.alpha(Theme.text, tma.containsMouse ? 0.3 : 0.14)
+                                }
+                                MouseArea {
+                                    id: tma
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (thumb.adder) Quickshell.execDetached(["sh", "-c", 'mkdir -p "$1" && xdg-open "$1"', "sh", Wallpaper.stillDir]);
+                                        else Wallpaper.setStill(thumb.modelData.path);
+                                    }
+                                }
                             }
-                        }
-                    }
-                    Column { // no wallpapers yet
-                        visible: Wallpaper.stills.length === 0
-                        anchors.centerIn: parent
-                        spacing: 12
-                        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "wallpaper"; size: 40; color: Theme.subtext }
-                        Body { width: 380; horizontalAlignment: Text.AlignHCenter; text: "Put a few images in ~/Pictures/Wallpapers and bead will pick its colours from them." }
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: 8
-                            Action { text: "Open the folder"; glyph: "folder_open"; onHit: Quickshell.execDetached(["sh", "-c", 'mkdir -p "$1" && xdg-open "$1"', "sh", Wallpaper.stillDir]) }
-                            Action { text: "Look again"; glyph: "refresh"; onHit: Wallpaper.refresh() }
                         }
                     }
                     Row {

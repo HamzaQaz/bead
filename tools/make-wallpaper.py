@@ -9,23 +9,48 @@ side away from the light. A faint thread runs through them, soft glows of
 their colours sit behind, then a vignette and fine grain. The top stays dark
 for the bar and the island.
 
-    tools/make-wallpaper.py [out.jpg] [width] [height]
+Variants change the colours and the layout:
+  bead   cyan → violet → magenta, the string from the upper left (the default)
+  ember  deep red → amber
+  tide   deep blue → teal → mint
+  mono   graphite glass, for the Mono colour setting
+  dusk   indigo → rose → peach, mirrored: the string from the upper right
+  solo   one big bead, a few far ones behind it
+
+    tools/make-wallpaper.py [variant] [out.jpg] [width] [height]
+    tools/make-wallpaper.py all [dir]        every variant, 4K, as <dir>/<variant>.jpg
 """
 import sys
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else "data/wallpapers/bead.jpg"
-W = int(sys.argv[2]) if len(sys.argv) > 2 else 3840
-H = int(sys.argv[3]) if len(sys.argv) > 3 else 2160
+VARIANTS = {
+    "bead": dict(ramp=((40, 200, 230), (70, 110, 255), (130, 70, 255), (200, 50, 230), (255, 50, 150)), warm=(255, 150, 70), bg=(7, 6, 13)),
+    "ember": dict(ramp=((110, 20, 40), (190, 35, 40), (235, 85, 40), (255, 145, 55), (255, 196, 105)), warm=(255, 232, 170), bg=(10, 5, 5)),
+    "tide": dict(ramp=((25, 55, 150), (20, 115, 205), (20, 175, 205), (55, 215, 190), (140, 250, 210)), warm=(205, 255, 240), bg=(3, 8, 12)),
+    "mono": dict(ramp=((70, 72, 82), (105, 107, 118), (145, 147, 158), (185, 187, 198), (228, 230, 240)), warm=(255, 255, 255), bg=(8, 8, 9)),
+    "dusk": dict(ramp=((60, 45, 150), (140, 60, 175), (230, 90, 145), (255, 140, 110), (255, 192, 140)), warm=(255, 222, 165), bg=(9, 6, 14), mirror=True),
+    "solo": dict(ramp=((40, 200, 230), (70, 110, 255), (130, 70, 255), (200, 50, 230), (255, 50, 150)), warm=(255, 150, 70), bg=(6, 5, 12), layout="solo"),
+}
+if len(sys.argv) > 1 and sys.argv[1] == "all":
+    import subprocess
+    out = sys.argv[2] if len(sys.argv) > 2 else "data/wallpapers"
+    for v in VARIANTS:
+        subprocess.run([sys.executable, __file__, v, f"{out}/{v}.jpg"], check=True)
+    sys.exit(0)
+NAME = sys.argv[1] if len(sys.argv) > 1 else "bead"
+V = VARIANTS[NAME]
+OUT = sys.argv[2] if len(sys.argv) > 2 else f"data/wallpapers/{NAME}.jpg"
+W = int(sys.argv[3]) if len(sys.argv) > 3 else 3840
+H = int(sys.argv[4]) if len(sys.argv) > 4 else 2160
 S = H / 2160  # sizes below are for 2160 high
 rng = np.random.default_rng(7)
 
-BG = np.array([7, 6, 13], float) / 255
+BG = np.array(V["bg"], float) / 255
 # along the string, far to near
-RAMP = [np.array(c, float) / 255 for c in ((40, 200, 230), (70, 110, 255), (130, 70, 255), (200, 50, 230), (255, 50, 150))]
-WARM = np.array([255, 150, 70], float) / 255   # what the light turns into inside the glass
+RAMP = [np.array(c, float) / 255 for c in V["ramp"]]
+WARM = np.array(V["warm"], float) / 255   # what the light turns into inside the glass
 
 
 def ramp(t):
@@ -67,6 +92,12 @@ for i in range(N):
     beads.append(dict(x=px[i] * W, y=py[i] * H, r=r, z=z[i], t=0.15 + 0.85 * u[i] ** 0.8, blur=float(abs(z[i] - focus) * 2.4 * S)))
 # the near one, past the hero: big, off the bottom edge, out of focus
 beads[-1].update(x=0.93 * W, y=1.02 * H, r=360 * S, blur=34 * S, t=1.0)
+if V.get("layout") == "solo":
+    # one big bead low of centre; a few far ones up behind it, softly
+    # (in order along the thread: far ones first)
+    beads = [dict(x=fx * W, y=fy * H, r=fr * S, z=6.0 - k, t=ft, blur=(10 - 2 * k) * S)
+             for k, (fx, fy, fr, ft) in enumerate(((0.20, 0.30, 38, 0.15), (0.30, 0.36, 52, 0.35), (0.42, 0.44, 70, 0.6)))]
+    beads.append(dict(x=0.62 * W, y=0.60 * H, r=470 * S, z=1.0, t=1.0, blur=0.0))
 
 
 def blur(a, r):
@@ -179,6 +210,8 @@ img *= (0.72 + 0.28 * np.clip(yy / (H * 0.22), 0, 1))[..., None]
 img = img / (1 + img * 0.35)  # gentle tone curve so highlights roll off
 img += rng.normal(0, 0.012, (H, W, 1)).astype(np.float32)
 
+if V.get("mirror"):
+    img = img[:, ::-1]
 out = Image.fromarray((np.clip(img, 0, 1) ** (1 / 1.05) * 255 + 0.5).astype(np.uint8), "RGB")
 out.save(OUT, quality=93, subsampling=0, optimize=True)
 print(OUT, W, H)

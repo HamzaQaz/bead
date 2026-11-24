@@ -82,6 +82,8 @@ Singleton {
         if (others.length) pick(others[Math.floor(Math.random() * others.length)]);
     }
     function refresh(): void { lister.running = true; }
+    readonly property list<string> beads: ["bead", "solo", "dusk", "tide", "ember", "mono"]
+    readonly property var own: stills.filter(w => !w.bead)   // the user's, not bead's
 
     // one switch at a time; a pick made meanwhile runs next (the latest wins)
     property var pending: null
@@ -111,16 +113,16 @@ Singleton {
             done`, "sh", root.stillDir, root.workshop, root.engine]
         stdout: StdioCollector {
             onStreamFinished: {
-                // bead's own (data/wallpapers, made by tools/make-wallpaper.py) comes
-                // first, so a first run with no wallpapers of its own starts on it
-                const s = [{ path: Quickshell.shellPath("data/wallpapers/bead.jpg"), name: "bead" }], l = [];
+                const s = [], l = [];
                 for (const line of text.split("\n")) {
                     const f = line.split("\t");
                     if (f[0] === "S" && f[1]) s.push({ path: f[1], name: f[1].split("/").pop().replace(/\.[^.]+$/, "").replace(/^od_/, "").replace(/[_-]+/g, " ") });
                     else if (f[0] === "L" && f.length >= 5) l.push({ id: f[1], type: f[2], preview: f[3], title: f.slice(4).join(" ") });
                 }
                 l.sort((a, b) => a.title.localeCompare(b.title));
-                root.stills = s;
+                // bead's own (data/wallpapers, from tools/make-wallpaper.py) come
+                // first, so a first run with no wallpapers of its own starts on them
+                root.stills = [...root.beads.map(n => ({ path: Quickshell.shellPath("data/wallpapers/" + n + ".jpg"), name: n, bead: true })), ...s];
                 root.lives = l;
                 root.firstPick();
             }
