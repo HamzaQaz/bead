@@ -28,6 +28,11 @@ usage:
   glint choose   TITLE -c A -c B [-c C...]        prints the chosen label; exit 1 if dismissed
   glint promise  TITLE [options] -- COMMAND...    spinner while COMMAND runs, then ✓/✗;
                                                   exits with COMMAND's status
+  glint ask      TITLE --questions JSON           questions in one toast, one after another
+                 (JSON: [{"header","question","multiSelect","options":[{"label","description"}]}],
+                 Claude Code's AskUserQuestion shape). Prints the picks as JSON, one list
+                 of option indexes per question: [[1],[0,2]]. Exit 1 if dismissed, 3 if
+                 the body is clicked. Needs bead running.
 
 options:
   -d, --desc TEXT        body text (the toast expands to show it)
@@ -61,6 +66,7 @@ type opts struct {
 	duration                                                              time.Duration
 	durSet, noExpand, wait, grab                                          bool
 	choices, react                                                        []string
+	questions                                                             string
 	reactLabel                                                            string
 	cmd                                                                   []string
 }
@@ -75,6 +81,20 @@ func main() {
 	switch o.kind {
 	case "promise":
 		os.Exit(promise(o))
+	case "ask":
+		res, ok := viaBead(o, true, nil)
+		if !ok {
+			fmt.Fprintln(os.Stderr, "glint: ask needs bead running")
+			os.Exit(1)
+		}
+		if res == "clicked" {
+			os.Exit(3)
+		}
+		if a, ok := strings.CutPrefix(res, "answers:"); ok {
+			fmt.Println(a)
+			os.Exit(0)
+		}
+		os.Exit(1)
 	case "choose":
 		res := run(o, true, nil)
 		if res == "clicked" {
@@ -112,7 +132,7 @@ func parse(args []string) (*opts, error) {
 	}
 	o.kind = args[0]
 	switch o.kind {
-	case "success", "error", "warning", "info", "loading", "action", "confirm", "choose", "promise":
+	case "success", "error", "warning", "info", "loading", "action", "confirm", "choose", "promise", "ask":
 	default:
 		return nil, fmt.Errorf("unknown type %q", o.kind)
 	}
@@ -180,6 +200,8 @@ func parse(args []string) (*opts, error) {
 			if v, err = next(); err == nil {
 				o.react = append(o.react, v)
 			}
+		case "--questions":
+			o.questions, err = next()
 		case "--react-label":
 			o.reactLabel, err = next()
 		case "--grab":
@@ -209,6 +231,12 @@ func parse(args []string) (*opts, error) {
 	}
 	if o.kind == "choose" && len(o.choices) == 0 {
 		return nil, fmt.Errorf("choose needs at least one --choice")
+	}
+	if o.kind == "ask" {
+		var qs []any
+		if err := json.Unmarshal([]byte(o.questions), &qs); err != nil || len(qs) == 0 {
+			return nil, fmt.Errorf("ask needs --questions with a JSON list of questions")
+		}
 	}
 	if o.kind == "promise" && len(o.cmd) == 0 {
 		return nil, fmt.Errorf("promise needs a command after --")

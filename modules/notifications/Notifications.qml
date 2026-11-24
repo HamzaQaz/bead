@@ -58,6 +58,7 @@ Scope {
     // "timeout") is written to $XDG_RUNTIME_DIR/bead/toast/<id>.result.
     readonly property string toastDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/bead/toast"
     property var reported: ({})
+    function esc(t: string): string { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
     function report(id: string, name: string, text: string): void {
         if (name === "result") {
             if (reported[id]) return;
@@ -81,7 +82,7 @@ Scope {
             let s;
             try { s = JSON.parse(spec); } catch (e) { return "error: bad json"; }
             s.id = String(s.id || Date.now());
-            const interactive = s.type === "confirm" || s.type === "choose" || s.type === "loading";
+            const interactive = s.type === "confirm" || s.type === "choose" || s.type === "loading" || s.type === "ask";
             root.add({ key: ++root.serial, spec: s, sticky: interactive || s.duration === 0 });
             return s.id;
         }
@@ -203,9 +204,11 @@ Scope {
                     readonly property string icon: spec?.icon ?? ""
                     readonly property bool iconIsPath: icon.startsWith("/") || /\.(svg|png|jpe?g|webp)$/i.test(icon)
 
-                    kind: spec ? spec.type : critical ? "error" : "notify"
-                    title: spec ? spec.title : modelData.summary || modelData.appName || "Notification"
-                    desc: spec ? spec.desc ?? "" : modelData.body
+                    kind: spec ? (asking ? "action" : spec.type) : critical ? "error" : "notify"
+                    title: asking ? (question?.header || spec.title) + (questions.length > 1 ? "  ·  " + (step + 1) + "/" + questions.length : "")
+                        : spec ? spec.title : modelData.summary || modelData.appName || "Notification"
+                    desc: asking ? (spec.desc ? spec.desc + "<br>" : "") + root.esc(question?.question ?? "")
+                        : spec ? spec.desc ?? "" : modelData.body
                     iconSource: spec ? (iconIsPath ? "file://" + icon : "")
                         : modelData.image ? modelData.image
                         : modelData.appIcon ? Quickshell.iconPath(modelData.appIcon, true) : ""
@@ -242,6 +245,39 @@ Scope {
                         target: root
                         function onWithdraw(prefix) { if (pill.spec && String(pill.spec.id).startsWith(prefix)) pill.dismiss("dismissed"); }
                     }
+                    // ── questions (`glint ask`): one at a time in this one toast ──
+                    readonly property bool asking: spec?.type === "ask"
+                    readonly property var questions: asking ? spec.questions ?? [] : []
+                    property int step: 0
+                    readonly property var question: questions[step] ?? null
+                    readonly property bool multi: question?.multiSelect === true
+                    property var picks: []   // per question: the option indexes picked
+                    property var sel: []     // this question's ticks (multi-select)
+                    function pick(i: int): void {
+                        if (pill.multi) {
+                            pill.sel = pill.sel.includes(i) ? pill.sel.filter(x => x !== i) : pill.sel.concat([i]).sort();
+                            return;
+                        }
+                        pill.next([i]);
+                    }
+                    function next(chosen: var): void {
+                        const p = pill.picks.slice();
+                        p[pill.step] = chosen;
+                        pill.picks = p;
+                        if (pill.step + 1 < pill.questions.length) {
+                            pill.sel = p[pill.step + 1] ?? [];
+                            pill.step++;
+                            return;
+                        }
+                        const q = pill.question;
+                        pill.answer("answers:" + JSON.stringify(p), "success:" + (pill.questions.length > 1 ? "Answered" : (q.options[chosen[0]]?.label ?? "Answered")));
+                    }
+                    function back(): void {
+                        if (pill.step === 0) return;
+                        pill.sel = pill.picks[pill.step - 1] ?? [];
+                        pill.step--;
+                    }
+
                     function resync(): void {
                         if (!notif) return;
                         Notifs.refresh(modelData.key);
@@ -316,6 +352,131 @@ Scope {
                             fill: 1
                             color: replyField.text.trim() ? Theme.tone("action") : Theme.subtext
                             MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: pill.endReply(true) }
+                        }
+                    }
+                    // moving between questions: the options slide in from the side
+                    // they come from (Next: the right, Back: the left) and fade up
+                    property int shownStep: 0
+                    onStepChanged: {
+                        askCol.from = step > shownStep ? 1 : -1;
+                        shownStep = step;
+                        askSlide.restart();
+                    }
+                    Column {
+                        id: askCol
+                        visible: pill.asking
+                        width: parent?.width ?? 0
+                        spacing: 6
+                        property real from: 1
+                        transform: Translate { id: askShift }
+                        ParallelAnimation {
+                            id: askSlide
+                            NumberAnimation { target: askShift; property: "x"; from: 28 * askCol.from; to: 0; duration: 320; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: askCol; property: "opacity"; from: 0; to: 1; duration: 260; easing.type: Easing.OutQuad }
+                        }
+                        Repeater {
+                            model: pill.question?.options ?? []
+                            delegate: Rectangle {
+                                id: opt
+                                required property var modelData
+                                required property int index
+                                readonly property bool ticked: pill.sel.includes(index)
+                                width: parent.width
+                                height: optText.implicitHeight + 18
+                                radius: 12
+                                color: Qt.alpha(Theme.tone("action"), optMa.containsMouse ? 0.22 : ticked ? 0.18 : 0.1)
+                                border.width: ticked ? 1 : 0
+                                border.color: Qt.alpha(Theme.tone("action"), 0.6)
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                Icon {
+                                    id: tick
+                                    visible: pill.multi
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: opt.ticked ? "check_box" : "check_box_outline_blank"
+                                    fill: opt.ticked ? 1 : 0
+                                    size: 18
+                                    color: Theme.tone("action")
+                                }
+                                Column {
+                                    id: optText
+                                    anchors.left: pill.multi ? tick.right : parent.left
+                                    anchors.leftMargin: pill.multi ? 8 : 12
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 2
+                                    Text {
+                                        width: parent.width
+                                        wrapMode: Text.Wrap
+                                        font.family: Theme.font
+                                        font.pixelSize: 13
+                                        font.weight: Font.Medium
+                                        color: Theme.text
+                                        text: opt.modelData.label ?? ""
+                                    }
+                                    Text {
+                                        visible: text !== ""
+                                        width: parent.width
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 3
+                                        elide: Text.ElideRight
+                                        font.family: Theme.font
+                                        font.pixelSize: 12
+                                        color: Theme.subtext
+                                        text: opt.modelData.description ?? ""
+                                    }
+                                }
+                                MouseArea {
+                                    id: optMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: pill.pick(opt.index)
+                                }
+                            }
+                        }
+                        // Back, and for a multi-select question Next / Send
+                        Item {
+                            visible: pill.step > 0 || pill.multi
+                            width: parent.width
+                            height: 32
+                            Rectangle {
+                                visible: pill.step > 0
+                                width: backLbl.implicitWidth + 28
+                                height: 32
+                                radius: 16
+                                color: Qt.alpha(Theme.neutral, backMa.containsMouse ? 0.25 : 0.15)
+                                Text {
+                                    id: backLbl
+                                    anchors.centerIn: parent
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.Medium
+                                    color: Theme.text
+                                    text: "Back"
+                                }
+                                MouseArea { id: backMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pill.back() }
+                            }
+                            Rectangle {
+                                visible: pill.multi
+                                anchors.right: parent.right
+                                width: parent.width - (pill.step > 0 ? backLbl.implicitWidth + 36 : 0)
+                                height: 32
+                                radius: 16
+                                opacity: pill.sel.length ? 1 : 0.45
+                                color: Qt.alpha(Theme.tone("action"), nextMa.containsMouse && pill.sel.length ? 0.3 : 0.2)
+                                Text {
+                                    anchors.centerIn: parent
+                                    font.family: Theme.font
+                                    font.pixelSize: 12
+                                    font.weight: Font.Medium
+                                    color: Theme.tone("action")
+                                    text: pill.step + 1 < pill.questions.length ? "Next" : "Send"
+                                }
+                                MouseArea { id: nextMa; anchors.fill: parent; hoverEnabled: true; cursorShape: pill.sel.length ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: if (pill.sel.length) pill.next(pill.sel) }
+                            }
                         }
                     }
                     // promise toasts: the CLI rewrites this file when its command ends

@@ -178,20 +178,12 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 	[ "$n" -ge 1 ] || exit 0
 	wait_turn 2 200 || { rm -f "$qmark"; exit 0; }
 	[ -f "$qmark" ] || { done_turn 0; exit 0; } # answered while queued
-	q=$(jq -r '.tool_input.questions[0].question' <<<"$in")
-	hdr=$(jq -r '.tool_input.questions[0].header // "Question"' <<<"$in")
-	args=()
-	# one question, one pick: its options as buttons; otherwise just a way to the terminal
-	if [ "$n" = 1 ] && [ "$(get '.tool_input.questions[0].multiSelect')" != true ]; then
-		while IFS= read -r l; do args+=(-c "$l"); done < <(jq -r '.tool_input.questions[0].options[].label' <<<"$in")
-	else
-		[ "$n" -gt 1 ] && hdr="$n questions"
-		args=(-c "Answer in terminal")
-	fi
-	log "showing question toast"
+	# all the questions in one toast, one after another: full-width options
+	# with their descriptions, ticks for the pick-several ones
 	out=$(mktemp)
-	glint choose "$hdr" -d "$(body "$(esc <<<"$q")")" "${args[@]}" --react-label success \
-		-i "✻" -p top-right -t 280s >"$out" 2>/dev/null &
+	log "showing question toast ($n)"
+	glint ask "Question" --questions "$(jq -c '.tool_input.questions' <<<"$in")" \
+		-d "$(printf '<b>%s</b>' "$(esc <<<"$session")")" -i "✻" -p top-right -t 280s >"$out" 2>/dev/null &
 	tp=$!
 	echo "$$ $tp" >"$qmark"
 	while kill -0 "$tp" 2>/dev/null; do
@@ -213,18 +205,42 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 		[ $rc = 3 ] && go_terminal
 		exit 0
 	fi
-	ans=$(cat "$out"); rm -f "$out" "$qmark"
+	picks=$(cat "$out"); rm -f "$out" "$qmark"
+	jq -e --argjson n "$n" 'type == "array" and length == $n' <<<"$picks" >/dev/null 2>&1 || exit 0
 	done_turn 1500
-	# take the pick to the terminal: focus it and press the option's number
+	# take the picks to the terminal: focus it, then each question in turn
+	# (arrows: number keys don't select there). One pick: its option, and it
+	# moves on. Several: Enter ticks each, then the row after "Type
+	# something" (Next, or Submit when it's the only question). After the
+	# last of several questions a review screen opens on Submit.
 	w=$(claude_window_pid) || exit 0
 	hyprctl dispatch "hl.dsp.focus({ window = \"pid:$w\" })" >/dev/null # Lua-config Hyprland
-	[ "$ans" = "Answer in terminal" ] && exit 0
-	i=$(jq -r --arg a "$ans" '.tool_input.questions[0].options | map(.label) | index($a) // empty' <<<"$in")
-	[ -n "$i" ] || exit 0
 	sleep 0.25
-	log "typing option $((i + 1)) into the terminal"
-	for ((k = 0; k < i; k++)); do wtype -k Down; sleep 0.05; done # number keys don't select here
-	sleep 0.1; wtype -k Return
+	# only ever type into that terminal
+	[ "$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty')" = "$w" ] || { log "terminal didn't take focus: not typing"; exit 0; }
+	log "typing $picks into the terminal"
+	down() { for ((k = 0; k < $1; k++)); do wtype -k Down; sleep 0.05; done; }
+	for ((qi = 0; qi < n; qi++)); do
+		opts=$(jq --argjson i "$qi" '.tool_input.questions[$i].options | length' <<<"$in")
+		cur=0
+		if [ "$(jq --argjson i "$qi" '.tool_input.questions[$i].multiSelect == true' <<<"$in")" = true ]; then
+			for i in $(jq -r --argjson i "$qi" '.[$i] | sort | .[]' <<<"$picks"); do
+				down $((i - cur)); cur=$i
+				sleep 0.1; wtype -k Return; sleep 0.15
+			done
+			down $((opts + 1 - cur)) # past "Type something" to Next / Submit
+		else
+			down "$(jq -r --argjson i "$qi" '.[$i][0]' <<<"$picks")"
+		fi
+		sleep 0.1; wtype -k Return; sleep 0.35
+	done
+	if [ "$n" -gt 1 ]; then
+		wtype -k Return # Submit answers
+	elif [ "$(jq '.tool_input.questions[0].multiSelect == true' <<<"$in")" = true ]; then
+		# one pick-several question: if a review screen opened, it's on Submit
+		sleep 1.2
+		settled || wtype -k Return
+	fi
 	;;
 
 Stop)

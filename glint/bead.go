@@ -36,6 +36,12 @@ func viaBead(o *opts, wait bool, extraEnv []string, onLine ...func(string)) (str
 		"icon":     expandHome(o.icon),
 		"buttons":  beadButtons(o),
 	}
+	if o.questions != "" {
+		var qs any
+		if json.Unmarshal([]byte(o.questions), &qs) == nil {
+			spec["questions"] = qs
+		}
+	}
 	if o.noExpand {
 		spec["autopilot"] = false
 	}
