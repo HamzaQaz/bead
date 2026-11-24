@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 
 // Installed apps (.desktop entries), fuzzy search, and how often each was
@@ -109,6 +110,24 @@ Singleton {
         used(e);
         const cmd = e.command.map(a => /^[\w@%+=:,./-]+$/.test(a) ? a : "'" + a.replace(/'/g, "'\\''") + "'").join(" ");
         Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.exec_cmd(${JSON.stringify(`[workspace ${ws}] ${cmd}`)})`]);
+        // an app that's already running (Thunar, browsers) opens its window
+        // from the old process, which the rule doesn't catch: move it there
+        expected = [...expected.filter(x => x.until > Date.now()), { id: e.id, ws: ws, until: Date.now() + 15000 }];
+    }
+    property var expected: []   // { id, ws, until }: windows we launched onto a workspace
+    Connections {
+        target: Hyprland
+        enabled: root.expected.length > 0
+        function onRawEvent(ev: HyprlandEvent): void {
+            if (ev.name !== "openwindow") return;
+            const [addr, ws, cls] = ev.data.split(",");
+            const now = Date.now();
+            const id = root.entryFor(cls)?.id;
+            const hit = root.expected.find(x => x.until > now && x.id === id);
+            root.expected = root.expected.filter(x => x !== hit && x.until > now);
+            if (hit && ws !== String(hit.ws))
+                Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.move({ workspace = "${hit.ws}", window = "address:0x${addr}", follow = false })`]);
+        }
     }
     function used(e: DesktopEntry): void {
         const c = Object.assign({}, counts);
