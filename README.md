@@ -8,7 +8,7 @@ A desktop shell for [Hyprland](https://hyprland.org), built with
 a bar, an island at the top of the screen that grows into a launcher, a
 dashboard, a lock screen and notifications, all coloured by your wallpaper.
 
-![bead's welcome: "bead." written by hand over a soft gradient](docs/screenshots/welcome.webp)
+![bead's welcome card, the first thing a new install shows](docs/screenshots/welcome.webp)
 
 | | |
 |---|---|
@@ -23,7 +23,7 @@ Hyprland 0.57 or newer (the Lua config).
 
 ```sh
 git clone https://github.com/HamzaQaz/bead && cd bead
-./install.sh            # or ./install.sh --dry-run to look around first
+./install.sh            # a window in a graphical session; --tui for the terminal, --dry-run to look around
 ```
 
 Or from the AUR, then `bead-setup` once for your keybinds and the optional parts:
@@ -32,15 +32,18 @@ Or from the AUR, then `bead-setup` once for your keybinds and the optional parts
 paru -S bead-shell-git && bead-setup
 ```
 
-`install.sh` builds **strand**, a small installer (Go, Bubble Tea), and runs it.
-strand checks what you have, lets you choose the optional parts, shows the
+In a graphical session `install.sh` installs Quickshell first, then opens
+bead's installer as a window: welcome, choose the parts, review, your
+password once (handed to sudo, never saved), then live progress. Underneath,
+and in a terminal (`--tui`, over SSH, `--yes`), it's **strand**, a small
+installer (Go, Bubble Tea). strand checks what you have, lets you choose the optional parts, shows the
 whole plan (packages, downloads, files it will touch), and only then
 installs. Packages come from pacman, and from the AUR through `paru` or `yay`.
 Any file strand edits gets backed up first (`*.bak-strand-<time>`).
 
 Then start it with `bead start`, or log out and back in. If something
 doesn't work, `bead doctor` lists what's missing and how to fix it (the same
-check is in Settings → System).
+check is in Settings → About bead).
 
 ### Keeping it up to date, or taking it off
 
@@ -129,8 +132,8 @@ bead voice list | run NAME | edit   # your voice commands
 ```
 
 - Wallpapers live in `~/Pictures/Wallpapers`. Pick one from the dashboard.
-- Settings live in the dashboard's Settings tab. They're saved to `~/.config/bead/settings.json`.
-- `BEAD_SCALE` sets the UI scale (Settings → Looks → Size otherwise).
+- Settings have their own window: the launcher ("settings"), the dashboard, or `bead settings [page]`. They're saved to `~/.config/bead/settings.json`.
+- `BEAD_SCALE` sets the UI scale (Settings → Appearance → Size otherwise).
 
 ## Layout
 

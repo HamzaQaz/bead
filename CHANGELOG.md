@@ -3,6 +3,19 @@
 bead follows [Semantic Versioning](https://semver.org). Each release's
 section is what `bead update` shows as "what's new".
 
+## Unreleased
+
+- Settings is a window of its own, like a desktop's settings app: Wi-Fi,
+  Bluetooth, Sound, Displays, Wallpaper, Appearance, Notifications, Night
+  light, Power & idle, Assistant, Keyboard shortcuts, Updates and About, with
+  a search across all of them. Open it from the launcher, the dashboard, or
+  `bead settings [page]`.
+- A graphical installer: `./install.sh` opens a window in a graphical session
+  (the terminal installer is still there with `--tui`).
+- The album cover fills the background of the media tab, the dashboard's
+  player and the island's media card; the weather's sky spans the whole tab.
+- New wallpapers: glossy ribbons of colour with a glass bead among them.
+
 ## 0.1.0
 
 The first release: a whole desktop shell for Hyprland, built with Quickshell.

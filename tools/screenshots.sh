@@ -27,7 +27,9 @@ EOF
 
 # an empty workspace to stage on, then back to where you were
 was=$(hyprctl monitors -j | jq -r --arg m "$mon" '.[] | select(.name == $m) | .activeWorkspace.name')
-used=$(hyprctl workspaces -j | jq -r '.[] | select(.windows > 0) | .id')
+# not one with windows, and not one another monitor is showing (focusing
+# that would jump to the other monitor instead of bringing it here)
+used=$(hyprctl workspaces -j | jq -r '.[] | select(.windows > 0) | .id'; hyprctl monitors -j | jq -r '.[].activeWorkspace.id')
 ws=
 for i in 9 8 7 6 10 11 12; do echo "$used" | grep -qx "$i" || { ws=$i; break; }; done
 [ -n "$ws" ] || { echo "no empty workspace to stage on" >&2; exit 1; }
