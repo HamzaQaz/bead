@@ -13,7 +13,9 @@ q() { git -C "$1" "${@:2}" >/dev/null 2>&1; }
 
 # origin: this working copy (as git sees it), released as v0.1.0
 mkdir -p "$T/origin"
-git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' f; do
+# safe.directory: HOME is the throwaway one, so CI's ~/.gitconfig (which trusts
+# a checkout owned by another user) is not read
+git -c safe.directory="$PWD" ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' f; do
 	if [ -e "$f" ]; then cp --parents "$f" "$T/origin"; fi
 done
 cp shaders/*.qsb "$T/origin/shaders/" 2>/dev/null
