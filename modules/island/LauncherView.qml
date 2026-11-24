@@ -577,11 +577,41 @@ Item {
                 }
                 else if (e.key === Qt.Key_Escape) { root.close(); e.accepted = true; }
             }
-            Label {
+            // the placeholder: in a mode, what it searches; otherwise "Search apps"
+            // and, faintly after it, one of the other things to type, a new one
+            // every few seconds (all of them at once was a wall of symbols)
+            Row {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !field.text && !field.preeditText
-                font.pixelSize: 15
-                text: root.acting ? "Pick one, or type a workspace number" : root.modes[root.mode]?.hint ?? "Search apps, = maths, > actions, ; clipboard, : emoji, # keys, ? ask Claude"
+                spacing: 14
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    font.pixelSize: 15
+                    text: root.acting ? "Pick one, or type a workspace number" : root.modes[root.mode]?.hint ?? "Search apps"
+                }
+                Row {
+                    id: tip
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: !root.acting && !root.mode
+                    spacing: 6
+                    readonly property var tips: [["=", "maths"], ["+", "install apps"], [";", "clipboard"], [">", "actions"], ["/", "files"], [":", "emoji"], ["#", "keys"], ["?", "ask Claude"]]
+                    property int at: 0
+                    readonly property var cur: tips[at % tips.length]
+                    Timer {
+                        interval: 3200
+                        repeat: true
+                        running: tip.visible && root.visible
+                        onTriggered: tipSwap.restart()
+                    }
+                    SequentialAnimation {
+                        id: tipSwap
+                        NumberAnimation { target: tip; property: "opacity"; to: 0; duration: 180; easing.type: Easing.InQuad }
+                        ScriptAction { script: tip.at++ }
+                        NumberAnimation { target: tip; property: "opacity"; to: 1; duration: 260; easing.type: Easing.OutQuad }
+                    }
+                    Key { text: tip.cur[0]; anchors.verticalCenter: parent.verticalCenter }
+                    Label { text: tip.cur[1]; font.pixelSize: 13; opacity: 0.6; anchors.verticalCenter: parent.verticalCenter }
+                }
             }
         }
     }
