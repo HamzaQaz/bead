@@ -89,7 +89,13 @@ Singleton {
                 0.75 * score(q, (e.genericName ?? "").toLowerCase()),
                 0.7 * Math.max(0, ...(e.keywords ?? []).map(k => score(q, k.toLowerCase()))),
                 0.5 * score(q, (e.id ?? "").toLowerCase()));
-            if (s > 0) out.push({ e: e, s: s + Math.log2(1 + used(e)) * 6 });
+            if (s <= 0) continue;
+            const id = (e.id ?? "").toLowerCase().replace(/\.desktop$/, "");
+            // "thunar" is thunar.desktop, not Thunar Preferences: the app the
+            // name is for wins, and an app's settings only when asked for
+            const exact = id === q || id.split(".").pop() === q ? 40 : 0;
+            const settings = /\b(preferences|settings|configur)/i.test(e.name) && !/\b(preferences|settings|config)/.test(q) ? 25 : 0;
+            out.push({ e: e, s: s + exact - settings + Math.log2(1 + used(e)) * 6 });
         }
         return out.sort((a, b) => b.s - a.s).map(x => x.e);
     }
