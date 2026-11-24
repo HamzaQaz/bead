@@ -90,12 +90,30 @@ Item {
     readonly property var curWins: Ov.readingOrder((spaces[current]?.toplevels.values ?? []).filter(t => !t.lastIpcObject?.hidden), t => t.lastIpcObject?.at)
     readonly property var picked: pick >= 0 ? curWins[pick] ?? null : hoverWin
     function addr(t: var): string { const a = String(t.address); return "address:" + (a.startsWith("0x") ? a : "0x" + a); }
+    property var floatedToPin: ({})   // windows floated only so they could be pinned
     function act(kind: string, t: var): void {
         if (!t) return;
         const name = t.title || t.wayland?.appId || "window";
         const w = `window = "${addr(t)}"`;
         if (kind === "float") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.float({ action = "toggle", ${w} })`]); caption = (t.lastIpcObject?.floating ? "Tiled " : "Floating ") + name; }
-        else if (kind === "pin") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.pin({ ${w} })`]); caption = (t.lastIpcObject?.pinned ? "Unpinned " : "Pinned ") + name; }
+        else if (kind === "pin") {
+            // Hyprland pins only floating windows: float a tiled one first,
+            // and tile it again when it's unpinned
+            const ipc = t.lastIpcObject ?? {};
+            const key = addr(t);
+            const pin = `hl.dsp.window.pin({ ${w} })`;
+            const fl = `hl.dsp.window.float({ action = "toggle", ${w} })`;
+            if (ipc.pinned) {
+                const back = !!floatedToPin[key];
+                Quickshell.execDetached(["sh", "-c", back ? 'hyprctl dispatch "$1" && hyprctl dispatch "$2"' : 'hyprctl dispatch "$1"', "sh", pin, fl]);
+                const f = Object.assign({}, floatedToPin); delete f[key]; floatedToPin = f;
+                caption = "Unpinned " + name;
+            } else {
+                Quickshell.execDetached(["sh", "-c", ipc.floating ? 'hyprctl dispatch "$2"' : 'hyprctl dispatch "$1" && hyprctl dispatch "$2"', "sh", fl, pin]);
+                if (!ipc.floating) { const f = Object.assign({}, floatedToPin); f[key] = true; floatedToPin = f; }
+                caption = "Pinned " + name;
+            }
+        }
         else if (kind === "close") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.close({ ${w} })`]); caption = "Closed " + name; if (hoverWin === t) hoverWin = null; }
         refreshTimer.restart();
     }
