@@ -23,6 +23,7 @@ Scope {
     property string size: String(Settings.scale) // applied at the end: it needs a restart
     property bool murmur: false
     property real ready: 1   // 0 → 1 as the intro hands over: the words and buttons come in
+    property bool bloomed: true // the intro's shape has become the card
 
     readonly property string flag: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/bead/welcomed"
     FileView {
@@ -38,7 +39,7 @@ Scope {
         onExited: code => root.murmur = code === 0
     }
 
-    function show(): void { step = 0; size = String(Settings.scale); hasMurmur.running = true; ready = 0; open = true; intro.restart(); }
+    function show(): void { step = 0; size = String(Settings.scale); hasMurmur.running = true; ready = 0; bloomed = false; open = true; intro.restart(); }
     function finish(): void {
         open = false;
         Quickshell.execDetached(["sh", "-c", 'mkdir -p "$(dirname "$1")" && : > "$1"', "sh", flag]);
@@ -52,6 +53,11 @@ Scope {
         if (step < steps - 1) step++; else finish();
     }
     function back(): void { if (step > 0) step--; }
+    // where the intro ends, however it got there (played out, or skipped)
+    function introEnd(): void {
+        stage.dark = 0; traced.opacity = 0; morph.opacity = 0;
+        hand.reveal = 1; hand.born = 1; ready = 1; bloomed = true;
+    }
 
     IpcHandler {
         target: "welcome"
@@ -78,6 +84,80 @@ Scope {
             Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
         }
 
+        // ── the intro's stage (docs/ideas/welcome-intro.md): on black, a bead
+        // rises to the top edge, becomes the island's pill, light runs out of it
+        // round the screen's frame, the black lifts and the pill blooms into the card ──
+        Item {
+            id: stage
+            anchors.fill: parent
+            visible: intro.running || morph.opacity > 0.01
+            readonly property real wallW: Theme.frameThickness / win.devicePixelRatio
+            readonly property real leftW: wallW + 40 // the bar
+            // from the screen, not this item: the window may not have its size
+            // yet when the intro starts
+            readonly property real sw: win.screen?.width ?? width
+            readonly property real sh: win.screen?.height ?? height
+            readonly property real cx: sw / 2
+            readonly property color accent: Theme.tone("action")
+            property real dark: 0     // the black
+            property real trace: 0    // 0 → 1: the frame drawn, top, then sides, then bottom
+            property real settle: 0   // 0 → 1: the traced light turns into the frame's colour
+            function leg(a: real, b: real): real { return Math.max(0, Math.min(1, (trace - a) / (b - a))); }
+            function mix(a: color, b: color, t: real): color { return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1); }
+            // the frame's own colour, with a hairline of light along its inner edge
+            component Leg: Rectangle {
+                id: leg
+                property string inner: "bottom" // which edge faces the screen
+                color: Theme.frame
+                Rectangle {
+                    color: stage.accent
+                    opacity: 1 - stage.settle
+                    width: leg.inner === "left" || leg.inner === "right" ? 2 : leg.width
+                    height: leg.inner === "top" || leg.inner === "bottom" ? 2 : leg.height
+                    x: leg.inner === "right" ? leg.width - 2 : 0
+                    y: leg.inner === "bottom" ? leg.height - 2 : 0
+                    layer.enabled: true
+                    layer.effect: MultiEffect { shadowEnabled: true; shadowColor: stage.accent; shadowBlur: 0.6; shadowHorizontalOffset: 0; shadowVerticalOffset: 0 }
+                }
+            }
+
+            Rectangle { anchors.fill: parent; color: "black"; opacity: stage.dark }
+
+            Item { // the frame, traced
+                id: traced
+                anchors.fill: parent
+                readonly property real t1: stage.leg(0, 0.42)
+                readonly property real t2: stage.leg(0.34, 0.76)
+                readonly property real t3: stage.leg(0.68, 1)
+                Leg { x: stage.cx - width; width: stage.cx * traced.t1; height: stage.wallW; inner: "bottom" }
+                Leg { x: stage.cx; width: (stage.sw - stage.cx) * traced.t1; height: stage.wallW; inner: "bottom" }
+                Leg { width: stage.leftW; height: stage.sh * traced.t2; inner: "right" }
+                Leg { x: stage.sw - stage.wallW; width: stage.wallW; height: stage.sh * traced.t2; inner: "left" }
+                Leg { y: stage.sh - stage.wallW; width: stage.cx * traced.t3; height: stage.wallW; inner: "top" }
+                Leg { x: stage.sw - width; y: stage.sh - stage.wallW; width: (stage.sw - stage.cx) * traced.t3; height: stage.wallW; inner: "top" }
+            }
+
+            Rectangle { // the bead, the pill, the card
+                id: morph
+                property real glow: 1  // 1 the accent, 0 the island's own colour
+                property real toCard: 0 // 0 → 1: the island's colour → the card's
+                color: stage.mix(stage.mix(Theme.frame, stage.accent, glow), Theme.fill, toCard)
+                border.width: 1
+                border.color: Qt.alpha(Theme.text, 0.07 * toCard)
+                antialiasing: true
+                // a soft halo of its own light while it's the bead
+                layer.enabled: glow > 0.01
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: Qt.alpha(stage.accent, 0.9 * morph.glow)
+                    shadowBlur: 1
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                    autoPaddingEnabled: true
+                }
+            }
+        }
+
         Rectangle {
             id: card
             anchors.centerIn: parent
@@ -87,7 +167,7 @@ Scope {
             color: Theme.fill
             border.width: 1
             border.color: Qt.alpha(Theme.text, 0.07)
-            opacity: root.open ? 1 : 0
+            opacity: root.open && root.bloomed ? 1 : 0
             scale: root.open ? 1 : 0.92
             Behavior on opacity { NumberAnimation { duration: 260 } }
             Behavior on scale { SpringAnimation { spring: 4; damping: 0.36; epsilon: 0.002 } }
@@ -132,45 +212,78 @@ Scope {
                 from: Qt.lighter(Theme.tone("action"), 1.25)
                 to: Qt.lighter(Theme.c("secondary", "#9a8fe0"), 1.2)
             }
-            // first, on a dark card: a field of dots spreads out from where the
-            // full stop will be, a ripple of light running through it, and an
-            // aurora comes down behind; the letters come into focus one by
-            // one; the dot at the middle of it all grows into the bead (a
-            // second ripple leaves it) and a shine crosses the word. Then the
-            // title rises, the dots and aurora fade to the glow and the rest
-            // comes in
+            // the intro: see the stage above. Any key skips to its end (introEnd)
             SequentialAnimation {
                 id: intro
-                ScriptAction { script: { fx.flood = 0; fx.gather = 0; fx.phase = 0; fx.aurora = 0; fx.grid = 0; fx.dots = 1; fx.wave = 0; hand.reveal = 0; hand.born = 0; hand.shine = 0; hand.opacity = 1; hand.glow = 1; hand.shift = 0; hand.height = 120; hand.cy = card.height / 2; } }
-                PauseAnimation { duration: 250 }
+                ScriptAction { script: {
+                    fx.flood = 0; fx.gather = 0; fx.phase = 0; fx.aurora = 0; fx.grid = 0; fx.dots = 0; fx.wave = 0;
+                    hand.reveal = 0; hand.born = 0; hand.shine = 0; hand.opacity = 1; hand.glow = 1; hand.shift = 0; hand.height = 84; hand.cy = hand.rest;
+                    stage.dark = 1; stage.trace = 0; stage.settle = 0; traced.opacity = 1;
+                    morph.width = 0; morph.height = 0; morph.radius = 0; morph.x = stage.cx; morph.y = stage.sh * 0.55;
+                    morph.glow = 1; morph.toCard = 0; morph.opacity = 1;
+                } }
+                PauseAnimation { duration: 150 }
+                // a bead, in the middle of the dark
                 ParallelAnimation {
-                    NumberAnimation { target: fx; property: "grid"; to: 1; duration: 1300; easing.type: Easing.OutCubic }
-                    NumberAnimation { target: fx; property: "wave"; to: 1; duration: 1700; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: fx; property: "aurora"; to: 1; duration: 1900; easing.type: Easing.InOutSine }
+                    NumberAnimation { target: morph; properties: "width,height"; to: 26; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                    NumberAnimation { target: morph; property: "radius"; to: 13; duration: 260 }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 13; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                    NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.55 - 13; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                }
+                PauseAnimation { duration: 120 }
+                // rises to the top edge, quicker as it goes
+                NumberAnimation { target: morph; property: "y"; to: stage.wallW; duration: 420; easing.type: Easing.InCubic }
+                // meets it: squashes flat against it
+                ParallelAnimation {
+                    NumberAnimation { target: morph; property: "height"; to: 16; duration: 110; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "width"; to: 30; duration: 110; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 15; duration: 110; easing.type: Easing.OutQuad }
+                }
+                // and spreads into the island's pill; light runs out of it round the frame
+                ParallelAnimation {
+                    NumberAnimation { target: morph; property: "width"; to: 160; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 80; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                    NumberAnimation { target: morph; property: "height"; to: 34; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
+                    NumberAnimation { target: morph; property: "radius"; to: 17; duration: 520 }
                     SequentialAnimation {
-                        PauseAnimation { duration: 550 }
-                        NumberAnimation { target: hand; property: "reveal"; to: 1; duration: 1100; easing.type: Easing.Linear }
+                        PauseAnimation { duration: 120 }
+                        NumberAnimation { target: stage; property: "trace"; to: 1; duration: 820; easing.type: Easing.InOutCubic }
                     }
                 }
-                ScriptAction { script: fx.wave = 0 }
+                // the dark lifts; the light settles into the frame and gives way to it
                 ParallelAnimation {
-                    NumberAnimation { target: hand; property: "born"; to: 1; duration: 460; easing.type: Easing.OutBack; easing.overshoot: 2.6 }
-                    NumberAnimation { target: fx; property: "wave"; to: 1; duration: 1100; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: stage; property: "dark"; to: 0; duration: 560; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: stage; property: "settle"; to: 1; duration: 560; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "glow"; to: 0; duration: 560; easing.type: Easing.InOutQuad }
                     SequentialAnimation {
-                        PauseAnimation { duration: 200 }
-                        NumberAnimation { target: hand; property: "shine"; to: 1; duration: 800; easing.type: Easing.InOutQuad }
+                        PauseAnimation { duration: 300 }
+                        NumberAnimation { target: traced; property: "opacity"; to: 0; duration: 380 }
                     }
                 }
+                // the pill blooms down into the card
                 ParallelAnimation {
-                    NumberAnimation { target: hand; property: "cy"; to: hand.rest; duration: 1000; easing.type: Easing.InOutCubic }
-                    NumberAnimation { target: hand; property: "height"; to: 84; duration: 1000; easing.type: Easing.InOutCubic }
-                    NumberAnimation { target: fx; property: "aurora"; to: 0; duration: 1300; easing.type: Easing.InOutQuad }
-                    NumberAnimation { target: fx; property: "dots"; to: 0; duration: 1000; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "x"; to: (stage.sw - card.width) / 2; duration: 560; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: morph; property: "y"; to: (stage.sh - card.height) / 2; duration: 560; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: morph; property: "width"; to: card.width; duration: 560; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: morph; property: "height"; to: card.height; duration: 560; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: morph; property: "radius"; to: card.radius; duration: 560; easing.type: Easing.OutQuint }
+                    NumberAnimation { target: morph; property: "toCard"; to: 1; duration: 420 }
+                }
+                // the card takes over; "bead." comes into focus on it, then the rest
+                ScriptAction { script: root.bloomed = true }
+                ParallelAnimation {
+                    NumberAnimation { target: morph; property: "opacity"; to: 0; duration: 260 }
+                    NumberAnimation { target: hand; property: "reveal"; to: 1; duration: 700; easing.type: Easing.Linear }
                     SequentialAnimation {
-                        PauseAnimation { duration: 700 } // the word clears the subtitle first
-                        NumberAnimation { target: root; property: "ready"; to: 1; duration: 700; easing.type: Easing.OutCubic }
+                        PauseAnimation { duration: 450 }
+                        NumberAnimation { target: hand; property: "born"; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 2.4 }
+                    }
+                    SequentialAnimation {
+                        PauseAnimation { duration: 350 }
+                        NumberAnimation { target: root; property: "ready"; to: 1; duration: 600; easing.type: Easing.OutCubic }
                     }
                 }
+                onStopped: root.introEnd()
             }
             // between steps: the title fades out (and back on the first step),
             // and the lights drift a little, so pages flow into one another
