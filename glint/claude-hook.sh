@@ -4,6 +4,8 @@
 #   PreToolUse (AskUserQuestion)  the terminal shows the question at once; a toast
 #                                 offers the same options and types the pick there
 #   PostToolUse (AskUserQuestion) answered in the terminal: withdraw that toast
+#                                 (declined with Esc: the worker sees the answer in
+#                                 the transcript and withdraws it too)
 #   Stop                          "Claude finished" + the start of its reply, every turn
 #   Notification                  passive toast (sign-in, usage limit; "waiting" only
 #                                 when no "finished" toast went out for that turn)
@@ -79,6 +81,7 @@ wait_turn() {
 		first=$(ls "$queue" | sort | head -1)
 		[ "$queue/$first" = "$ticket" ] && screen_free && return 0
 		focused && { log "terminal focused while queued"; return 1; }
+		[ "$1" = 2 ] && settled && { log "question settled while queued"; return 1; }
 		((SECONDS - start > $2)) && { log "gave up waiting in queue"; return 1; }
 		sleep 0.25
 	done
@@ -96,6 +99,13 @@ withdraw_question() {
 	[ -n "$w" ] && kill "$w" 2>/dev/null
 	[ -n "$t" ] && { qs -p "${XDG_DATA_HOME:-$HOME/.local/share}/bead" ipc call toast close "$t-" >/dev/null 2>&1; kill "$t" 2>/dev/null; }
 	log "question answered in the terminal: toast withdrawn"
+}
+# this question has an answer in the transcript (picked, declined with Esc,
+# interrupted: Esc sends no PostToolUse or Stop, so watch for the result)
+tuid=$(get .tool_use_id)
+settled() {
+	[ -n "$tuid" ] && [ -f "$(get .transcript_path)" ] &&
+		tail -c 400000 "$(get .transcript_path)" | grep -qF "\"tool_use_id\":\"$tuid\""
 }
 # the window running this session, by its process
 claude_window_pid() {
@@ -116,7 +126,7 @@ go_terminal() {
 }
 
 case $event in
-PostToolUse) [ "$(get .tool_name)" = AskUserQuestion ] && withdraw_question; exit 0 ;;
+PostToolUse | PostToolUseFailure) [ "$(get .tool_name)" = AskUserQuestion ] && withdraw_question; exit 0 ;;
 Stop) withdraw_question ;; # the turn ended (a question declined with Esc, say)
 esac
 
@@ -184,7 +194,19 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 		-i "✻" -p top-right -t 280s >"$out" 2>/dev/null &
 	tp=$!
 	echo "$$ $tp" >"$qmark"
+	while kill -0 "$tp" 2>/dev/null; do
+		if settled; then
+			rm -f "$qmark" "$out"
+			qs -p "${XDG_DATA_HOME:-$HOME/.local/share}/bead" ipc call toast close "$tp-" >/dev/null 2>&1
+			kill "$tp" 2>/dev/null
+			log "question settled in the terminal: toast withdrawn"
+			done_turn 900
+			exit 0
+		fi
+		sleep 0.5
+	done
 	wait "$tp"; rc=$?
+	settled && { rm -f "$qmark" "$out"; done_turn 900; exit 0; } # too late to type: it's answered
 	if [ $rc != 0 ]; then # dismissed (or clicked: go there): the terminal still asks
 		rm -f "$qmark" "$out"
 		done_turn 900
