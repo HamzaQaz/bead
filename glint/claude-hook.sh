@@ -94,7 +94,7 @@ event=$(get .hook_event_name)
 qmark=$marks/$(get .session_id).q # "<worker pid> <toast pid>" while a question toast is up
 withdraw_question() {
 	local w t
-	read -r w t <"$qmark" 2>/dev/null || return 0
+	[ -f "$qmark" ] && read -r w t <"$qmark" || return 0
 	rm -f "$qmark"
 	[ -n "$w" ] && kill "$w" 2>/dev/null
 	[ -n "$t" ] && { qs -p "${XDG_DATA_HOME:-$HOME/.local/share}/bead" ipc call toast close "$t-" >/dev/null 2>&1; kill "$t" 2>/dev/null; }
