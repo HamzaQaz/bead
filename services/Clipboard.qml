@@ -3,11 +3,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "pins.js" as Pins
 
 // Clipboard history (cliphist, fed by wl-paste --watch). `load()` reads the
 // list; pick() copies an entry back and pastes it into the window you were
 // in (wtype; Ctrl+Shift+V in terminals); remove() deletes it. Images get a
-// cached thumbnail in ~/.cache/bead/clip.
+// cached thumbnail in ~/.cache/bead/clip. Pins (pins.js) are text you paste
+// again and again: kept in ~/.config/bead/clips.json, shown on top of the
+// history (`list`), and never expiring.
 Singleton {
     id: root
 
@@ -15,6 +18,38 @@ Singleton {
     //         type: image | secret | colour | link | path | command | code | number | text }
     property list<var> entries: []
     property bool loading: false
+
+    // ── pins ──
+    property var pins: []   // [{ id, text, added }], newest first
+    // what the picker shows: pins, then the history without what's pinned
+    readonly property list<var> list: Pins.rows(pins, entries, "", t => root.typeOf(t))
+    function savePins(next: var): void {
+        pins = next;
+        pinFile.setText(Pins.serialise(next)); // our own write doesn't come back through the watcher
+    }
+    // pin a history entry (its whole text, not the list's preview); returns "" or why not
+    function pin(e: var): string {
+        const why = Pins.whyNot(e);
+        if (why) return why;
+        const p = Qt.createQmlObject('import Quickshell.Io; Process { stdout: StdioCollector {} }', root);
+        p.command = ["sh", "-c", 'printf "%s\\n" "$1" | cliphist decode | head -c 20000', "sh", e.line];
+        p.stdout.streamFinished.connect(() => {
+            root.savePins(Pins.add(root.pins, p.stdout.text || e.text, Date.now()));
+            Qt.callLater(() => p.destroy());
+        });
+        p.running = true;
+        return "";
+    }
+    function unpin(e: var): void { savePins(Pins.remove(pins, e.pin)); }
+    FileView {
+        id: pinFile
+        path: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/bead/clips.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.pins = Pins.parse(text())
+        onLoadFailed: root.pins = []
+    }
     readonly property string cacheDir: (Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache") + "/bead/clip"
 
     // Opening `;` shows what's already here at once and refreshes quietly behind
@@ -83,7 +118,7 @@ Singleton {
     // the whole text of an entry (the list only has a 400-character preview)
     property var full: ({}) // id -> text
     function loadFull(e: var): void {
-        if (!e || e.image || full[e.id] !== undefined) return;
+        if (!e || e.image || e.pinned || full[e.id] !== undefined) return; // a pin's text is whole already
         const p = Qt.createQmlObject('import Quickshell.Io; Process { stdout: StdioCollector {} }', root);
         p.command = ["sh", "-c", 'printf "%s\\n" "$1" | cliphist decode | head -c 20000', "sh", e.line];
         p.stdout.streamFinished.connect(() => {
@@ -113,16 +148,17 @@ Singleton {
     // copy it back, and paste unless copyOnly
     function pick(e: var, copyOnly: bool): void {
         Quickshell.execDetached(["sh", "-c", `
-            printf '%s\\n' "$1" | cliphist decode | wl-copy
+            if [ -n "$3" ]; then printf '%s' "$1" | wl-copy; else printf '%s\\n' "$1" | cliphist decode | wl-copy; fi
             [ "$2" = copy ] && exit 0
             sleep 0.25
             cls=$(hyprctl activewindow -j | sed -n 's/.*"class": "\\([^"]*\\)".*/\\1/p' | head -1)
             case $cls in
             *kitty*|*foot*|*alacritty*|*wezterm*|*ghostty*|*konsole*|*terminal*|*Terminal*) wtype -M ctrl -M shift -k v -m shift -m ctrl ;;
             *) wtype -M ctrl -k v -m ctrl ;;
-            esac`, "sh", e.line, copyOnly ? "copy" : "paste"]);
+            esac`, "sh", e.pinned ? e.text : e.line, copyOnly ? "copy" : "paste", e.pinned ? "pinned" : ""]);
     }
     function remove(e: var): void {
+        if (e.pinned) return unpin(e);
         Quickshell.execDetached(["sh", "-c", 'printf "%s\\n" "$1" | cliphist delete', "sh", e.line]);
         entries = entries.filter(x => x.id !== e.id);
     }
