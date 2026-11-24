@@ -2,6 +2,8 @@
 """Find something on the screen and click it: "click the update button".
 
     bead-look click "the update button" [--dry]
+    bead-look shot      just the screenshot: prints {"dir": ...} holding screen.png
+                        (for a question about the screen; the asker deletes it)
 
 Screenshots the focused monitor (grim), asks Claude where the thing is (the
 Claude Code CLI with your logged-in account, print mode, --restricted, the Read
@@ -44,9 +46,38 @@ def focused_monitor():
     return m["name"], m["x"], m["y"], w, h
 
 
+def capture(work):
+    """The focused monitor, at most WIDTH px wide: (path, s, monitor x, y, w, h)."""
+    name, mx, my, lw, lh = focused_monitor()
+    s = min(1.0, WIDTH / lw)  # px per logical unit in the screenshot
+    shot = os.path.join(work, "screen.png")
+    subprocess.run(["grim", "-o", name, "-s", f"{s:.4f}", shot], check=True, timeout=10)
+    return shot, s, mx, my, lw, lh
+
+
+def shot_only():
+    if not shutil.which("grim"):
+        say(error="grim isn't installed")
+        return 1
+    time.sleep(0.45)  # let the island get out of the way first
+    run = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    work = tempfile.mkdtemp(prefix="bead-look-", dir=run)
+    os.chmod(work, 0o700)
+    try:
+        capture(work)
+    except Exception as e:
+        shutil.rmtree(work, ignore_errors=True)
+        say(error="Couldn't take a screenshot: " + str(e)[:120])
+        return 1
+    say(dir=work)
+    return 0
+
+
 def main():
     args = [a for a in sys.argv[1:] if a != "--dry"]
     dry = "--dry" in sys.argv
+    if args[:1] == ["shot"]:
+        return shot_only()
     if len(args) < 2 or args[0] != "click" or not args[1].strip():
         sys.stderr.write(__doc__)
         return 2
@@ -58,14 +89,11 @@ def main():
 
     say(state="looking")
     time.sleep(0.45)  # let the island get out of the way first
-    name, mx, my, lw, lh = focused_monitor()
-    s = min(1.0, WIDTH / lw)  # px per logical unit in the screenshot
     run = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
     work = tempfile.mkdtemp(prefix="bead-look-", dir=run)
     os.chmod(work, 0o700)
-    shot = os.path.join(work, "screen.png")
     try:
-        subprocess.run(["grim", "-o", name, "-s", f"{s:.4f}", shot], check=True, timeout=10)
+        shot, s, mx, my, lw, lh = capture(work)
         iw, ih = round(lw * s), round(lh * s)
         prompt = (
             f"Read the screenshot screen.png in this folder ({iw}x{ih} px). The user said: "

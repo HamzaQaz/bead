@@ -76,6 +76,10 @@ Singleton {
         volume_down: "turn the volume down",
         mute: "mute or unmute the sound",
         mic_mute: "mute or unmute the microphone",
+        again: "do the last command again, repeat it",
+        undo: "undo or take back the last command",
+        window: "do something to an open window: op = focus (switch to it), close, move (to workspace = the number), fullscreen, float, or side_by_side (with with_app); app = which window by its app name, or \"this\" for the current one",
+        look: "a question about what's on the screen right now: this window, this error, this page, what am I looking at; text = the question",
         click: "click, press or tap something visible on the screen (a button, link, tab, icon); text = what to click, as said",
         ssh: "open an SSH session (a remote shell) in a new terminal; workspace = the number, if they say where",
         open_app: "open or launch an application; app = its name only; workspace = the number, if they say which workspace (or window, desktop) to open it on; alone = true if they ask to close the other windows there",
@@ -165,6 +169,7 @@ Singleton {
         type: "object",
         properties: {
             action: { type: "string", enum: Object.keys(actions) },
+            op: { type: "string", enum: ["focus", "close", "move", "fullscreen", "float", "side_by_side"] },
             hours: { type: "integer", minimum: 0, maximum: 24 },
             minutes: { type: "integer", minimum: 0, maximum: 600 },
             seconds: { type: "integer", minimum: 0, maximum: 3600 },
@@ -172,6 +177,7 @@ Singleton {
             app: { type: "string", maxLength: 40 },
             workspace: { type: "integer", minimum: 1, maximum: 20 },
             alone: { type: "boolean" },
+            with_app: { type: "string", maxLength: 40 },
             text: { type: "string", maxLength: 300 }
         },
         required: ["action"]
@@ -185,6 +191,15 @@ Singleton {
         + "\"open firefox\" -> {\"action\":\"open_app\",\"app\":\"firefox\"}\n"
         + "\"open spotify on workspace five and close the other windows there\" -> {\"action\":\"open_app\",\"app\":\"spotify\",\"workspace\":5,\"alone\":true}\n"
         + "\"click the update button\" -> {\"action\":\"click\",\"text\":\"the update button\"}\n"
+        + "\"move discord to workspace two\" -> {\"action\":\"window\",\"op\":\"move\",\"app\":\"discord\",\"workspace\":2}\n"
+        + "\"close spotify\" -> {\"action\":\"window\",\"op\":\"close\",\"app\":\"spotify\"}\n"
+        + "\"switch to firefox\" -> {\"action\":\"window\",\"op\":\"focus\",\"app\":\"firefox\"}\n"
+        + "\"make this fullscreen\" -> {\"action\":\"window\",\"op\":\"fullscreen\",\"app\":\"this\"}\n"
+        + "\"put firefox and kitty side by side\" -> {\"action\":\"window\",\"op\":\"side_by_side\",\"app\":\"firefox\",\"with_app\":\"kitty\"}\n"
+        + "\"what does this error mean\" -> {\"action\":\"look\",\"text\":\"what does this error mean\"}\n"
+        + "\"summarize what's on my screen\" -> {\"action\":\"look\",\"text\":\"summarize what's on my screen\"}\n"
+        + "\"undo that\" -> {\"action\":\"undo\"}\n"
+        + "\"do that again\" -> {\"action\":\"again\"}\n"
         + "\"ssh\" -> {\"action\":\"ssh\"}\n"
         + "\"ssh into the pi on workspace two\" -> {\"action\":\"ssh\",\"workspace\":2}\n"
         + "\"go to workspace three\" -> {\"action\":\"workspace\",\"workspace\":3}\n"
@@ -387,7 +402,11 @@ Singleton {
 
     function decide(heard: string): void {
         idle.restart();
-        const hit = byPhrase(heard);
+        // "undo" and "again" need no model
+        const n = norm(heard);
+        const quick = /^(undo|undo (that|it|this)|take (that|it) back|revert (that|it))$/.test(n) ? { action: "undo" }
+            : /^(again|do (that|it) again|repeat( that| it)?|one more time|same again)$/.test(n) ? { action: "again" } : null;
+        const hit = quick ?? byPhrase(heard);
         if (hit) {
             console.info("voice: phrase", JSON.stringify(hit), "for", JSON.stringify(heard));
             root.state = "done";

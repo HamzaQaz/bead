@@ -209,7 +209,7 @@ Scope {
     Connections {
         target: Voice
         function onFailed(why) { root.toast("mic_off", why, "error", 3500); }
-        function onDecided(a, heard) { root.runVoice(a, heard); }
+        function onDecided(a, heard) { root.doVoice(a, heard); }
     }
     // "1 hour and thirty seconds", "an hour and a half", "90 seconds" -> ms (0 if none)
     function spokenDuration(text: string): real {
@@ -229,6 +229,106 @@ Scope {
         }
         return Math.round(total) * 1000;
     }
+    // ── "again" and "undo" ──
+    // each command leaves how to take itself back (remember), newest last; a
+    // custom action's steps all go in one, so "undo" takes back the lot
+    property var lastVoice: null   // { a, heard }
+    property var undoLog: []       // [{ label, run }] of the last command
+    property var recording: null   // where remember() writes while a command runs
+    function remember(label: string, undo: var): void { if (root.recording) root.recording.push({ label: label, run: undo }); }
+    function doVoice(a: var, heard: string): void {
+        if (a.action === "undo") return root.undoLast();
+        if (a.action === "again") {
+            if (!root.lastVoice) return root.toast("replay", "Nothing to do again", "info", 2000);
+            a = root.lastVoice.a;
+            heard = root.lastVoice.heard;
+        }
+        const rec = [];
+        root.recording = rec;
+        root.runVoice(a, heard);
+        root.recording = null;
+        if (a.action === "none") return;
+        root.lastVoice = { a: a, heard: heard };
+        root.undoLog = rec;
+    }
+    function undoLast(): void {
+        const log = root.undoLog;
+        root.undoLog = [];
+        if (!log.length) return root.toast("undo", root.lastVoice ? "That one can't be undone" : "Nothing to undo", "info", 2200);
+        for (let i = log.length - 1; i >= 0; i--) log[i].run();
+        root.toast("undo", "Undid " + log.map(x => x.label).filter((x, i, all) => all.indexOf(x) === i).join(", "), "action", 2200);
+    }
+
+    // ── windows, for voice ──
+    function addr(t: var): string { return t.address.startsWith("0x") ? t.address : "0x" + t.address; }
+    function windowsNow(): var { return Hyprland.toplevels.values.map(t => root.addr(t)); }
+    function winName(t: var): string {
+        const e = Apps.entryFor(t.wayland?.appId ?? t.lastIpcObject?.class ?? "");
+        return e?.name || t.title || "the window";
+    }
+    function spokenWorkspace(heard: string): int {
+        const m = heard.match(/(?:workspace|window|desktop|screen)\s+(?:number\s+)?(\w+)/i);
+        const nums = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+        const n = m ? (parseInt(m[1]) || nums.indexOf(m[1].toLowerCase())) : 0;
+        return n > 0 ? n : 0;
+    }
+    // a window by what you call its app: its class ("discord", the last part
+    // of "com.discordapp.Discord"), the app's name ("vs code"), or its title.
+    // "this"/"it"/nothing: the focused one
+    function findWindow(said: string): var {
+        const n = Voice.norm(said).replace(/\b(the|window|app|my)\b/g, " ").replace(/\s+/g, " ").trim();
+        if (!n || /^(this|it|that|current|this one|active|focused)$/.test(n)) return Hyprland.activeToplevel;
+        const flat = n.replace(/ /g, "");
+        const named = Apps.search(n)[0];
+        let best = null, score = 0;
+        for (const t of Hyprland.toplevels.values) {
+            const id = String(t.wayland?.appId ?? t.lastIpcObject?.class ?? "").toLowerCase();
+            const short = id.split(".").pop().replace(/[^a-z0-9]/g, "");
+            const cls = id.replace(/[^a-z0-9]/g, "");
+            const e = Apps.entryFor(id);
+            const ename = Voice.norm(e?.name ?? "").replace(/ /g, "");
+            let v = 0;
+            if (flat === short || flat === cls || (ename && flat === ename)) v = 1;
+            else if (named && e && named.id === e.id) v = 0.95;
+            else if (short.length >= 3 && (cls.includes(flat) || flat.includes(short))) v = 0.9;
+            else if ((" " + Voice.norm(t.title ?? "") + " ").includes(" " + n + " ")) v = 0.8;
+            else v = Math.max(Apps.similar(flat, short), ename ? Apps.similar(flat, ename) : 0) * 0.85;
+            // the same app twice: the one where you are wins
+            if (t.workspace?.id === Hyprland.focusedWorkspace?.id) v += 0.01;
+            if (v > score) { score = v; best = t; }
+        }
+        return score >= 0.6 ? best : null;
+    }
+    // undoing an open: close the windows that appeared since, of that app
+    function closeNew(before: var, names: var): void {
+        const want = names.filter(x => x).map(x => String(x).toLowerCase().replace(/[^a-z0-9]/g, ""));
+        const fresh = Hyprland.toplevels.values.filter(t => !before.includes(root.addr(t)));
+        const mine = fresh.filter(t => {
+            const id = String(t.wayland?.appId ?? t.lastIpcObject?.class ?? "").toLowerCase();
+            const k = id.replace(/[^a-z0-9]/g, ""), short = id.split(".").pop().replace(/[^a-z0-9]/g, "");
+            return want.some(w => w && (k === w || short === w || k.includes(w) || (short.length >= 3 && w.includes(short))));
+        });
+        for (const t of (mine.length ? mine : fresh.length === 1 ? fresh : []))
+            Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.close({ window = "address:${root.addr(t)}" })`]);
+    }
+    Process {
+        id: shooter
+        property string q: ""
+        command: [Quickshell.env("HOME") + "/.local/bin/bead-look", "shot"]
+        stdout: SplitParser {
+            onRead: line => {
+                let m;
+                try { m = JSON.parse(line); } catch (e) { return; }
+                if (m.error) return root.toast("screenshot_monitor", m.error, "error", 3000);
+                if (!m.dir) return;
+                root.launcherSeed = "?" + shooter.q;
+                if (root.launcherOpen) root.launcherSeedChanged();
+                root.launcherOpen = true;
+                Ask.askScreen(shooter.q, m.dir);
+            }
+        }
+    }
+
     // run what the voice model picked; each says what it did on the island
     property bool voiceQuiet: false // running a step of your action: its own "say" speaks for it
     function runVoice(a: var, heard: string): void {
@@ -239,19 +339,30 @@ Scope {
             // the words themselves first: small models mix up units
             const ms = root.spokenDuration(heard) || (((a.hours ?? 0) * 60 + (a.minutes ?? 0)) * 60 + (a.seconds ?? 0)) * 1000;
             if (!(ms > 0)) break;
-            Countdown.startTimer(ms, "");
+            const id = Countdown.startTimer(ms, "");
+            if (id > 0) remember("the timer", () => Countdown.stop(id));
             return say("timer", "Timer \u00b7 " + Countdown.fmtTotal(ms));
         }
-        case "stopwatch": Countdown.startStopwatch(); return say("timer", "Stopwatch started");
-        case "stop_timers": Countdown.stopAll(); return say("timer_off", "Timers stopped");
-        case "play_pause": if (root.player?.canTogglePlaying) { root.player.togglePlaying(); return say(root.player.isPlaying ? "pause" : "play_arrow", root.player.isPlaying ? "Paused" : "Playing"); } break;
-        case "next_track": if (root.player?.canGoNext) { root.player.next(); return say("skip_next", "Next track"); } break;
-        case "previous_track": if (root.player?.canGoPrevious) { root.player.previous(); return say("skip_previous", "Previous track"); } break;
-        case "volume_set": if (a.level === undefined) break; Audio.setVolume(a.level / 100); root.flash("volume", ""); return;
-        case "volume_up": Audio.setVolume(Audio.volume + 0.1); root.flash("volume", ""); return;
-        case "volume_down": Audio.setVolume(Audio.volume - 0.1); root.flash("volume", ""); return;
-        case "mute": Audio.toggleMute(); root.flash("volume", ""); return;
-        case "mic_mute": Audio.toggleMicMute(); root.flash("mic", ""); return;
+        case "stopwatch": {
+            const before = Countdown.items;
+            Countdown.startStopwatch();
+            remember("the stopwatch", () => Countdown.items = before.concat(Countdown.items.filter(i => i.kind !== "stopwatch" && !before.some(b => b.id === i.id))));
+            return say("timer", "Stopwatch started");
+        }
+        case "stop_timers": { const before = Countdown.items; Countdown.stopAll(); remember("stopping timers", () => Countdown.items = before); return say("timer_off", "Timers stopped"); }
+        case "play_pause": if (root.player?.canTogglePlaying) { const p = root.player; p.togglePlaying(); remember("play/pause", () => p.togglePlaying()); return say(root.player.isPlaying ? "pause" : "play_arrow", root.player.isPlaying ? "Paused" : "Playing"); } break;
+        case "next_track": if (root.player?.canGoNext) { const p = root.player; p.next(); remember("the skip", () => p.previous()); return say("skip_next", "Next track"); } break;
+        case "previous_track": if (root.player?.canGoPrevious) { const p = root.player; p.previous(); remember("going back", () => p.next()); return say("skip_previous", "Previous track"); } break;
+        case "volume_set": case "volume_up": case "volume_down": {
+            if (a.action === "volume_set" && a.level === undefined) break;
+            const v = Audio.volume;
+            Audio.setVolume(a.action === "volume_set" ? a.level / 100 : v + (a.action === "volume_up" ? 0.1 : -0.1));
+            remember("the volume", () => { Audio.setVolume(v); root.flash("volume", ""); });
+            root.flash("volume", "");
+            return;
+        }
+        case "mute": Audio.toggleMute(); remember("mute", () => Audio.toggleMute()); root.flash("volume", ""); return;
+        case "mic_mute": Audio.toggleMicMute(); remember("mic mute", () => Audio.toggleMicMute()); root.flash("mic", ""); return;
         case "open_app": {
             // small models sometimes leave the place in the name ("x on window 5"):
             // take it off, and read the workspace and "close the rest" from the
@@ -266,6 +377,11 @@ Scope {
             const alone = a.alone === true || /close\s+(?:all\s+)?(?:the\s+)?(?:other|rest|everything)/i.test(heard);
             const e = name ? Apps.search(name)[0] : null;
             if (!e) return root.toast("search_off", "No app called \u201c" + (name || heard) + "\u201d", "error", 2600);
+            const before = root.windowsNow(), wasOn = Hyprland.focusedWorkspace?.name ?? "";
+            remember("opening " + e.name, () => {
+                root.closeNew(before, [e.startupClass, e.id, e.name, name]);
+                if (ws && wasOn) dispatch(`hl.dsp.focus({ workspace = "${wasOn}" })`);
+            });
             if (!ws) { Apps.launch(e); return say("open_in_new", "Opening " + e.name); }
             let closed = 0;
             if (alone) for (const t of Hyprland.toplevels.values) {
@@ -277,6 +393,80 @@ Scope {
             Apps.launchOn(e, ws);
             dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
             return say("open_in_new", "Opening " + e.name + " on " + ws + (closed ? " \u00b7 closed " + closed : ""));
+        }
+        case "window": {
+            // something done to an open window, found by its app's name ("this": the focused one)
+            const t = root.findWindow(a.app ?? "");
+            if (!t) return root.toast("search_off", "No window like \u201c" + (a.app || heard) + "\u201d", "error", 2600);
+            const ad = root.addr(t), name = root.winName(t), from = t.workspace?.name ?? "";
+            const sel = `window = "address:${ad}"`;
+            let op = String(a.op ?? "");
+            // "send the terminal to 4": a move, whatever the model called it
+            if (op !== "side_by_side" && /\b(move|send|put|throw|shift|take)\b/i.test(heard) && (root.spokenWorkspace(heard) || a.workspace > 0)) op = "move";
+            switch (op) {
+            case "focus": {
+                const prev = Hyprland.activeToplevel;
+                if (prev && prev !== t) { const pa = root.addr(prev); remember("switching to " + name, () => dispatch(`hl.dsp.focus({ window = "address:${pa}" })`)); }
+                dispatch(`hl.dsp.focus({ ${sel} })`);
+                return;
+            }
+            case "close": {
+                const cls = t.wayland?.appId ?? t.lastIpcObject?.class ?? "";
+                dispatch(`hl.dsp.window.close({ ${sel} })`);
+                // a window can't come back, but its app can
+                const e = Apps.entryFor(cls);
+                if (e) remember("closing " + name + " (reopened)", () => Apps.launch(e));
+                return say("close", "Closed " + name);
+            }
+            case "move": {
+                const ws = root.spokenWorkspace(heard) || (a.workspace > 0 ? a.workspace : 0);
+                if (!ws) break;
+                dispatch(`hl.dsp.window.move({ workspace = "${ws}", ${sel}, follow = false })`);
+                if (from) remember("moving " + name, () => dispatch(`hl.dsp.window.move({ workspace = "${from}", ${sel}, follow = false })`));
+                return say("move_item", "Moved " + name + " to " + ws);
+            }
+            case "fullscreen":
+                dispatch(`hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle", ${sel} })`);
+                remember("fullscreen", () => dispatch(`hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle", ${sel} })`));
+                return;
+            case "float":
+                dispatch(`hl.dsp.window.float({ action = "toggle", ${sel} })`);
+                remember("floating " + name, () => dispatch(`hl.dsp.window.float({ action = "toggle", ${sel} })`));
+                return;
+            case "side_by_side": {
+                const u = root.findWindow(a.with_app ?? "");
+                if (!u || u === t) return root.toast("search_off", "Which other window? \u201c" + (a.with_app || heard) + "\u201d", "error", 2600);
+                // the two alone on one workspace (here, if they're all that's on it;
+                // else the first empty one) tile side by side
+                const here = Hyprland.focusedWorkspace?.id ?? 1, hereName = Hyprland.focusedWorkspace?.name ?? "";
+                const on = id => Hyprland.toplevels.values.filter(w => w.workspace?.id === id);
+                const ok = id => on(id).every(w => w === t || w === u);
+                let to = ok(here) ? here : 0;
+                for (let i = 1; !to && i <= 20; i++) if (on(i).length === 0) to = i;
+                if (!to) break;
+                const ua = root.addr(u), uFrom = u.workspace?.name ?? "";
+                for (const [x, xa] of [[t, ad], [u, ua]]) if (x.workspace?.id !== to)
+                    dispatch(`hl.dsp.window.move({ workspace = "${to}", window = "address:${xa}", follow = false })`);
+                if (to !== here) dispatch(`hl.dsp.focus({ workspace = "${to}" })`);
+                remember("side by side", () => {
+                    if (from) dispatch(`hl.dsp.window.move({ workspace = "${from}", ${sel}, follow = false })`);
+                    if (uFrom) dispatch(`hl.dsp.window.move({ workspace = "${uFrom}", window = "address:${ua}", follow = false })`);
+                    if (hereName) dispatch(`hl.dsp.focus({ workspace = "${hereName}" })`);
+                });
+                return say("splitscreen", name + " and " + root.winName(u) + (to !== here ? " on " + to : ""));
+            }
+            }
+            break;
+        }
+        case "look": {
+            // a question about the screen: screenshot first (before anything
+            // opens over it), then ask Claude with it in the launcher
+            if (shooter.running) return;
+            let q = a.text || heard;
+            if (Voice.mentionsClip(heard) && Voice.clip) q = heard + "\n\nMy clipboard:\n" + Voice.clip;
+            shooter.q = q;
+            shooter.running = true;
+            return;
         }
         case "click": {
             // "click the update button": Claude finds it on a screenshot of this
@@ -298,7 +488,12 @@ Scope {
             const spoken = m ? (parseInt(m[1]) || nums.indexOf(m[1].toLowerCase())) : -1;
             // only when you said where (the model sometimes adds one of its own)
             const ws = !m ? 0 : spoken > 0 ? spoken : a.workspace > 0 ? a.workspace : 0;
+            const before = root.windowsNow(), wasOn = Hyprland.focusedWorkspace?.name ?? "";
             const open = host => {
+                remember("the SSH session", () => {
+                    root.closeNew(before, ["bead-ssh"]);
+                    if (ws && wasOn) dispatch(`hl.dsp.focus({ workspace = "${wasOn}" })`);
+                });
                 const cmd = ["bead-term", "--class", "bead-ssh", "--title", "ssh " + host, "--", "ssh", "--", host];
                 if (ws) {
                     dispatch(`hl.dsp.exec_cmd(${JSON.stringify(`[workspace ${ws}] ` + cmd.join(" "))})`);
@@ -328,10 +523,20 @@ Scope {
             Voice.ask("Which server?", hosts, open);
             return;
         }
-        case "workspace": if (!(a.workspace > 0)) break; dispatch(`hl.dsp.focus({ workspace = "${a.workspace}" })`); return;
+        case "workspace": {
+            if (!(a.workspace > 0)) break;
+            const wasOn = Hyprland.focusedWorkspace?.name ?? "";
+            if (wasOn) remember("the workspace switch", () => dispatch(`hl.dsp.focus({ workspace = "${wasOn}" })`));
+            dispatch(`hl.dsp.focus({ workspace = "${a.workspace}" })`);
+            return;
+        }
         case "overview": root.overviewOpen = true; return;
-        case "wallpaper": Wallpaper.random(""); return say("wallpaper", "New wallpaper");
-        case "dnd": Notifs.dnd = !Notifs.dnd; return say(Notifs.dnd ? "do_not_disturb_on" : "notifications", Notifs.dnd ? "Do not disturb on" : "Do not disturb off");
+        case "wallpaper": {
+            const k = Wallpaper.kind, c = Wallpaper.current;
+            if (c) remember("the wallpaper", () => k === "live" ? Wallpaper.setLive(c) : Wallpaper.setStill(c));
+            Wallpaper.random("");
+        } return say("wallpaper", "New wallpaper");
+        case "dnd": Notifs.dnd = !Notifs.dnd; remember("do not disturb", () => Notifs.dnd = !Notifs.dnd); return say(Notifs.dnd ? "do_not_disturb_on" : "notifications", Notifs.dnd ? "Do not disturb on" : "Do not disturb off");
         case "screenshot_area": Capture.shot("area"); return;
         case "screenshot_screen": Capture.shot("screen"); return;
         case "ask": {
@@ -352,6 +557,7 @@ Scope {
     // your action (services/Voice.qml): its steps in order. Built-in steps run
     // quietly; commands get what you said as $BEAD_TEXT, never in the command
     function runCustom(c: var, text: string, heard: string): void {
+        const rec = root.recording;
         const step = i => {
             if (i >= c.steps.length) { if (c.say) root.toast("bolt", c.say, "action", 2200); return; }
             const st = c.steps[i];
@@ -359,7 +565,10 @@ Scope {
             if (st.run) Quickshell.execDetached({ command: ["sh", "-c", String(st.run)], environment: { BEAD_TEXT: text, BEAD_HEARD: heard, BEAD_CLIP: Voice.clip } });
             else if (st.do) {
                 root.voiceQuiet = !!c.say;
+                const outer = root.recording;
+                root.recording = rec; // steps after a wait still undo with the rest
                 root.runVoice(Object.assign({}, st, { action: st.do, text: st.text ?? text }), st.text ?? (text || heard));
+                root.recording = outer;
                 root.voiceQuiet = false;
             }
             step(i + 1);
