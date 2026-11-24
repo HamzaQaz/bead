@@ -6,6 +6,8 @@
 //	                  folder above strand's, or the current one)
 //	strand --yes [--with murmur,huddle] [--without binds]
 //	                  no questions: the default parts (plus/minus these), in plain text
+//	strand --gui describe|plan|run [--parts a,b] [--pearl way]
+//	                  for the graphical installer (installer/): JSON, see gui.go
 package main
 
 import (
@@ -19,17 +21,26 @@ import (
 )
 
 func main() {
+	if filepath.Base(os.Args[0]) == askpassName { // sudo asking for the password (gui.go)
+		os.Exit(askpassClient())
+	}
 	dry := flag.Bool("dry-run", false, "show what would happen; change nothing")
 	repo := flag.String("repo", "", "the bead checkout to install from")
 	yes := flag.Bool("yes", false, "install the default parts without asking (plain output)")
 	with := flag.String("with", "", "with --yes: parts to add, comma-separated")
 	without := flag.String("without", "", "with --yes: parts to leave out, comma-separated")
+	guiMode := flag.String("gui", "", "for the graphical installer: describe | plan | run (JSON)")
+	parts := flag.String("parts", "", "with --gui: the parts chosen, comma-separated (core is always in)")
+	pearl := flag.String("pearl", "claude", "with --gui: how Pearl answers (claude | api | local)")
 	flag.Parse()
 
 	dir, err := findRepo(*repo)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "strand:", err)
 		os.Exit(1)
+	}
+	if *guiMode != "" {
+		os.Exit(gui(*guiMode, detect(dir), split(*parts), *pearl))
 	}
 	if *yes {
 		os.Exit(headless(detect(dir), *dry, split(*with), split(*without)))
