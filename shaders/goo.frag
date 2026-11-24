@@ -19,6 +19,7 @@ layout(std140, binding = 0) uniform buf {
     float goo;
     vec4 fill;
     vec4 shadow;
+    vec4 glow;   // a coloured halo round the pill only (not the wall); a = strength
 };
 
 float sdRoundBox(vec2 p, vec4 r, float rad) {
@@ -63,5 +64,11 @@ void main() {
 
     vec4 col = fill * a;                    // premultiplied
     col += vec4(shadow.rgb, 1.0) * s * (1.0 - a);
+
+    // the halo: falls off over ~20px from the pill, kept off the wall strip
+    float gd = sdRoundBox(p, pill, radius);
+    float below = wall.z > 0.0 ? smoothstep(wall.w, wall.w + 8.0, p.y) : 1.0;
+    float g = glow.a * pow(1.0 - smoothstep(0.0, 22.0, gd), 2.0) * below * (1.0 - a);
+    col += vec4(glow.rgb, 1.0) * g;
     fragColor = col * qt_Opacity;
 }

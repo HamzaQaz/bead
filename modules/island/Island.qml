@@ -13,6 +13,7 @@ import "hover.js" as Hover
 import qs.components
 import qs.config
 import qs.modules.dashboard
+import "artglow.js" as Glow
 import qs.services
 
 // The island: one shape hanging from the top-center of the screen frame (clean
@@ -800,7 +801,12 @@ Scope {
         function open(): void { root.pinnedOn = root.home.name; }
         function close(): void { root.pinnedOn = ""; }
         function tab(n: int): void { root.tab = Math.max(0, Math.min(6, n)); root.pinnedOn = root.home.name; }
+        // a key, by name (Down, Return, Escape, 3, ]…), straight into the open
+        // dashboard's key handler: no synthetic typing, so nothing can land in
+        // another window. Does nothing unless the dashboard is open by key.
+        function key(name: string): string { root.dashKey(name); return root.pinnedOn ? "sent" : "dashboard not open"; }
     }
+    signal dashKey(string name)
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
 
@@ -814,6 +820,30 @@ Scope {
     readonly property MprisPlayer player: (picked && Mpris.players.values.includes(picked) ? picked : null)
         ?? Mpris.players.values.find(p => p.isPlaying) ?? Mpris.players.values[0] ?? null
     readonly property bool playing: player?.isPlaying ?? false
+    // the cover's colour for the island's halo, or null (artglow.js)
+    // (the quantizer reads only local files: a web cover is fetched once into
+    // the runtime folder, named by its URL, and read from there)
+    readonly property string artUrl: root.player?.trackArtUrl ?? ""
+    property string artFile: ""
+    property string artFetching: ""   // the file being fetched (set with the URL, not a binding: no stale names)
+    onArtUrlChanged: {
+        if (/^https?:\/\//.test(artUrl)) {
+            artFile = "";
+            artFetching = (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/bead/art/" + Qt.md5(artUrl) + ".img";
+            artFetch.exec(["sh", "-c", "mkdir -p \"$(dirname \"$1\")\" && { [ -s \"$1\" ] || curl -sfL --max-time 5 --max-filesize 5000000 -o \"$1\" -- \"$2\"; }", "sh", artFetching, artUrl]);
+        } else artFile = artUrl.startsWith("file://") ? artUrl : "";
+    }
+    Process {
+        id: artFetch
+        onExited: code => { if (code === 0) root.artFile = "file://" + root.artFetching; }
+    }
+    ColorQuantizer {
+        id: artColours
+        source: root.artFile
+        depth: 2
+        rescaleSize: 64
+    }
+    readonly property var artGlow: Glow.pick(artColours.colors.map(c => ({ r: c.r, g: c.g, b: c.b })))
 
     // the pill shows the track briefly when a song starts or changes (or while
     // hovered), then goes back to the time; a tiny equaliser stays while playing
@@ -828,7 +858,7 @@ Scope {
 
     Binding { target: SysStats; property: "active"; value: root.openCount > 0 }
     onOpenCountChanged: if (openCount > 0) Weather.refresh()
-    Component.onCompleted: Weather.refresh()
+    Component.onCompleted: { Weather.refresh(); artUrlChanged(); }
     Timer { interval: 20 * 60 * 1000; repeat: true; running: true; onTriggered: Weather.refresh() }
     Timer { // MPRIS doesn't push positions
         interval: 1000
@@ -1239,6 +1269,10 @@ Scope {
                 property real goo: 16
                 property color fill: Theme.frame
                 property color shadow: "transparent"
+                // while music plays, a soft halo in the cover's colour (artglow.js)
+                property color glow: root.artGlow && root.playing && win.state !== "open" && win.state !== "launcher" && win.state !== "overview"
+                    ? Qt.rgba(root.artGlow.r, root.artGlow.g, root.artGlow.b, 0.32) : Qt.rgba(root.artGlow?.r ?? 0, root.artGlow?.g ?? 0, root.artGlow?.b ?? 0, 0)
+                Behavior on glow { ColorAnimation { duration: 900; easing.type: Easing.InOutSine } }
             }
 
             Item {
@@ -2032,6 +2066,10 @@ Scope {
                 // ── open: the dashboard ──
                 DashboardContent {
                     id: dash
+                    Connections {
+                        target: root
+                        function onDashKey(name: string): void { if (win.dashKeys) { dash.keys = true; dash.handle(name, false, false, false); } }
+                    }
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: win.openW
                     height: win.openH
