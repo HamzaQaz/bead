@@ -26,7 +26,7 @@ Row {
         height: parent.height
         spacing: 3
         Label {
-            text: root.greeting() + ", " + Quickshell.env("USER")
+            text: root.greeting() + (Demo.on ? "" : ", " + Quickshell.env("USER"))
             font.pixelSize: 12
         }
         Item { width: 1; height: 8 }

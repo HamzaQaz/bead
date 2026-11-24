@@ -20,9 +20,10 @@ Singleton {
     property bool deaf: false
 
     property list<var> dms: []      // { channel, name, avatar, count, text }, newest first
-    property int dmCount: 0
+    property int dmUnread: 0
+    readonly property int dmCount: Demo.on ? 0 : dmUnread // demo mode: none
 
-    readonly property bool inCall: !!channel
+    readonly property bool inCall: !!channel && !Demo.on
     readonly property list<var> speaking: members.filter(m => m.speaking)
 
     // a (re)started helper reports the call you're already in: not a "join"
@@ -37,7 +38,7 @@ Singleton {
     function toggleMute(): void { send("toggle-mute"); }
     function toggleDeaf(): void { send("toggle-deaf"); }
     function leave(): void { send("leave"); }
-    function markRead(): void { if (dmCount > 0) send("read"); }
+    function markRead(): void { if (dmUnread > 0) send("read"); }
     // to Discord (and they count as read)
     function openDms(): void {
         markRead();
@@ -66,10 +67,10 @@ Singleton {
                     root.state = m.state;
                     root.detail = m.detail || "";
                 } else if (m.type === "dms") {
-                    const before = root.dmCount;
+                    const before = root.dmUnread;
                     root.dms = m.from ?? [];
-                    root.dmCount = m.count ?? 0;
-                    if (root.dmCount > before && root.dms.length) root.dmArrived(root.dms[0]);
+                    root.dmUnread = m.count ?? 0;
+                    if (root.dmUnread > before && root.dms.length) root.dmArrived(root.dms[0]);
                 } else if (m.type === "voice") {
                     const was = root.channel?.id ?? "";
                     const now = m.channel?.id ?? "";
@@ -85,11 +86,11 @@ Singleton {
                 }
             }
         }
-        onExited: { root.primed = false; root.channel = null; root.members = []; root.dms = []; root.dmCount = 0; restart.start(); }
+        onExited: { root.primed = false; root.channel = null; root.members = []; root.dms = []; root.dmUnread = 0; restart.start(); }
         onRunningChanged: if (running) prime.restart()
     }
     Timer { id: restart; interval: 5000; onTriggered: helper.running = true }
-    Timer { id: previewEnd; interval: 8000; onTriggered: if (root.dms[0]?.channel === "preview") { root.dms = []; root.dmCount = 0; } }
+    Timer { id: previewEnd; interval: 8000; onTriggered: if (root.dms[0]?.channel === "preview") { root.dms = []; root.dmUnread = 0; } }
 
     // a new or edited config: start over
     FileView {
@@ -115,7 +116,7 @@ Singleton {
         // a pretend unread DM for 8 s, to see how it looks
         function preview(): void {
             root.dms = [{ channel: "preview", name: "Preview", avatar: "https://cdn.discordapp.com/embed/avatars/0.png", count: 2, text: "" }];
-            root.dmCount = 2;
+            root.dmUnread = 2;
             root.dmArrived(root.dms[0]);
             previewEnd.restart();
         }

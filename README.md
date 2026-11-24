@@ -5,6 +5,14 @@ A desktop shell for [Hyprland](https://hyprland.org), built with
 a bar, an island at the top of the screen that grows into a launcher, a
 dashboard, a lock screen and notifications, all coloured by your wallpaper.
 
+![bead's welcome: "bead." written by hand over a soft gradient](docs/screenshots/welcome.webp)
+
+| | |
+|---|---|
+| ![The dashboard: clock, weather, calendar, what's playing and system gauges](docs/screenshots/dashboard.webp) | ![A clean desktop: the bar down the left, the island at the top](docs/screenshots/desktop.webp) |
+| ![The launcher searching apps](docs/screenshots/launcher.webp) | ![The launcher doing a currency conversion](docs/screenshots/launcher-maths.webp) |
+| ![A voice command, the words it understood lit up](docs/screenshots/voice.webp) | ![A toast in the island](docs/screenshots/toast.webp) |
+
 ## Install
 
 Arch and Arch-based distros (CachyOS, EndeavourOS, Manjaro…) only.
@@ -49,7 +57,7 @@ Then start it with `bead start`, or log out and back in.
 | **Tint** | Builds bead's colours from your wallpaper, in OKLCH, so lightness steps look even whatever the hue. Three styles: vibrant, muted, mono. |
 | **Glint** | Desktop toasts from the terminal: `glint success "Deployed"`, plus confirm, choose and promise (spinner while a command runs). They show inside bead's island. |
 | **Glint for Claude Code** | Hooks that turn Claude Code's permission prompts, questions and "finished" messages into toasts you can answer. |
-| **Murmur** | Voice. Hold <kbd>Super</kbd>+<kbd>Space</kbd> and say "timer for ten minutes", "skip this song" or "open firefox". Hold <kbd>Super</kbd>+<kbd>A</kbd> to dictate into any text field. Runs offline on your GPU (whisper.cpp and a small Qwen model, about 1.2 GB). |
+| **Murmur** | Voice. Hold <kbd>Super</kbd>+<kbd>Space</kbd> and say "timer for ten minutes", "open Steam on workspace 5 and close the rest", "move Discord to 2", "ssh into my server", "what does this error mean?" or "click the update button". "Undo" and "again" work on most of it. Add your own commands and chains of steps in `~/.config/bead/voice.json`. Tap <kbd>Super</kbd>+<kbd>A</kbd> to dictate hands-free (typed as you speak), or hold it and let go to type. Runs offline on your GPU (whisper.cpp and a small Qwen model, about 1.2 GB); questions about your screen and clicks go to Claude. |
 | **Huddle** | Discord on the island: who's talking, mute and deafen, unread DMs. Needs a Discord application of your own; strand explains how to set one up. |
 | **Pearl** | Answers questions from the launcher (`?`) or by voice. It can use Claude Code, your own Anthropic API key, or Murmur's local model. |
 
@@ -70,7 +78,7 @@ yours to edit.
 | <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> | colour picker |
 | <kbd>Super</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> | record the screen |
 | <kbd>Super</kbd>+<kbd>Space</kbd> (hold) | voice command (Murmur) |
-| <kbd>Super</kbd>+<kbd>A</kbd> (hold) | dictate (Murmur) |
+| <kbd>Super</kbd>+<kbd>A</kbd> | dictate (Murmur): tap for hands-free, hold to type on release |
 
 ## Using it
 
@@ -80,6 +88,7 @@ bead dashboard toggle
 bead lock
 bead shot area
 bead log                  # the shell's log, for when something's off
+bead voice list | run NAME | edit   # your voice commands
 ```
 
 - Wallpapers live in `~/Pictures/Wallpapers`. Pick one from the dashboard.
@@ -98,6 +107,8 @@ shaders/         the goo / blob effects (built with qsb)
 bin/             bead (the CLI), bead-tint, bead-pearl, bead-dictate, bead-discord
 glint/           the toast CLI (Go) and its Claude Code hook
 strand/          the installer (Go, Bubble Tea)
+tools/           the handwriting generator, screenshots.sh (these README pictures)
+docs/            the screenshots
 ```
 
 To build by hand: `make install` (the shell), `make install-glint`, and `make test`.

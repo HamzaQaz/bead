@@ -225,7 +225,9 @@ Singleton {
         helper.running = true;
     }
     function stop(): void { if (helper.running && state === "listening") helper.write("stop\n"); }
+    property bool previewing: false
     function cancel(): void {
+        if (previewing) { previewing = false; state = ""; partial = ""; return; }
         if (helper.running) helper.write("cancel\n");
         else if (question) { question = null; answerCb = null; }
     }
@@ -471,6 +473,9 @@ Singleton {
             return hit || "(none)";
         }
         // test the decision without speaking
+        // the island as if it heard TEXT and is working it out, held until
+        // `voice cancel` (for screenshots: nothing is decided or run)
+        function preview(text: string): void { if (!helper.running) { root.previewing = true; root.heard = text; root.partial = text; root.state = "thinking"; } }
         // what would it do? decides, shows it, runs nothing: decideDry "…" then lastDecision
         function decideDry(text: string): void { root.dry = true; root.lastDecision = ""; decideText(text); }
         function lastDecision(): string { return root.lastDecision; }

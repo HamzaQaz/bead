@@ -115,6 +115,7 @@ Item {
 
     // ── open windows ──
     function windowsFor(q: string): list<var> {
+        if (Demo.on) return []; // their titles are yours: none in screenshots
         const ql = q.toLowerCase();
         const out = [];
         for (const t of Hyprland.toplevels.values) {
