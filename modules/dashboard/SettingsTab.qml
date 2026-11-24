@@ -85,6 +85,10 @@ Item {
         id: mins
         property real value: 0
         signal chose(real v)
+        readonly property bool focusStop: true   // one stop for the whole row: Left/Right step it
+        readonly property real focusRadius: 12
+        function focusAdjust(dir: int): void { mins.step(dir); }
+        function focusPress(): void { mins.step(1); }
         readonly property list<real> stops: [0, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120]
         // to the next stop up or down (a value between stops snaps to one)
         function step(d: int): void {
@@ -175,6 +179,9 @@ Item {
                     required property var modelData
                     required property int index
                     readonly property bool on: root.section === index
+                    readonly property bool focusStop: true   // a stop for the keyboard ring (focusnav.js)
+                    readonly property real focusRadius: 14
+                    function focusPress(): void { root.section = tab.index; }
                     width: parent.width
                     height: 48
                     Icon {

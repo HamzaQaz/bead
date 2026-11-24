@@ -7,6 +7,16 @@ Rectangle {
     property list<var> options: []   // { v, t }
     property string value: ""
     signal chose(string v)
+    // a stop for the dashboard's keyboard ring: Left/Right pick the one beside, Enter the next round
+    readonly property bool focusStop: true
+    function focusAdjust(dir: int): void {
+        const i = options.findIndex(o => o.v === value), n = options[Math.max(0, Math.min(options.length - 1, i + dir))];
+        if (n && n.v !== value) chose(n.v);
+    }
+    function focusPress(): void {
+        if (!options.length) return;
+        chose(options[(options.findIndex(o => o.v === value) + 1) % options.length].v);
+    }
     width: seg.width + 4
     height: 26
     radius: 13

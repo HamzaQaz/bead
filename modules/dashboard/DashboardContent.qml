@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Services.Mpris
+import "focusnav.js" as Nav
 import qs.components
 import qs.config
 import qs.services
@@ -19,6 +20,92 @@ Item {
     property int tab: 0                    // shown tab (owner keeps it)
     signal pick(MprisPlayer p)
     signal select(int tab)
+    signal close()
+
+    // ── the keyboard (focusnav.js). Only when it was opened by key: then 1-7 and
+    // Ctrl+Tab switch tabs, arrows move a ring to the nearest control that way
+    // (Left/Right adjust a slider or a choice instead), Enter or Space presses
+    // it, Tab steps through in reading order, Esc closes. A control is a stop
+    // if it has `focusStop: true`, with focusPress() and maybe focusAdjust(dir).
+    // The ring shows from the first key and goes when the mouse moves ──
+    property bool keys: false      // the ring is showing
+    property Item cur: null        // the control it's on
+    function takeKeys(): void { cur = null; keys = false; forceActiveFocus(); }
+    onTabChanged: cur = null
+    onVisibleChanged: if (!visible) { cur = null; keys = false; }
+    // the stops on screen now: { x, y, w, h, item }
+    function stops(): var {
+        const out = [];
+        const walk = it => {
+            if (!it || !it.visible || it.opacity < 0.05) return;
+            if (it.focusStop === true && it.width > 0 && it.height > 0) {
+                const p = it.mapToItem(root, 0, 0);
+                if (p.x + it.width > 4 && p.x < root.width - 4 && p.y + it.height > 4 && p.y < root.height - 4)
+                    out.push({ x: p.x, y: p.y, w: it.width, h: it.height, item: it });
+                return;
+            }
+            const kids = it.children;
+            for (let i = 0; i < kids.length; i++) walk(kids[i]);
+        };
+        walk(root);
+        return out;
+    }
+    function go(pickNext: var): void {
+        const all = stops();
+        const from = all.find(r => r.item === cur) ?? null;
+        // the first key puts the ring on the tab's first control, under the tab bar
+        const to = from || !all.length ? pickNext(all, from) : (Nav.order(all.filter(r => r.y > 56))[0] ?? Nav.order(all)[0]);
+        if (to) { cur = to.item; ring.place(); }
+        keys = !!cur;
+    }
+    readonly property var keyNames: ({ [Qt.Key_Left]: "Left", [Qt.Key_Right]: "Right", [Qt.Key_Up]: "Up", [Qt.Key_Down]: "Down",
+        [Qt.Key_Tab]: "Tab", [Qt.Key_Backtab]: "Tab", [Qt.Key_Return]: "Return", [Qt.Key_Enter]: "Return", [Qt.Key_Space]: "Space", [Qt.Key_Escape]: "Escape" })
+    Keys.onPressed: e => {
+        const field = root.Window.activeFocusItem;
+        const editing = !!field && field !== root && field.cursorPosition !== undefined;
+        const name = keyNames[e.key] ?? (/^[1-9]$/.test(e.text) ? e.text : "");
+        const a = Nav.action(name, { tabs: tabs.length, tab: tab, editing: editing,
+            adjustable: !!cur && typeof cur.focusAdjust === "function",
+            ctrl: !!(e.modifiers & Qt.ControlModifier), shift: !!(e.modifiers & Qt.ShiftModifier) || e.key === Qt.Key_Backtab });
+        switch (a.type) {
+        case "tab": root.select(a.index); break;
+        case "move": go((all, from) => Nav.nearest(all, from, a.dir)); break;
+        case "step": go((all, from) => Nav.step(all, from, a.dir)); break;
+        case "adjust": keys = true; cur.focusAdjust(a.dir); break;
+        case "press": if (cur && keys) cur.focusPress(); break;
+        case "leave": root.forceActiveFocus(); break;
+        case "close": root.close(); break;
+        default: return;
+        }
+        e.accepted = true;
+    }
+    HoverHandler { onPointChanged: if (root.keys) root.keys = false } // the mouse takes over: no ring
+    Rectangle {
+        id: ring
+        z: 100
+        visible: opacity > 0.01
+        opacity: root.keys && root.cur ? 1 : 0
+        color: "transparent"
+        border.width: 2
+        border.color: Theme.tone("action")
+        property rect at: Qt.rect(0, 0, 0, 0)
+        function place(): void {
+            const c = root.cur;
+            if (!c || !c.visible) { root.cur = null; return; }
+            const p = c.mapToItem(root, 0, 0);
+            at = Qt.rect(p.x, p.y, c.width, c.height);
+            radius = (c.focusRadius ?? c.radius ?? Math.min(c.width, c.height) / 2) + 4;
+        }
+        x: at.x - 4; y: at.y - 4
+        width: at.width + 8; height: at.height + 8
+        Behavior on x { SpringAnimation { spring: 5; damping: 0.4; epsilon: 0.2 } }
+        Behavior on y { SpringAnimation { spring: 5; damping: 0.4; epsilon: 0.2 } }
+        Behavior on width { SpringAnimation { spring: 5; damping: 0.4; epsilon: 0.2 } }
+        Behavior on height { SpringAnimation { spring: 5; damping: 0.4; epsilon: 0.2 } }
+        Behavior on opacity { NumberAnimation { duration: 140 } }
+        // it follows its control while things settle (a tab sliding in, a list reflowing)
+        Timer { interval: 120; repeat: true; running: ring.visible; onTriggered: ring.place() }
+    }
 
     readonly property var tabs: [
         { name: "Dashboard", icon: "dashboard" },
@@ -39,6 +126,10 @@ Item {
         signal moved(real v)
         signal nudged(int dir)
         signal iconClicked()
+        readonly property bool focusStop: true   // Left/Right nudge it, Enter its icon (mute)
+        readonly property real focusRadius: 19
+        function focusAdjust(dir: int): void { qs.nudged(dir); }
+        function focusPress(): void { qs.iconClicked(); }
         spacing: 8
         height: 38
         readonly property color tone: dim ? Theme.neutral : Theme.tone("action")
@@ -144,6 +235,9 @@ Item {
                     required property var modelData
                     required property int index
                     readonly property bool current: root.tab === index
+                    readonly property bool focusStop: true
+                    readonly property real focusRadius: height / 2
+                    function focusPress(): void { root.select(tb.index); }
                     // only the current tab shows its name; it slides open as you switch
                     width: tbRow.implicitWidth + 24
                     height: parent.height

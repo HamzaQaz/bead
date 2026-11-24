@@ -10,6 +10,8 @@ Item {
     property color tone: dim ? Theme.neutral : Theme.tone("action")
     signal moved(real v)
     signal nudged(int dir)
+    readonly property bool focusStop: true   // a stop for the dashboard's keyboard ring: Left/Right nudge it
+    function focusAdjust(dir: int): void { nudged(dir); }
     implicitHeight: 20
 
     Rectangle {

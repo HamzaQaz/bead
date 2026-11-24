@@ -24,6 +24,8 @@ Item {
         property string glyph: ""
         property bool on: false
         signal hit()
+        readonly property bool focusStop: true
+        function focusPress(): void { chip.hit(); }
         height: 30
         width: chipRow.implicitWidth + 24
         radius: 15
@@ -135,6 +137,9 @@ Item {
             required property var modelData
             readonly property bool live: !!modelData.id
             readonly property bool on: Wallpaper.isCurrent(modelData)
+            readonly property bool focusStop: true
+            readonly property real focusRadius: 14
+            function focusPress(): void { Wallpaper.pick(cell.modelData); }
             width: grid.cellWidth
             height: grid.cellHeight
 

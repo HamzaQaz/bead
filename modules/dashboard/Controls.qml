@@ -25,6 +25,9 @@ Row {
         property bool active: false
         property real kick: 0 // -1 back, 1 forward: the glyph jumps that way
         signal clicked()
+        readonly property bool focusStop: true   // a stop for the dashboard's keyboard ring
+        readonly property real focusRadius: width / 2
+        function focusPress(): void { b.clicked(); }
         width: big ? root.size : root.size * 0.76
         height: width
         anchors.verticalCenter: parent?.verticalCenter

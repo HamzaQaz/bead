@@ -1188,7 +1188,11 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "bead-island"
-            WlrLayershell.keyboardFocus: Passkey.asking || root.launcherOpen || root.overviewOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+            // the dashboard too, but only when a key opened it: hovering it open must not take your typing
+            readonly property bool dashKeys: root.pinnedOn === modelData.name && state === "open"
+            onDashKeysChanged: if (dashKeys) dashFocus.restart()
+            Timer { id: dashFocus; interval: 140; onTriggered: if (win.dashKeys) dash.takeKeys() }
+            WlrLayershell.keyboardFocus: Passkey.asking || root.launcherOpen || root.overviewOpen || dashKeys ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             // input: the island itself, plus the top frame strip (hover opens it)
             mask: Region {
                 item: win.state === "tucked" ? null : hit
@@ -2040,6 +2044,7 @@ Scope {
                     tab: root.tab
                     onSelect: t => root.tab = t
                     onPick: p => root.picked = p
+                    onClose: root.pinnedOn = ""
                 }
             }
         }

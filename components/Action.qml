@@ -8,6 +8,8 @@ Rectangle {
     property string glyph: ""
     property bool accent: false
     signal hit()
+    readonly property bool focusStop: true   // a stop for the dashboard's keyboard ring
+    function focusPress(): void { act.hit(); }
     width: actRow.implicitWidth + 22
     height: 28
     radius: 14

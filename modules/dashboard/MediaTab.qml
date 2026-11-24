@@ -97,6 +97,8 @@ Item {
                             id: chip
                             required property MprisPlayer modelData
                             readonly property bool current: modelData === root.player
+                            readonly property bool focusStop: true
+                            function focusPress(): void { root.pick(chip.modelData); }
                             width: chipText.implicitWidth + 20
                             height: 24
                             radius: 12

@@ -179,6 +179,8 @@ Row {
                         id: chip
                         required property int modelData
                         readonly property bool on: quick.mins === modelData
+                        readonly property bool focusStop: true
+                        function focusPress(): void { quick.mins = chip.modelData; }
                         width: (190 - 18) / 4; height: 28; radius: 14
                         color: on ? Theme.tone("action") : Qt.alpha(Theme.text, chipMa.pressed ? 0.16 : chipMa.containsMouse ? 0.11 : 0.06)
                         scale: chipMa.pressed ? 0.92 : 1
@@ -198,6 +200,8 @@ Row {
                 spacing: 8
                 Rectangle { // start
                     id: go
+                    readonly property bool focusStop: true
+                    function focusPress(): void { quick.start(); }
                     width: 118; height: 36; radius: 18
                     color: Theme.tone("action")
                     scale: goMa.pressed ? 0.94 : 1
@@ -216,6 +220,8 @@ Row {
                     MouseArea { id: goMa; anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: quick.start() }
                 }
                 Rectangle { // stopwatch
+                    readonly property bool focusStop: true
+                    function focusPress(): void { Countdown.startStopwatch(); }
                     width: 64; height: 36; radius: 18
                     color: Qt.alpha(Theme.text, swMa.pressed ? 0.16 : swMa.containsMouse ? 0.11 : 0.06)
                     scale: swMa.pressed ? 0.94 : 1
@@ -340,6 +346,8 @@ Row {
                             property bool main: false
                             property string tip: ""
                             signal hit()
+                            readonly property bool focusStop: true
+                            function focusPress(): void { ctl.hit(); }
                             width: 38; height: 38; radius: 19
                             color: main ? Theme.tone("action") : Qt.alpha(Theme.text, cma.pressed ? 0.16 : cma.containsMouse ? 0.11 : 0.06)
                             scale: cma.pressed ? 0.92 : 1

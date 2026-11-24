@@ -6,6 +6,9 @@ Rectangle {
     id: sw
     property bool checked: false
     signal toggled()
+    // the dashboard's keyboard ring stops here (modules/dashboard/focusnav.js)
+    readonly property bool focusStop: true
+    function focusPress(): void { sw.toggled(); }
     width: 36
     height: 20
     radius: 10
