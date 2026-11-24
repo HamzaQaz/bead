@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Shapes
+import "../../components/emptystates.js" as Empty
 import qs.components
 import qs.config
 import qs.services
@@ -338,12 +339,18 @@ Row {
     Card {
         width: parent.width
         height: parent.height
-        visible: !Weather.ready
+        id: waiting
+        // on its way, or it didn't get through (components/emptystates.js)
+        readonly property var what: Empty.weather({ ready: Weather.ready, failed: Weather.failed })
+        visible: !!what
         Column {
             anchors.centerIn: parent
             spacing: 8
-            Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "cloud_sync"; size: 32; color: Theme.subtext }
-            Label { text: "Getting the weather…" }
+            Icon { anchors.horizontalCenter: parent.horizontalCenter; name: waiting.what?.glyph ?? ""; size: 32; color: Theme.subtext }
+            Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; text: waiting.what?.text ?? "" }
+            Label { anchors.horizontalCenter: parent.horizontalCenter; visible: text !== ""; text: waiting.what?.hint ?? "" }
+            Item { width: 1; height: 2; visible: retry.visible }
+            Action { id: retry; anchors.horizontalCenter: parent.horizontalCenter; visible: !!waiting.what?.retry; text: "Try again"; glyph: "refresh"; onHit: Weather.retry() }
         }
     }
 }

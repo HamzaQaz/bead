@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Networking
+import "../../components/emptystates.js" as Empty
 import qs.components
 import qs.config
 
@@ -25,7 +26,10 @@ PanelColumn {
     property string asking: ""   // network waiting for a password
     property string failed: ""   // last network that failed to connect
 
-    onActiveChanged: { if (!active) { asking = ""; failed = ""; } if (dev) dev.scannerEnabled = active; }
+    onActiveChanged: { if (!active) { asking = ""; failed = ""; } if (dev) dev.scannerEnabled = active; looking = 0; }
+    // how long the open panel has had nothing to list (s): "looking…" gives way to "none in range"
+    property int looking: 0
+    Timer { interval: 1000; repeat: true; running: root.active && Networking.wifiEnabled && root.nets.length === 0; onTriggered: root.looking++ }
 
     function strengthIcon(s: real): string {
         return s > 0.75 ? "signal_wifi_4_bar" : s > 0.5 ? "network_wifi_3_bar" : s > 0.25 ? "network_wifi_2_bar" : "network_wifi_1_bar";
@@ -46,7 +50,7 @@ PanelColumn {
         visible: !Networking.wifiEnabled || root.nets.length === 0
         topPadding: 6
         bottomPadding: 6
-        text: !Networking.wifiEnabled ? "Wi-Fi is off" : !root.dev ? "No Wi-Fi adapter" : "Looking for networks…"
+        text: Empty.wifi({ enabled: Networking.wifiEnabled, adapter: !!root.dev, nets: root.nets.length, looking: root.looking })
     }
 
     Repeater {

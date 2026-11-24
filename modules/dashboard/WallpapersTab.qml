@@ -1,7 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
 import QtQuick.Effects
+import "../../components/emptystates.js" as Empty
 import qs.components
 import qs.config
 import qs.services
@@ -61,6 +63,29 @@ Item {
             text: Wallpaper.busy ? "Switching…" : root.cur ? "Now: " + (root.cur.title ?? root.cur.name) : ""
         }
         Chip { glyph: "shuffle"; label: "Shuffle"; onHit: Wallpaper.random(root.filter) }
+    }
+
+    // ── nothing to show: no wallpapers at all, or none of this kind ──
+    Column {
+        id: none
+        readonly property var what: Empty.wallpapers({ shown: root.shown.length, stills: Wallpaper.stills.length, lives: Wallpaper.lives.length,
+            filter: root.filter, dir: Wallpaper.stillDir.replace(Quickshell.env("HOME"), "~") })
+        visible: !!what
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: grid.y + (grid.height - height) / 2
+        spacing: 8
+        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: none.what?.glyph ?? ""; size: 32; color: Theme.subtext }
+        Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; text: none.what?.text ?? "" }
+        Label { anchors.horizontalCenter: parent.horizontalCenter; text: none.what?.hint ?? "" }
+        Item { width: 1; height: 2; visible: openDir.visible }
+        Action {
+            id: openDir
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: !!none.what?.open
+            text: "Open the folder"
+            glyph: "folder_open"
+            onHit: Quickshell.execDetached(["sh", "-c", 'mkdir -p "$1" && xdg-open "$1"', "sh", Wallpaper.stillDir])
+        }
     }
 
     // ── the strip ──

@@ -10,6 +10,8 @@ Singleton {
     id: root
 
     property bool ready: false
+    property bool failed: false     // the last try didn't get through (offline, or the service is down)
+    function retry(): void { failed = false; lastFetch = 0; refresh(); }
     property string city: ""
     property string country: ""
     // Settings.units, or by country (°F in the US, Liberia, Myanmar)
@@ -35,7 +37,7 @@ Singleton {
         lastFetch = Date.now();
         if (coords) forecast();
         else get("http://ip-api.com/json?fields=status,city,lat,lon,countryCode", r => {
-            if (r.status !== "success") return;
+            if (r.status !== "success") { failed = true; lastFetch = 0; return; }
             // country first: with no coords yet, the units change doesn't fetch twice
             country = r.countryCode ?? "";
             coords = { lat: r.lat, lon: r.lon };
@@ -84,8 +86,8 @@ Singleton {
         const x = new XMLHttpRequest();
         x.onreadystatechange = () => {
             if (x.readyState !== XMLHttpRequest.DONE) return;
-            if (x.status === 200) { try { cb(JSON.parse(x.responseText)); } catch (e) {} }
-            else lastFetch = 0; // retry next time
+            if (x.status === 200) { root.failed = false; try { cb(JSON.parse(x.responseText)); } catch (e) { root.failed = true; } }
+            else { root.failed = true; lastFetch = 0; } // retry next time
         };
         x.open("GET", url);
         x.send();
