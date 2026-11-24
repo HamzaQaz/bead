@@ -26,6 +26,8 @@ Singleton {
     property alias askModel: a.askModel             // "sonnet" | "opus" | "haiku"
     property alias askVia: a.askVia                 // "claude" (Claude Code) | "api" (own key) | "local"
     property alias clipHints: a.clipHints           // copied a colour, address, tracking number: the island offers what's next
+    property alias nightLight: a.nightLight         // "off" | "on" | "sunset": a warmer screen (services/NightLight.qml)
+    property alias nightTemp: a.nightTemp           // its colour temperature, K (2500 to 6000)
     property alias gameMode: a.gameMode             // performance, no blur or animations while a game is fullscreen
 
     readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || (Quickshell.screens[0]?.name ?? "")
@@ -57,6 +59,8 @@ Singleton {
             property string askModel: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
             property string askVia: "claude"
             property bool gameMode: true
+            property string nightLight: "off"
+            property real nightTemp: 4500
             property bool clipHints: true
         }
     }

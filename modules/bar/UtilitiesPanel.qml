@@ -267,10 +267,12 @@ PanelColumn {
 
     // ── quick toggles: one compact row ──
     Rectangle { width: root.width; height: 1; color: Qt.alpha(Theme.text, 0.08) }
-    Row {
+    Flow { // five in a row; with the night light, two rows of three
+        id: quick
         width: root.width
         spacing: 6
-        readonly property real w: (root.width - 24) / 5
+        readonly property int perRow: NightLight.available ? 3 : 5
+        readonly property real w: (root.width - 6 * (perRow - 1)) / perRow
         Chip { width: parent.w; glyph: "do_not_disturb_on"; label: "Quiet"; on: Notifs.dnd; onHit: Notifs.dnd = !Notifs.dnd }
         Chip { width: parent.w; glyph: "coffee"; label: "Awake"; on: Idle.keepAwake; onHit: Idle.keepAwake = !Idle.keepAwake }
         Chip { width: parent.w; glyph: Audio.micMuted ? "mic_off" : "mic"; label: "Mic"; on: !Audio.micMuted; onHit: Audio.toggleMicMute() }
@@ -281,5 +283,13 @@ PanelColumn {
             onHit: Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled
         }
         Chip { width: parent.w; glyph: "colorize"; label: "Pick"; onHit: { root.done(); Capture.pickColour(); } }
+        Chip { // the night light: off, on, from sunset (services/NightLight.qml)
+            width: parent.w
+            visible: NightLight.available
+            glyph: NightLight.mode === "sunset" ? "wb_twilight" : "nightlight"
+            label: NightLight.chip.label
+            on: NightLight.chip.lit
+            onHit: { const said = NightLight.step(); Osd.toast(glyph, said, "action", 2200); }
+        }
     }
 }
