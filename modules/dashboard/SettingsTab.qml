@@ -433,6 +433,22 @@ Item {
                     }
                 }
                 In {
+                    order: 3; width: root.colW; height: 44
+                    Line {
+                        label: "Your voice actions"
+                        hint: Voice.customError ? "Skipped: " + Voice.customError
+                            : Voice.custom.length ? Voice.custom.map(c => c.name.replace(/_/g, " ")).join(" · ")
+                            : "Add your own commands and automations"
+                        Action {
+                            text: "Edit"; glyph: "edit"
+                            onHit: {
+                                Voice.ensureCustom();
+                                Quickshell.execDetached(["bead-term", "--", "sh", "-c", 'exec "${VISUAL:-${EDITOR:-nano}}" "$1"', "sh", Voice.customPath]);
+                            }
+                        }
+                    }
+                }
+                In {
                     order: 4; width: root.colW; height: 44
                     Line {
                         label: "Dictation"

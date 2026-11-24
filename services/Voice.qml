@@ -9,6 +9,24 @@ import Quickshell.Io
 // llama-server, on the GPU) picks ONE action from a fixed list as JSON, and
 // the island runs it (see Island.runVoice). Nothing outside the list can run.
 //
+// Your own actions (and automations: chains of steps) live in
+// ~/.config/bead/voice.json, reloaded on save:
+//   { "actions": [ {
+//       "name": "game_mode",                       a-z, 0-9, _
+//       "when": "start gaming or game mode",       tells the model when to pick it
+//       "phrases": ["game mode"],                  optional: exact words that skip the model
+//       "text": false,                             true: what you said goes to $BEAD_TEXT
+//       "say": "Game mode on",                     optional: shown on the island after
+//       "steps": [
+//         { "do": "open_app", "app": "steam", "workspace": 5, "alone": true },
+//         { "do": "dnd" },                         any built-in action, with its fields
+//         { "wait": 500 },                         milliseconds
+//         { "run": "notify-send 'gl hf'" }         a shell command (sh -c)
+//       ] } ] }
+// The model only ever picks a name; the commands come from your file. A text
+// action's words reach its commands as $BEAD_TEXT (an environment variable,
+// never pasted into the command: write "$BEAD_TEXT", quoted).
+//
 // The model server starts when you press the key (it loads while you talk)
 // and stops after a few idle minutes, so nothing sits in VRAM all day.
 Singleton {
@@ -28,7 +46,7 @@ Singleton {
     property bool serverReady: false
     property string pending: "" // heard before the server was ready
 
-    readonly property var actions: ({
+    readonly property var builtins: ({
         timer: "start a countdown timer; hours, minutes and seconds as said (don't add them up)",
         stopwatch: "start a stopwatch",
         stop_timers: "stop or cancel all timers",
@@ -50,6 +68,78 @@ Singleton {
         ask: "any question (who, what, how, why, when…) or request for information; text = the question",
         none: "only greetings, chit-chat or unclear speech"
     })
+    // built-ins, then yours
+    readonly property var actions: {
+        const out = Object.assign({}, builtins);
+        delete out.none; // keep "none" last: the model's fallback
+        for (const c of custom) out[c.name] = c.when + (c.text ? "; text = what they asked for" : "");
+        out.none = builtins.none;
+        return out;
+    }
+
+    // ── your actions (~/.config/bead/voice.json) ──
+    readonly property string customPath: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/bead/voice.json"
+    property var custom: []
+    property string customError: ""   // why the file (or an action in it) was skipped
+    function parseCustom(txt: string): void {
+        let d;
+        try { d = JSON.parse(txt); } catch (e) { custom = []; customError = "voice.json isn't valid JSON: " + e.message; return; }
+        const out = [], bad = [];
+        for (const c of (d.actions ?? [])) {
+            const name = String(c.name ?? "");
+            const steps = Array.isArray(c.steps) ? c.steps : [];
+            const why = !/^[a-z][a-z0-9_]{0,39}$/.test(name) ? "name must be a-z, 0-9 or _"
+                : builtins[name] !== undefined ? "a built-in has that name"
+                : out.some(x => x.name === name) ? "used twice"
+                : !c.when ? "needs \"when\""
+                : !steps.length ? "needs steps"
+                : steps.some(st => !(st.run || st.wait > 0 || (st.do && builtins[st.do] !== undefined && st.do !== "none")))
+                    ? "a step needs \"run\", \"wait\" or a built-in \"do\"" : "";
+            if (why) { bad.push((name || "?") + ": " + why); continue; }
+            out.push({ name: name, when: String(c.when), text: c.text === true, say: String(c.say ?? ""),
+                phrases: (c.phrases ?? []).map(norm).filter(x => x), steps: steps });
+        }
+        custom = out;
+        customError = bad.join("; ");
+        if (bad.length) console.warn("voice: skipped", customError);
+    }
+    // words only, lower case, single spaces
+    function norm(t: string): string { return String(t).toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim(); }
+    // one of your phrases, said: run it straight away, no model needed. A text
+    // action's phrase starts the sentence and the rest is its text
+    function byPhrase(heard: string): var {
+        const h = norm(heard);
+        for (const c of custom) for (const p of c.phrases) {
+            if (c.text && (h === p || h.startsWith(p + " "))) {
+                // the rest as you said it (case, punctuation and all), past the phrase's words
+                const lead = new RegExp("^\\W*" + p.split(" ").map(w => w.replace(/'/g, "\\W?")).join("\\W+") + "\\W*", "i");
+                return { action: c.name, text: heard.replace(lead, "").trim() };
+            }
+            if (!c.text && (" " + h + " ").includes(" " + p + " ")) return { action: c.name };
+        }
+        return null;
+    }
+    // a starting point for the file, if you don't have one yet
+    function ensureCustom(): void {
+        if (customFile.loaded) return;
+        customFile.setText(JSON.stringify({ actions: [
+            { name: "game_mode", when: "start gaming, or game mode", phrases: ["game mode"], say: "Game mode on",
+              steps: [{ do: "open_app", app: "steam", workspace: 5, alone: true }, { do: "dnd" }] },
+            { name: "search_web", when: "search the web for something", text: true, phrases: ["search for", "look up"],
+              steps: [{ run: "xdg-open \"https://duckduckgo.com/?q=$BEAD_TEXT\"" }] }
+        ] }, null, 2) + "\n");
+    }
+    FileView {
+        id: customFile
+        path: root.customPath
+        watchChanges: true
+        printErrors: false
+        property bool loaded: false
+        onFileChanged: reload()
+        onLoaded: { loaded = true; root.parseCustom(text()); }
+        onLoadFailed: { loaded = false; root.custom = []; root.customError = ""; }
+    }
+
     readonly property var schema: ({
         type: "object",
         properties: {
@@ -168,6 +258,14 @@ Singleton {
 
     function decide(heard: string): void {
         idle.restart();
+        const hit = byPhrase(heard);
+        if (hit) {
+            console.info("voice: phrase", JSON.stringify(hit), "for", JSON.stringify(heard));
+            root.state = "done";
+            handover.action = hit;
+            handover.restart();
+            return;
+        }
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "http://127.0.0.1:" + port + "/v1/chat/completions");
         xhr.setRequestHeader("Content-Type", "application/json");
@@ -204,6 +302,13 @@ Singleton {
         function stop(): void { root.stop(); }
         function cancel(): void { root.cancel(); }
         function status(): string { return (root.state || "idle") + (server.running ? (root.serverReady ? " · model ready" : " · model loading") : ""); }
+        // one of your actions, by name (for keybinds and scripts: bead voice run NAME [TEXT])
+        function run(name: string, text: string): string {
+            if (!root.custom.some(c => c.name === name)) return "no action called " + name + (root.customError ? " (" + root.customError + ")" : "");
+            root.decided({ action: name, text: text }, text);
+            return "ok";
+        }
+        function list(): string { return root.custom.map(c => c.name + (c.phrases.length ? " (\"" + c.phrases.join("\", \"") + "\")" : "")).join("\n") + (root.customError ? "\nskipped: " + root.customError : ""); }
         // test the decision without speaking
         function decideText(text: string): void { root.ensureServer(); root.heard = text; root.partial = text; root.state = "thinking"; if (root.serverReady) root.decide(text); else root.pending = text; }
     }

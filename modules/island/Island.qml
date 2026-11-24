@@ -218,8 +218,9 @@ Scope {
         return Math.round(total) * 1000;
     }
     // run what the voice model picked; each says what it did on the island
+    property bool voiceQuiet: false // running a step of your action: its own "say" speaks for it
     function runVoice(a: var, heard: string): void {
-        const say = (icon, text) => root.toast(icon, text, "action", 2200);
+        const say = (icon, text) => { if (!root.voiceQuiet) root.toast(icon, text, "action", 2200); };
         const dispatch = lua => Quickshell.execDetached(["hyprctl", "dispatch", lua]);
         switch (a.action) {
         case "timer": {
@@ -279,7 +280,36 @@ Scope {
             return;
         }
         }
+        const mine = Voice.custom.find(c => c.name === a.action);
+        if (mine) return root.runCustom(mine, mine.text ? (a.text || heard) : "", heard);
         root.toast("help", "Not a command: \u201c" + heard + "\u201d", "info", 2800);
+    }
+    // your action (services/Voice.qml): its steps in order. Built-in steps run
+    // quietly; commands get what you said as $BEAD_TEXT, never in the command
+    function runCustom(c: var, text: string, heard: string): void {
+        const step = i => {
+            if (i >= c.steps.length) { if (c.say) root.toast("bolt", c.say, "action", 2200); return; }
+            const st = c.steps[i];
+            if (st.wait > 0) { later.start(Math.min(60000, st.wait), () => step(i + 1)); return; }
+            if (st.run) Quickshell.execDetached({ command: ["sh", "-c", String(st.run)], environment: { BEAD_TEXT: text, BEAD_HEARD: heard } });
+            else if (st.do) {
+                root.voiceQuiet = !!c.say;
+                root.runVoice(Object.assign({}, st, { action: st.do, text: st.text ?? text }), st.text ?? (text || heard));
+                root.voiceQuiet = false;
+            }
+            step(i + 1);
+        };
+        step(0);
+    }
+    // waits between steps (several actions may be waiting at once)
+    QtObject {
+        id: later
+        function start(ms: int, then: var): void {
+            const t = Qt.createQmlObject("import QtQuick; Timer { }", root);
+            t.interval = ms;
+            t.triggered.connect(() => { t.destroy(); then(); });
+            t.start();
+        }
     }
     GlobalShortcut {
         appid: "bead"

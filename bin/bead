@@ -81,6 +81,13 @@ lock) # bead lock [preview]: lock the screen (preview: show it for 20 s without 
 	exec qs -p "$share" ipc call lock "${2:-lock}" ;;
 island) # bead island [toggle|show|hide]
 	exec qs -p "$share" ipc call island "${2:-toggle}" ;;
+voice) # bead voice [run NAME [TEXT] | list | edit]: your voice actions (~/.config/bead/voice.json)
+	case ${2:-list} in
+	run) exec qs -p "$share" ipc call voice run "$3" "${4:-}" ;;
+	list) exec qs -p "$share" ipc call voice list ;;
+	edit) exec "${VISUAL:-${EDITOR:-nano}}" "${XDG_CONFIG_HOME:-$HOME/.config}/bead/voice.json" ;;
+	*) echo "bead voice [run NAME [TEXT] | list | edit]" >&2; exit 2 ;;
+	esac ;;
 welcome) # bead welcome: the first-run welcome, again
 	exec qs -p "$share" ipc call welcome open ;;
 launcher) # bead launcher [toggle|open|close|search TEXT]
