@@ -46,12 +46,18 @@ Then start it with `bead start`, or log out and back in.
     terminal, so you see the build file first)
   - `?` questions for Pearl (see the optional parts below)
 - **Overview** (<kbd>Super</kbd>+<kbd>Tab</kbd>): every workspace and its windows, live.
+  Drag a window to another workspace (or onto `+` for a new one); <kbd>↓</kbd> picks a
+  window, then <kbd>f</kbd> floats, <kbd>x</kbd> closes and <kbd>p</kbd> pins it.
 - **Dashboard** (<kbd>Super</kbd>+<kbd>K</kbd>): media, weather, performance, timers,
-  wallpapers, apps (sizes, last opened, uninstall, updates) and settings. Opened by
+  wallpapers (bead's own included), apps (sizes, last opened, uninstall, updates),
+  displays (drag to arrange; refresh rate, scale, rotation, each change undone
+  after 15 s unless you keep it) and settings. Opened by
   key, it's all reachable by keyboard: number keys for tabs, arrows to move.
 - **Notifications**: one app's pop-ups stack into one, swipe to dismiss, with history.
 - **Lock screen**: PAM, with your wallpaper, the time and what's playing.
 - **OSDs**: volume, brightness (including DDC monitors) and Caps Lock.
+- **Bluetooth**: pairs new devices from the bar; sound follows headphones when
+  they connect and comes back when they go.
 
 **Optional parts** (choose them in strand)
 
