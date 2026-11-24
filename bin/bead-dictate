@@ -16,6 +16,15 @@ Out (JSON lines): {"level": x} | {"partial": "..."} | {"state": "transcribing"} 
                  of starting whisper-cli; falls back to whisper-cli if it fails
 --partials       while recording, transcribe what's been said so far about twice
                  a second and print it as {"partial": ...} (needs --server)
+--live           type as you speak (needs --partials): a word is typed once two
+                 partials in a row agree on it, and the final transcript then
+                 corrects what was typed (backspacing over revised words).
+                 Typing waits for `free` on stdin: while the shortcut is held
+                 its modifier (Super) is down, and typed letters would become
+                 shortcuts. `free` also makes it hands-free: it stops by itself
+                 after ~2 s of quiet
+--until-silence  hands-free: stop by itself about a second after you finish
+                 speaking (and give up if nothing is said within 8 s)
 Only the Python standard library is used.
 """
 import array
@@ -89,9 +98,46 @@ def via_server(url: str, pcm: bytes, timeout=10) -> str:
         return json.load(r).get("text", "")
 
 
+class Typer:
+    """Types text into the focused window, keeping track of what it typed so
+    a later, better guess can replace it: backspace to where they agree, then
+    type the rest."""
+
+    def __init__(self):
+        self.typed = ""
+        self.lock = threading.Lock()
+
+    def to(self, target: str):
+        with self.lock:
+            c = 0
+            while c < min(len(self.typed), len(target)) and self.typed[c] == target[c]:
+                c += 1
+            back = len(self.typed) - c
+            if back:
+                subprocess.run(["wtype"] + ["-k", "BackSpace"] * back, timeout=30)
+            if target[c:]:
+                subprocess.run(["wtype", "--", target[c:]], timeout=30)
+            self.typed = target
+
+
+def agreed(a: str, b: str) -> list:
+    """The words two transcripts agree on, from the start."""
+    out = []
+    for x, y in zip(a.split(), b.split()):
+        if x != y:
+            break
+        out.append(x)
+    return out
+
+
 def main():
     server = arg("--server")
     partials = server and "--partials" in sys.argv
+    typing = not os.environ.get("BEAD_DICTATE_DRY") and "--no-type" not in sys.argv
+    live = partials and typing and "--live" in sys.argv
+    until_silence = "--until-silence" in sys.argv
+    typer = Typer()
+    committed = []  # words typed live so far
     wbin = whisper_bin()
     if not wbin and not server:
         say(error="whisper.cpp isn't installed (pacman -S whisper-cpp ggml-vulkan)")
@@ -116,6 +162,10 @@ def main():
     def commands():
         for line in sys.stdin:
             cmd = line.strip()
+            if cmd == "free":
+                free_at[0] = time.monotonic()
+                free.set()
+                continue
             if cmd == "cancel":
                 cancelled.set()
             if cmd in ("stop", "cancel"):
@@ -123,12 +173,16 @@ def main():
         stop.set()  # stdin closed counts as stop
     threading.Thread(target=commands, daemon=True).start()
 
+    free = threading.Event()  # the key's been let go: safe to type, and hands-free
+    free_at = [0.0]
     frames = bytearray()
     lock = threading.Lock()
     heard_speech = threading.Event()
 
     def partial_loop():
+        nonlocal committed
         last = 0
+        prev = ""
         while not stop.is_set():
             time.sleep(0.45)
             if stop.is_set() or not heard_speech.is_set():
@@ -145,12 +199,24 @@ def main():
                 continue
             if t and not stop.is_set():
                 say(partial=t)
+                # live typing: commit the words this guess and the last agree on
+                # (only while the window still starts at the beginning: 28 s)
+                if live and free.is_set() and n < RATE * 2 * 28:
+                    words = agreed(prev, t)
+                    if len(words) > len(committed) and words[:len(committed)] == committed:
+                        with typer.lock:
+                            if stop.is_set():
+                                continue
+                        committed = words
+                        typer.to(" ".join(words) + " ")
+                prev = t
     if partials:
         threading.Thread(target=partial_loop, daemon=True).start()
     chunk = RATE // 20 * 2  # 50 ms of s16
     smooth = 0.0
     peak = 0.0
     loud = 0  # 50 ms chunks at speech level: silence alone makes whisper invent words ("you")
+    last_loud = started
     while not stop.is_set():
         b = rec.stdout.read(chunk)
         if not b:
@@ -166,9 +232,25 @@ def main():
             peak = max(peak, lvl)
             if lvl > 0.18:  # quiet headset mics sit around 0.2-0.4 when you talk
                 loud += 1
+                last_loud = time.monotonic()
                 if loud >= 3:
                     heard_speech.set()
             say(level=round(smooth, 3))
+            if free.is_set():
+                now = time.monotonic()
+                if heard_speech.is_set() and now - max(last_loud, free_at[0]) > 2.0:
+                    break  # hands-free: you've stopped talking
+                if not heard_speech.is_set() and now - free_at[0] > 8:
+                    cancelled.set()
+                    break
+            if until_silence:
+                now = time.monotonic()
+                if heard_speech.is_set() and now - last_loud > 1.1:
+                    break  # you've finished
+                if not heard_speech.is_set() and now - started > 8:
+                    cancelled.set()
+                    break
+    stop.set()  # (also ends the partials: the until-silence path leaves the loop itself)
     rec.terminate()
     try:
         rec.wait(1)
@@ -178,6 +260,8 @@ def main():
     try:
         if (cancelled.is_set() or time.monotonic() - started < MIN_SECONDS
                 or len(frames) < RATE * 2 * MIN_SECONDS or loud < 3):
+            if typing and typer.typed:
+                typer.to("")  # cancelled: take back what was typed live
             say(text="", peak=round(peak, 3), loud=loud)
             return 0
         say(state="transcribing")
@@ -204,10 +288,10 @@ def main():
                 say(error=(r.stderr.strip().splitlines() or ["whisper failed"])[-1][:200])
                 return 1
             text = clean(r.stdout)
-        if text and not os.environ.get("BEAD_DICTATE_DRY") and "--no-type" not in sys.argv:
-            # type into whatever has focus; a trailing space lets the next
-            # dictation carry on the sentence
-            subprocess.run(["wtype", "--", text + " "], timeout=30)
+        if typing and (text or typer.typed):
+            # type into whatever has focus (correcting anything typed live); a
+            # trailing space lets the next dictation carry on the sentence
+            typer.to(text + " " if text else "")
         say(text=text)
         return 0
     finally:

@@ -10,14 +10,17 @@ import qs.services
 //   transcribing  the bars collapse into the middle and melt into a goo blob
 //   thinking      the blob wobbles faster while the model picks an action
 //   done          the blob swells, then the island becomes the result
+//   a question    (Voice.ask: "Which server?") the options as chips under the
+//                 words; it listens without the key, or tap one
 Item {
     id: root
     property bool active: false
 
     readonly property real wantW: 420
-    readonly property real wantH: 116
+    readonly property real wantH: Voice.question ? 160 : 116
     readonly property string phase: Voice.state
     readonly property bool listening: phase === "listening"
+    readonly property bool asking: Voice.question !== null
 
     // ── the waveform: the last ~2.4 s of your level, newest in the middle,
     // spreading out to both sides ──
@@ -41,7 +44,7 @@ Item {
     onActiveChanged: if (active) { history = []; gain = 0.2; }
 
     // 0 while listening → 1 once released: the bars gather and the blob takes over
-    property real collapse: listening || !active ? 0 : 1
+    property real collapse: listening || !active || (asking && phase === "") ? 0 : 1
     Behavior on collapse { NumberAnimation { duration: 420; easing.type: Easing.InOutCubic } }
 
     Item {
@@ -112,17 +115,49 @@ Item {
         font.pixelSize: 14
         font.weight: Voice.partial ? Font.Medium : Font.Normal
         color: Voice.partial ? Theme.text : Theme.subtext
-        text: Voice.partial || (root.listening ? "Listening…" : "")
+        text: Voice.partial || (root.asking ? Voice.question.prompt : root.listening ? "Listening…" : "")
         Behavior on color { ColorAnimation { duration: 200 } }
     }
     Label {
         anchors.horizontalCenter: parent.horizontalCenter
         y: words.y + words.height + 2
         font.pixelSize: 11
-        opacity: root.listening ? 0 : 1
+        opacity: root.listening || root.asking ? 0 : 1
         Behavior on opacity { NumberAnimation { duration: 200 } }
         text: root.phase === "transcribing" ? "Catching the last words…" : root.phase === "thinking" ? "Working out what to do…" : ""
     }
 
-    TapHandler { onTapped: root.listening ? Voice.stop() : Voice.cancel() }
+    // the question's options: say one, or tap it
+    Row {
+        id: chips
+        visible: root.asking
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: words.y + words.height + 10
+        spacing: 6
+        Repeater {
+            model: root.asking ? Voice.question.options.slice(0, 6) : []
+            Rectangle {
+                id: chip
+                required property string modelData
+                required property int index
+                height: 28
+                width: chipText.implicitWidth + 24
+                radius: 14
+                color: chipHover.hovered ? Qt.alpha(Theme.tone("action"), 0.3) : Qt.alpha(Theme.text, 0.08)
+                Behavior on color { ColorAnimation { duration: 150 } }
+                Text {
+                    id: chipText
+                    anchors.centerIn: parent
+                    font.family: Theme.font
+                    font.pixelSize: 13
+                    color: Theme.text
+                    text: chip.modelData
+                }
+                HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: Voice.answer(chip.modelData) }
+            }
+        }
+    }
+
+    TapHandler { enabled: !root.asking; onTapped: root.listening ? Voice.stop() : Voice.cancel() }
 }

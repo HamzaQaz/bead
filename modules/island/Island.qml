@@ -178,9 +178,21 @@ Scope {
     GlobalShortcut {
         appid: "bead"
         name: "dictate"
-        description: "Hold to dictate into the focused field"
-        onPressed: Dictation.start()
-        onReleased: Dictation.stop()
+        description: "Hold to dictate (typed on release), or tap for hands-free live typing"
+        onPressed: Dictation.keyDown()
+        onReleased: Dictation.keyUp()
+    }
+    Process {
+        id: looker
+        property string what: ""
+        stdout: SplitParser {
+            onRead: line => {
+                let m;
+                try { m = JSON.parse(line); } catch (e) { return; }
+                if (m.error) root.toast("ads_click", m.error, "error", 3200);
+                else if (m.clicked) root.toast("ads_click", "Clicked " + looker.what, "action", 1800);
+            }
+        }
     }
     Connections {
         target: Dictation
@@ -249,7 +261,8 @@ Scope {
             const name = (a.app ?? "").replace(place, "").trim();
             const m = heard.match(/(?:workspace|window|desktop|screen)\s+(?:number\s+)?(\w+)/i);
             const spoken = m ? (parseInt(m[1]) || words.indexOf(m[1].toLowerCase())) : -1;
-            const ws = a.workspace > 0 ? a.workspace : spoken > 0 ? spoken : 0;
+            // only when you said where (the model sometimes adds one of its own)
+            const ws = !m ? 0 : spoken > 0 ? spoken : a.workspace > 0 ? a.workspace : 0;
             const alone = a.alone === true || /close\s+(?:all\s+)?(?:the\s+)?(?:other|rest|everything)/i.test(heard);
             const e = name ? Apps.search(name)[0] : null;
             if (!e) return root.toast("search_off", "No app called \u201c" + (name || heard) + "\u201d", "error", 2600);
@@ -265,6 +278,56 @@ Scope {
             dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
             return say("open_in_new", "Opening " + e.name + " on " + ws + (closed ? " \u00b7 closed " + closed : ""));
         }
+        case "click": {
+            // "click the update button": Claude finds it on a screenshot of this
+            // monitor (bin/bead-look), then the pointer moves there and clicks
+            const what = String(a.text || heard.replace(/^\s*(click|press|tap|hit)\s+(on\s+)?/i, "")).replace(/\s+(on|in)\s+(the|my)\s+screen\b.*$/i, "").trim();
+            if (!what) break;
+            if (looker.running) return root.toast("ads_click", "Still looking…", "action", 1600);
+            looker.what = what;
+            looker.command = [Quickshell.env("HOME") + "/.local/bin/bead-look", "click", what];
+            looker.running = true;
+            root.toast("ads_click", "Looking for " + what + "…", "action", 6000);
+            return;
+        }
+        case "ssh": {
+            // a new terminal with ssh in it; on a workspace if you said one.
+            // No host said (or not one of yours): ask which, by voice or tap
+            const m = heard.match(/(?:workspace|window|desktop|screen)\s+(?:number\s+)?(\w+)/i);
+            const nums = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+            const spoken = m ? (parseInt(m[1]) || nums.indexOf(m[1].toLowerCase())) : -1;
+            // only when you said where (the model sometimes adds one of its own)
+            const ws = !m ? 0 : spoken > 0 ? spoken : a.workspace > 0 ? a.workspace : 0;
+            const open = host => {
+                const cmd = ["bead-term", "--class", "bead-ssh", "--title", "ssh " + host, "--", "ssh", "--", host];
+                if (ws) {
+                    dispatch(`hl.dsp.exec_cmd(${JSON.stringify(`[workspace ${ws}] ` + cmd.join(" "))})`);
+                    dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
+                } else Quickshell.execDetached(cmd);
+                root.toast("terminal", "SSH \u00b7 " + host + (ws ? " on " + ws : ""), "action", 2200);
+            };
+            // the host only ever comes from your own words (a model will happily
+            // guess one), minus the "on workspace N" and the filler; no ordinals
+            // here ("two" is a workspace): those are for answering the question
+            const hosts = Voice.sshHosts;
+            const rest = heard.replace(/\b(?:on|in|to|at)?\s*(?:the\s+)?(?:workspace|window|desktop|screen)\s+(?:number\s+)?\w+/ig, " ")
+                .replace(/\b(?:ssh|s s h|into|in to|open|start|a|an|new|terminal|session|connect|connection|to|me|please|the|server|shell|remote)\b/ig, " ").trim();
+            // "ssh to the IP in my clipboard": a host from the clipboard (checked
+            // to be just a host: it reaches a shell, so nothing else gets through)
+            if (Voice.mentionsClip(heard) || /\b(that|this|the) (ip|address|server)\b/i.test(heard)) {
+                const h = Voice.hostIn(Voice.clip);
+                if (h && /^[A-Za-z0-9._@-]+$/.test(h) && !h.startsWith("-")) return open(h);
+                if (Voice.mentionsClip(heard)) return root.toast("content_paste_off", "No server address on the clipboard", "error", 2600);
+            }
+            // or an address said out loud ("ssh to 192.168.1.2")
+            const said = Voice.hostIn(heard.replace(/\s+dot\s+/gi, "."));
+            if (said && /^[A-Za-z0-9._@-]+$/.test(said)) return open(said);
+            const hit = rest ? Voice.matchOption(rest, hosts, false) : "";
+            if (hit) return open(hit);
+            if (!hosts.length) return root.toast("terminal", "No hosts in ~/.ssh/config", "error", 2600);
+            Voice.ask("Which server?", hosts, open);
+            return;
+        }
         case "workspace": if (!(a.workspace > 0)) break; dispatch(`hl.dsp.focus({ workspace = "${a.workspace}" })`); return;
         case "overview": root.overviewOpen = true; return;
         case "wallpaper": Wallpaper.random(""); return say("wallpaper", "New wallpaper");
@@ -272,7 +335,9 @@ Scope {
         case "screenshot_area": Capture.shot("area"); return;
         case "screenshot_screen": Capture.shot("screen"); return;
         case "ask": {
-            const q = a.text || heard;
+            let q = a.text || heard;
+            // "explain what I copied": the clipboard goes along with the question
+            if (Voice.mentionsClip(heard) && Voice.clip) q = heard + "\n\nMy clipboard:\n" + Voice.clip;
             root.launcherSeed = "?" + q;
             if (root.launcherOpen) root.launcherSeedChanged();
             root.launcherOpen = true;
@@ -291,7 +356,7 @@ Scope {
             if (i >= c.steps.length) { if (c.say) root.toast("bolt", c.say, "action", 2200); return; }
             const st = c.steps[i];
             if (st.wait > 0) { later.start(Math.min(60000, st.wait), () => step(i + 1)); return; }
-            if (st.run) Quickshell.execDetached({ command: ["sh", "-c", String(st.run)], environment: { BEAD_TEXT: text, BEAD_HEARD: heard } });
+            if (st.run) Quickshell.execDetached({ command: ["sh", "-c", String(st.run)], environment: { BEAD_TEXT: text, BEAD_HEARD: heard, BEAD_CLIP: Voice.clip } });
             else if (st.do) {
                 root.voiceQuiet = !!c.say;
                 root.runVoice(Object.assign({}, st, { action: st.do, text: st.text ?? text }), st.text ?? (text || heard));

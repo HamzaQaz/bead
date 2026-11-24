@@ -36,9 +36,27 @@ Singleton {
     property string state: ""
     property string partial: ""  // what you've said so far, live
     property string heard: ""    // the final transcript
-    readonly property bool active: state !== ""
+    readonly property bool active: state !== "" || question !== null
     property real level: 0
     signal decided(var action, string heard)
+    property bool dry: false
+    property string lastDecision: ""
+
+    // ── context: what's on your clipboard when you speak (text, up to 4k).
+    // It stays here: the local model only sees it when you mention it ──
+    property string clip: ""
+    function mentionsClip(t: string): bool { return /\b(clipboard|copied|i copied|just copied)\b/i.test(t); }
+    function mentionsScreen(t: string): bool { return /\b(on (the |my )?screen|on screen|you can see|in (this|the) window|that button|the button)\b/i.test(t); }
+    // a host or IP in some text: user@host, an IPv4 address, or a dotted name
+    function hostIn(t: string): string {
+        const m = String(t).match(/(?:^|[\s"'(<\[])((?:[A-Za-z0-9._-]+@)?(?:(?:\d{1,3}\.){3}\d{1,3}|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9-]+)+))(?=$|[\s"')>\]:/,])/);
+        return m ? m[1] : "";
+    }
+    Process {
+        id: clipRead
+        command: ["sh", "-c", "wl-paste -n -t text 2>/dev/null | head -c 4096"]
+        stdout: StdioCollector { onStreamFinished: root.clip = text }
+    }
     signal failed(string why)
 
     readonly property string model: Quickshell.env("HOME") + "/.local/share/bead-models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
@@ -58,6 +76,8 @@ Singleton {
         volume_down: "turn the volume down",
         mute: "mute or unmute the sound",
         mic_mute: "mute or unmute the microphone",
+        click: "click, press or tap something visible on the screen (a button, link, tab, icon); text = what to click, as said",
+        ssh: "open an SSH session (a remote shell) in a new terminal; workspace = the number, if they say where",
         open_app: "open or launch an application; app = its name only; workspace = the number, if they say which workspace (or window, desktop) to open it on; alone = true if they ask to close the other windows there",
         workspace: "go or switch to a workspace; workspace = its number",
         overview: "show all workspaces / windows",
@@ -126,7 +146,8 @@ Singleton {
             { name: "game_mode", when: "start gaming, or game mode", phrases: ["game mode"], say: "Game mode on",
               steps: [{ do: "open_app", app: "steam", workspace: 5, alone: true }, { do: "dnd" }] },
             { name: "search_web", when: "search the web for something", text: true, phrases: ["search for", "look up"],
-              steps: [{ run: "xdg-open \"https://duckduckgo.com/?q=$BEAD_TEXT\"" }] }
+              steps: [{ run: "xdg-open \"https://duckduckgo.com/?q=$BEAD_TEXT\"" }] },
+            {"name": "spotify", "when": "play or find a song, artist, album or playlist on Spotify; text = just what to play", "text": true, "phrases": ["on spotify play", "spotify play"], "say": "Spotify", "steps": [{"run": "q=$(printf %s \"$BEAD_TEXT\" | sed -E 's/^(play|put on) +//I; s/ +(on|in|from) +spotify$//I; s/%/%25/g; s/ /%20/g; s/#/%23/g; s/\\?/%3F/g'); xdg-open \"spotify:search:$q\""}]}
         ] }, null, 2) + "\n");
     }
     FileView {
@@ -163,15 +184,23 @@ Singleton {
         + "\"volume to thirty\" -> {\"action\":\"volume_set\",\"level\":30}\n"
         + "\"open firefox\" -> {\"action\":\"open_app\",\"app\":\"firefox\"}\n"
         + "\"open spotify on workspace five and close the other windows there\" -> {\"action\":\"open_app\",\"app\":\"spotify\",\"workspace\":5,\"alone\":true}\n"
+        + "\"click the update button\" -> {\"action\":\"click\",\"text\":\"the update button\"}\n"
+        + "\"ssh\" -> {\"action\":\"ssh\"}\n"
+        + "\"ssh into the pi on workspace two\" -> {\"action\":\"ssh\",\"workspace\":2}\n"
         + "\"go to workspace three\" -> {\"action\":\"workspace\",\"workspace\":3}\n"
         + "\"skip this song\" -> {\"action\":\"next_track\"}\n"
         + "\"who wrote hamlet\" -> {\"action\":\"ask\",\"text\":\"who wrote hamlet\"}\n"
         + "\"hi there\" -> {\"action\":\"none\"}"
 
+
     function start(): void {
         if (helper.running) return;
         // a muted mic records silence, which then does nothing: say so instead
         if (Audio.micMuted) { root.failed("Your mic is muted"); return; }
+        if (question) { question = null; answerCb = null; } // a new command drops an open question
+        handsFree = false;
+        clip = "";
+        clipRead.running = true;
         ensureServer();
         level = 0;
         pending = "";
@@ -181,7 +210,94 @@ Singleton {
         helper.running = true;
     }
     function stop(): void { if (helper.running && state === "listening") helper.write("stop\n"); }
-    function cancel(): void { if (helper.running) helper.write("cancel\n"); }
+    function cancel(): void {
+        if (helper.running) helper.write("cancel\n");
+        else if (question) { question = null; answerCb = null; }
+    }
+
+    // ── a follow-up question: the island shows the options and listens
+    // hands-free (no key: it stops when you stop talking); say one, or tap it ──
+    property var question: null   // { prompt, options: [string] }
+    property var answerCb: null
+    property bool handsFree: false
+    function ask(prompt: string, options: var, then: var): void {
+        question = { prompt: prompt, options: options };
+        answerCb = then;
+        listenAgain();
+    }
+    function listenAgain(): void {
+        if (helper.running || !question) return;
+        if (Audio.micMuted) return; // the options can still be tapped
+        ensureWhisper();
+        handsFree = true;
+        level = 0;
+        partial = "";
+        heard = "";
+        state = "listening";
+        helper.running = true;
+    }
+    function answer(choice: string): void {
+        const cb = answerCb;
+        question = null;
+        answerCb = null;
+        if (helper.running) helper.write("cancel\n");
+        state = "";
+        if (cb) cb(choice);
+    }
+    // which option was said: its name (allowing for mishearing), or "the
+    // second one", "number two"…
+    function matchOption(said: string, options: var, ordinals = true): string {
+        // spoken letters ("dee lax" is dlax, "el see" is lc): only when every
+        // word in the run is a letter, so "I'll see" stays words
+        const letters = { ay: "a", bee: "b", see: "c", sea: "c", dee: "d", ee: "e", ef: "f", gee: "g", aitch: "h",
+            eye: "i", jay: "j", kay: "k", el: "l", elle: "l", em: "m", en: "n", oh: "o", pee: "p", cue: "q", queue: "q",
+            ar: "r", es: "s", tee: "t", tea: "t", vee: "v", ex: "x", zed: "z", zee: "z" };
+        const words = norm(said).replace(/'/g, "").split(" ").filter(w => w);
+        const name = o => norm(o).replace(/[ ']/g, "");
+        // "the second one", "number three": an ordinal ("one" only when it's alone)
+        const ords = [["first", "1"], ["second", "two", "2"], ["third", "three", "3"], ["fourth", "four", "4"], ["fifth", "five", "5"], ["sixth", "six", "6"]];
+        let k = ords.findIndex(set => set.some(w => words.includes(w)));
+        if (k < 0 && words.includes("one") && words.every(w => ["the", "one", "number"].includes(w))) k = 0;
+        // runs of 1-3 whole words: as said, as letters, and as initials + last word ("home lab")
+        const exact = [], loose = [];
+        for (let i = 0; i < words.length; i++) for (let n = 1; n <= 3 && i + n <= words.length; n++) {
+            const run = words.slice(i, i + n);
+            exact.push(run.join(""));
+            loose.push(run.join(""));
+            if (run.every(w => letters[w] || w.length === 1)) exact.push(run.map(w => letters[w] ?? w).join(""));
+            if (n > 1) exact.push(run.slice(0, -1).map(w => w[0]).join("") + run[n - 1], run.map(w => w[0]).join(""));
+        }
+        const hit = options.find(o => exact.includes(name(o)));
+        if (hit) return hit;
+        if (ordinals && k >= 0 && k < options.length) return options[k];
+        // a near miss of a whole run ("h-lab", "dlacks"): close, and long enough to be sure
+        let best = "", score = 0;
+        for (const o of options) for (const g of loose) {
+            const v = Apps.similar(g, name(o));
+            if (v >= 0.8 && v > score) { score = v; best = o; }
+        }
+        return best;
+    }
+
+
+
+    // ── your SSH hosts (~/.ssh/config: the Host names, not wildcards) ──
+    property var sshHosts: []
+    FileView {
+        path: Quickshell.env("HOME") + "/.ssh/config"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            const out = [];
+            for (const line of text().split("\n")) {
+                const m = line.match(/^\s*Host\s+(.+?)\s*$/i);
+                if (m) for (const h of m[1].split(/\s+/)) if (!/[*?!]/.test(h) && !out.includes(h)) out.push(h);
+            }
+            root.sshHosts = out;
+        }
+        onLoadFailed: root.sshHosts = []
+    }
 
     // ── the model server ──
     readonly property bool warm: server.running || whisper.running // models in memory
@@ -189,6 +305,11 @@ Singleton {
     function ensureServer(): void {
         idle.restart();
         if (!server.running) { serverReady = false; server.running = true; }
+        if (!whisper.running) whisper.running = true;
+    }
+    // just the speech model (dictation types live through it)
+    function ensureWhisper(): void {
+        idle.restart();
         if (!whisper.running) whisper.running = true;
     }
     // whisper kept warm while you use voice: live partials take ~50 ms each
@@ -229,7 +350,7 @@ Singleton {
     Process {
         id: helper
         command: [Quickshell.env("HOME") + "/.local/bin/bead-dictate", "--no-type", "--partials",
-            "--server", "http://127.0.0.1:" + root.whisperPort]
+            "--server", "http://127.0.0.1:" + root.whisperPort].concat(root.handsFree ? ["--until-silence"] : [])
         stdinEnabled: true
         property string heard: ""
         stdout: SplitParser {
@@ -248,6 +369,14 @@ Singleton {
             const t = heard;
             heard = "";
             root.level = 0;
+            if (root.question) {
+                // an answer: no model needed. Not caught: the options stay up to tap
+                root.state = "";
+                const hit = t ? root.matchOption(t, root.question.options) : "";
+                if (hit) root.answer(hit);
+                else root.partial = t ? "\u201c" + t + "\u201d? Say one, or tap it" : "";
+                return;
+            }
             if (!t) { root.state = ""; return; }
             root.heard = t;
             root.partial = t;
@@ -293,7 +422,11 @@ Singleton {
         id: handover
         interval: 280
         property var action: null
-        onTriggered: { root.state = ""; root.decided(action, root.heard); }
+        onTriggered: {
+            root.state = "";
+            if (root.dry) { root.dry = false; root.lastDecision = JSON.stringify(action); return; }
+            root.decided(action, root.heard);
+        }
     }
 
     IpcHandler {
@@ -309,7 +442,19 @@ Singleton {
             return "ok";
         }
         function list(): string { return root.custom.map(c => c.name + (c.phrases.length ? " (\"" + c.phrases.join("\", \"") + "\")" : "")).join("\n") + (root.customError ? "\nskipped: " + root.customError : ""); }
+        // test how an answer would match, without acting: match "the h lab one" "dlax,lc,hlab"
+        function match(said: string, options: string): string { return root.matchOption(said, options.split(",")) || "(none)"; }
+        // test a follow-up answer without speaking
+        function answerText(text: string): string {
+            if (!root.question) return "no question open";
+            const hit = root.matchOption(text, root.question.options);
+            if (hit) root.answer(hit);
+            return hit || "(none)";
+        }
         // test the decision without speaking
+        // what would it do? decides, shows it, runs nothing: decideDry "…" then lastDecision
+        function decideDry(text: string): void { root.dry = true; root.lastDecision = ""; decideText(text); }
+        function lastDecision(): string { return root.lastDecision; }
         function decideText(text: string): void { root.ensureServer(); root.heard = text; root.partial = text; root.state = "thinking"; if (root.serverReady) root.decide(text); else root.pending = text; }
     }
 }

@@ -18,6 +18,7 @@ install: build
 	install -Dm755 bin/bead-resume $(PREFIX)/bin/bead-resume
 	install -Dm755 bin/bead-discord $(PREFIX)/bin/bead-discord
 	install -Dm755 bin/bead-dictate $(PREFIX)/bin/bead-dictate
+	install -Dm755 bin/bead-look $(PREFIX)/bin/bead-look
 	install -Dm755 bin/bead-tint $(PREFIX)/bin/bead-tint
 	install -Dm755 bin/bead-pearl $(PREFIX)/bin/bead-pearl
 	install -Dm755 bin/bead-term $(PREFIX)/bin/bead-term
