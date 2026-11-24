@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -56,7 +57,7 @@ Scope {
     function back(): void { if (step > 0) step--; }
     // where the intro ends, however it got there (played out, or skipped)
     function introEnd(): void {
-        stage.dark = 0; traced.opacity = 0; morph.opacity = 0;
+        stage.dark = 0; traced.opacity = 0; morph.opacity = 0; morph.rotation = 0; face.opacity = 0;
         hand.reveal = 1; hand.born = 1; ready = 1; bloomed = true;
     }
 
@@ -156,7 +157,59 @@ Scope {
                     shadowVerticalOffset: 0
                     autoPaddingEnabled: true
                 }
+
+                // its face: the bead is alive for a moment. Eyes and a smile in a
+                // darker shade of its own colour; they part as it stretches into the pill
+                Item {
+                    id: face
+                    anchors.fill: parent
+                    opacity: 0
+                    property real blink: 0   // 0 open, 1 shut
+                    property real happy: 0   // 0 calm, 1 beaming (eyes squint, the smile widens)
+                    property real sx: 0      // where it looks when your cursor isn't near (-1 … 1)
+                    readonly property real u: Math.min(width, height)
+                    readonly property real spread: Math.max(0, width - height) // wider than tall: the pill
+                    readonly property color ink: Qt.darker(stage.accent, 2.8)
+                    // it looks at your cursor, if you move it; else where the intro says
+                    readonly property real cx: morph.x + morph.width / 2
+                    readonly property real cy: morph.y + morph.height / 2
+                    property real lx: look.hovered ? Math.max(-1, Math.min(1, (look.point.position.x - cx) / 260)) : sx
+                    property real ly: look.hovered ? Math.max(-1, Math.min(1, (look.point.position.y - cy) / 260)) : 0
+                    Behavior on lx { SmoothedAnimation { velocity: 7 } }
+                    Behavior on ly { SmoothedAnimation { velocity: 7 } }
+
+                    Repeater {
+                        model: [-1, 1]
+                        Rectangle {
+                            required property int modelData
+                            width: face.u * 0.13
+                            height: Math.max(face.u * 0.025, face.u * 0.2 * (1 - face.blink) * (1 - face.happy * 0.6))
+                            radius: width / 2
+                            x: face.width / 2 + modelData * (face.u * 0.17 + face.spread * 0.3) - width / 2 + face.lx * face.u * 0.07
+                            y: face.height * 0.42 - height / 2 + face.ly * face.u * 0.05
+                            color: face.ink
+                            antialiasing: true
+                        }
+                    }
+                    Shape { // the smile
+                        id: smile
+                        anchors.fill: parent
+                        preferredRendererType: Shape.CurveRenderer
+                        readonly property real w: face.u * (0.13 + face.happy * 0.07) + face.spread * 0.08
+                        readonly property real y0: face.height * 0.6 + face.ly * face.u * 0.03
+                        readonly property real mx: face.width / 2 + face.lx * face.u * 0.05
+                        ShapePath {
+                            strokeColor: face.ink
+                            strokeWidth: Math.max(1.5, face.u * 0.05)
+                            fillColor: "transparent"
+                            capStyle: ShapePath.RoundCap
+                            startX: smile.mx - smile.w; startY: smile.y0
+                            PathQuad { x: smile.mx + smile.w; y: smile.y0; controlX: smile.mx; controlY: smile.y0 + face.u * (0.12 + face.happy * 0.1) }
+                        }
+                    }
+                }
             }
+            HoverHandler { id: look; enabled: intro.running }
         }
 
         Rectangle {
@@ -220,25 +273,73 @@ Scope {
                     fx.flood = 0; fx.gather = 0; fx.phase = 0; fx.aurora = 0; fx.grid = 0; fx.dots = 0; fx.wave = 0;
                     hand.reveal = 0; hand.born = 0; hand.shine = 0; hand.opacity = 1; hand.glow = 1; hand.shift = 0; hand.height = 84; hand.cy = hand.rest;
                     stage.dark = 1; stage.trace = 0; stage.settle = 0; traced.opacity = 1;
-                    morph.width = 0; morph.height = 0; morph.radius = 0; morph.x = stage.cx; morph.y = stage.sh * 0.55;
-                    morph.glow = 1; morph.toCard = 0; morph.opacity = 1;
+                    morph.width = 0; morph.height = 0; morph.radius = 999; // round from the first frame (clamped to half its size) morph.x = stage.cx; morph.y = stage.sh * 0.55;
+                    morph.glow = 1; morph.toCard = 0; morph.opacity = 1; morph.rotation = 0;
+                    face.opacity = 0; face.blink = 0; face.happy = 0; face.sx = 0;
                 } }
                 PauseAnimation { duration: 150 }
-                // a bead, in the middle of the dark
+                // a bead pops into the dark, and it's alive
                 ParallelAnimation {
-                    NumberAnimation { target: morph; properties: "width,height"; to: 26; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
-                    NumberAnimation { target: morph; property: "radius"; to: 13; duration: 260 }
-                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 13; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
-                    NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.55 - 13; duration: 260; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                    NumberAnimation { target: morph; properties: "width,height"; to: 64; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                    NumberAnimation { target: morph; property: "radius"; to: 32; duration: 320 }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 32; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                    NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 32; duration: 320; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
+                    SequentialAnimation {
+                        PauseAnimation { duration: 140 }
+                        NumberAnimation { target: face; property: "opacity"; to: 1; duration: 200 }
+                    }
                 }
-                PauseAnimation { duration: 120 }
-                // rises to the top edge, quicker as it goes
-                NumberAnimation { target: morph; property: "y"; to: stage.wallW; duration: 420; easing.type: Easing.InCubic }
+                PauseAnimation { duration: 280 }
+                // blinks
+                NumberAnimation { target: face; property: "blink"; to: 1; duration: 70; easing.type: Easing.InQuad }
+                NumberAnimation { target: face; property: "blink"; to: 0; duration: 120; easing.type: Easing.OutQuad }
+                PauseAnimation { duration: 180 }
+                // looks around (at your cursor, if you move it)
+                NumberAnimation { target: face; property: "sx"; to: -1; duration: 240; easing.type: Easing.InOutQuad }
+                PauseAnimation { duration: 360 }
+                NumberAnimation { target: face; property: "sx"; to: 1; duration: 340; easing.type: Easing.InOutQuad }
+                PauseAnimation { duration: 360 }
+                NumberAnimation { target: face; property: "sx"; to: 0; duration: 220; easing.type: Easing.InOutQuad }
+                NumberAnimation { target: face; property: "blink"; to: 1; duration: 70; easing.type: Easing.InQuad }
+                NumberAnimation { target: face; property: "blink"; to: 0; duration: 120; easing.type: Easing.OutQuad }
+                // happy: beams, wiggles and hops
+                ParallelAnimation {
+                    NumberAnimation { target: face; property: "happy"; to: 1; duration: 220; easing.type: Easing.OutBack }
+                    SequentialAnimation {
+                        NumberAnimation { target: morph; property: "rotation"; to: -14; duration: 110; easing.type: Easing.OutQuad }
+                        NumberAnimation { target: morph; property: "rotation"; to: 12; duration: 150; easing.type: Easing.InOutQuad }
+                        NumberAnimation { target: morph; property: "rotation"; to: -8; duration: 130; easing.type: Easing.InOutQuad }
+                        NumberAnimation { target: morph; property: "rotation"; to: 4; duration: 110; easing.type: Easing.InOutQuad }
+                        NumberAnimation { target: morph; property: "rotation"; to: 0; duration: 120; easing.type: Easing.OutQuad }
+                    }
+                    SequentialAnimation {
+                        PauseAnimation { duration: 260 }
+                        NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 32 - 34; duration: 190; easing.type: Easing.OutQuad }
+                        NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 32; duration: 260; easing.type: Easing.OutBounce }
+                    }
+                }
+                PauseAnimation { duration: 140 }
+                // a contented yawn: eyes shut, it stretches tall…
+                ParallelAnimation {
+                    NumberAnimation { target: face; property: "blink"; to: 1; duration: 200 }
+                    NumberAnimation { target: face; property: "happy"; to: 0.4; duration: 200 }
+                    NumberAnimation { target: morph; property: "height"; to: 84; duration: 300; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "width"; to: 54; duration: 300; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 27; duration: 300; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 52; duration: 300; easing.type: Easing.OutQuad }
+                }
+                // …and up it goes to the top edge, quicker as it goes, rounding again
+                ParallelAnimation {
+                    NumberAnimation { target: morph; property: "y"; to: stage.wallW; duration: 460; easing.type: Easing.InCubic }
+                    NumberAnimation { target: morph; properties: "width,height"; to: 44; duration: 460; easing.type: Easing.InQuad }
+                    NumberAnimation { target: morph; property: "radius"; to: 22; duration: 460 }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 22; duration: 460; easing.type: Easing.InQuad }
+                }
                 // meets it: squashes flat against it
                 ParallelAnimation {
-                    NumberAnimation { target: morph; property: "height"; to: 16; duration: 110; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: morph; property: "width"; to: 30; duration: 110; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 15; duration: 110; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "height"; to: 24; duration: 110; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "width"; to: 50; duration: 110; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 25; duration: 110; easing.type: Easing.OutQuad }
                 }
                 // and spreads into the island's pill; light runs out of it round the frame
                 ParallelAnimation {
@@ -246,6 +347,7 @@ Scope {
                     NumberAnimation { target: morph; property: "x"; to: stage.cx - 80; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
                     NumberAnimation { target: morph; property: "height"; to: 34; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
                     NumberAnimation { target: morph; property: "radius"; to: 17; duration: 520 }
+                    NumberAnimation { target: face; property: "opacity"; to: 0; duration: 380; easing.type: Easing.InQuad }
                     SequentialAnimation {
                         PauseAnimation { duration: 120 }
                         NumberAnimation { target: stage; property: "trace"; to: 1; duration: 820; easing.type: Easing.InOutCubic }
@@ -531,7 +633,7 @@ Scope {
                         width: parent.width
                         spacing: 6
                         Heading { text: "Pick a look" }
-                        Body { text: "Each one applies as you tap it. Change it any time in Settings, Looks." }
+                        Body { text: "Each one applies as you tap it. Change it any time in Settings → Appearance." }
                     }
                     Grid {
                         id: lookGrid
@@ -710,8 +812,8 @@ Scope {
                         Body {
                             horizontalAlignment: Text.AlignHCenter
                             text: done.clear
-                                ? "Everything here lives in the dashboard's Settings tab, where you can also see this again."
-                                    + (Doctor.problems.length ? " " + Doctor.summary.replace("All set · ", "").replace(/^./, c => c.toUpperCase()) + ": see Settings → System." : "")
+                                ? "Everything here lives in Settings (the launcher, or the dashboard), where you can also see this again."
+                                    + (Doctor.problems.length ? " " + Doctor.summary.replace("All set · ", "").replace(/^./, c => c.toUpperCase()) + ": see Settings → About bead." : "")
                                 : Doctor.checks.length ? "bead needs a few things this machine doesn't have yet:" : ""
                         }
                         // what's missing, a few by name, and the fix
