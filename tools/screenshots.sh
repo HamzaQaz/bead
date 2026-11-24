@@ -88,7 +88,7 @@ shot dashboard
 ipc dashboard close
 sleep 0.6
 
-# the welcome, once "bead." is written
+# the welcome, once its intro has played
 ipc welcome open
 sleep 6.7
 shot welcome

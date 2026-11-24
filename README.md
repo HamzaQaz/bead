@@ -107,7 +107,7 @@ shaders/         the goo / blob effects (built with qsb)
 bin/             bead (the CLI), bead-tint, bead-pearl, bead-dictate, bead-discord
 glint/           the toast CLI (Go) and its Claude Code hook
 strand/          the installer (Go, Bubble Tea)
-tools/           the handwriting generator, screenshots.sh (these README pictures)
+tools/           screenshots.sh (these README pictures)
 docs/            the screenshots
 ```
 

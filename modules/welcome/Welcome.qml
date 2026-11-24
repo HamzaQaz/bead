@@ -107,11 +107,20 @@ Scope {
                 property color c1: Theme.tone("action")
                 property color c2: Theme.tone("info")
                 property color c3: Theme.c("secondary", "#9a8fe0")
+                property real gather: 0
+                property point target: Qt.point(0.5, 0.5)
+                // the intro: an aurora, and a field of dots spreading from the
+                // title's full stop with a ripple of light running through it
+                property point origin: Qt.point(hand.x - 1 + hand.stop.x, hand.y - 1 + hand.stop.y)
+                property real aurora: 0
+                property real grid: 0
+                property real dots: 0
+                property real wave: 0
                 fragmentShader: Qt.resolvedUrl("../../shaders/intro.frag.qsb")
                 NumberAnimation on time { running: win.visible; from: 0; to: 1000; duration: 1000000; loops: Animation.Infinite }
             }
-            // ── the title: "bead." written by hand ──
-            Handwriting {
+            // ── the title: "bead." ──
+            Wordmark {
                 id: hand
                 property real cy: rest
                 readonly property real rest: card.height / 2 - 62 // its place on the first step
@@ -123,22 +132,40 @@ Scope {
                 from: Qt.lighter(Theme.tone("action"), 1.25)
                 to: Qt.lighter(Theme.c("secondary", "#9a8fe0"), 1.2)
             }
-            // first: the card fills with colour and "bead." is written across
-            // its middle, the bead dropping in as the full stop; then the word
-            // rises to its place as the title, the colour drains to a glow and
-            // the rest comes in
+            // first, on a dark card: a field of dots spreads out from where the
+            // full stop will be, a ripple of light running through it, and an
+            // aurora comes down behind; the letters come into focus one by
+            // one; the dot at the middle of it all grows into the bead (a
+            // second ripple leaves it) and a shine crosses the word. Then the
+            // title rises, the dots and aurora fade to the glow and the rest
+            // comes in
             SequentialAnimation {
                 id: intro
-                ScriptAction { script: { fx.flood = 1; fx.phase = 0; hand.progress = 0; hand.dot = 0; hand.glow = 0; hand.opacity = 1; hand.shift = 0; hand.height = 150; hand.cy = card.height / 2; } }
-                PauseAnimation { duration: 350 }
-                NumberAnimation { target: hand; property: "progress"; to: 1; duration: 3000; easing.type: Easing.InOutSine }
-                NumberAnimation { target: hand; property: "dot"; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 2.2 }
-                PauseAnimation { duration: 350 }
+                ScriptAction { script: { fx.flood = 0; fx.gather = 0; fx.phase = 0; fx.aurora = 0; fx.grid = 0; fx.dots = 1; fx.wave = 0; hand.reveal = 0; hand.born = 0; hand.shine = 0; hand.opacity = 1; hand.glow = 1; hand.shift = 0; hand.height = 120; hand.cy = card.height / 2; } }
+                PauseAnimation { duration: 250 }
+                ParallelAnimation {
+                    NumberAnimation { target: fx; property: "grid"; to: 1; duration: 1300; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: fx; property: "wave"; to: 1; duration: 1700; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: fx; property: "aurora"; to: 1; duration: 1900; easing.type: Easing.InOutSine }
+                    SequentialAnimation {
+                        PauseAnimation { duration: 550 }
+                        NumberAnimation { target: hand; property: "reveal"; to: 1; duration: 1100; easing.type: Easing.Linear }
+                    }
+                }
+                ScriptAction { script: fx.wave = 0 }
+                ParallelAnimation {
+                    NumberAnimation { target: hand; property: "born"; to: 1; duration: 460; easing.type: Easing.OutBack; easing.overshoot: 2.6 }
+                    NumberAnimation { target: fx; property: "wave"; to: 1; duration: 1100; easing.type: Easing.OutCubic }
+                    SequentialAnimation {
+                        PauseAnimation { duration: 200 }
+                        NumberAnimation { target: hand; property: "shine"; to: 1; duration: 800; easing.type: Easing.InOutQuad }
+                    }
+                }
                 ParallelAnimation {
                     NumberAnimation { target: hand; property: "cy"; to: hand.rest; duration: 1000; easing.type: Easing.InOutCubic }
                     NumberAnimation { target: hand; property: "height"; to: 84; duration: 1000; easing.type: Easing.InOutCubic }
-                    NumberAnimation { target: fx; property: "flood"; to: 0; duration: 1300; easing.type: Easing.InOutQuad }
-                    NumberAnimation { target: hand; property: "glow"; to: 1; duration: 1300; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: fx; property: "aurora"; to: 0; duration: 1300; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: fx; property: "dots"; to: 0; duration: 1000; easing.type: Easing.InOutQuad }
                     SequentialAnimation {
                         PauseAnimation { duration: 700 } // the word clears the subtitle first
                         NumberAnimation { target: root; property: "ready"; to: 1; duration: 700; easing.type: Easing.OutCubic }
