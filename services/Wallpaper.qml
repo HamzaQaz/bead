@@ -67,7 +67,7 @@ Singleton {
 
     function setStill(path: string): void {
         kind = "still"; current = path; save();
-        start(["sh", "-c", '"$1" stop; "$3" --variant "$4" "$2"', "sh", engine, path, tintBin, Settings.tint]);
+        start(["sh", "-c", '[ -x "$1" ] && "$1" stop; "$3" --variant "$4" "$2"', "sh", engine, path, tintBin, Settings.tint]);
     }
     function setLive(id: string): void {
         kind = "live"; current = id; save();
@@ -104,10 +104,11 @@ Singleton {
         id: lister
         command: ["sh", "-c", `
             find "$1" -maxdepth 1 -type f \\( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \\) ! -name 'we-*' -printf 'S\\t%p\\n' | sort
+            [ -x "$3" ] || exit 0 # live wallpapers need the engine
             for d in "$2"/*/; do
                 p=$(ls "$d"preview.* 2>/dev/null | head -1); [ -n "$p" ] && [ -f "$d"project.json ] || continue
                 jq -r --arg id "$(basename "$d")" --arg p "$p" 'select(.type != null) | ["L", $id, (.type | ascii_downcase), $p, (.title // $id)] | @tsv' "$d"project.json 2>/dev/null
-            done`, "sh", root.stillDir, root.workshop]
+            done`, "sh", root.stillDir, root.workshop, root.engine]
         stdout: StdioCollector {
             onStreamFinished: {
                 const s = [], l = [];
@@ -119,6 +120,7 @@ Singleton {
                 l.sort((a, b) => a.title.localeCompare(b.title));
                 root.stills = s;
                 root.lives = l;
+                root.firstPick();
             }
         }
     }
@@ -141,8 +143,8 @@ Singleton {
     // at start: a still means no player; live means make sure it's playing.
     // With nothing saved yet, adopt whatever wallengine last played.
     function restore(): void {
-        if (kind === "still") Quickshell.execDetached([engine, "stop"]);
-        else Quickshell.execDetached(["sh", "-c", 'pgrep -x linux-wallpaper >/dev/null || exec "$1"', "sh", engine]);
+        if (kind === "still") Quickshell.execDetached(["sh", "-c", '[ -x "$1" ] && exec "$1" stop', "sh", engine]);
+        else if (kind === "live") Quickshell.execDetached(["sh", "-c", '[ -x "$1" ] && ! pgrep -x linux-wallpaper >/dev/null && exec "$1"', "sh", engine]);
         if (!kind) adopt.running = true;
         firstTint.restart();
     }
@@ -151,7 +153,16 @@ Singleton {
     Process {
         id: adopt
         command: ["cat", root.home + "/.local/state/wallengine-current"]
-        stdout: StdioCollector { onStreamFinished: if (text.trim()) { root.kind = "live"; root.current = text.trim(); root.save(); } }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim()) { root.kind = "live"; root.current = text.trim(); root.save(); }
+                else root.firstPick();
+            }
+        }
+    }
+    // a first run with nothing to adopt: start on the first still there is
+    function firstPick(): void {
+        if (!kind && !adopt.running && stills.length) setStill(stills[0].path);
     }
 
     Component.onCompleted: { Quickshell.execDetached(["mkdir", "-p", stateDir]); refresh(); }

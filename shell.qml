@@ -7,6 +7,7 @@ import qs.modules.bar
 import qs.modules.island
 import qs.modules.lock
 import qs.modules.notifications
+import qs.modules.welcome
 import qs.services
 
 ShellRoot {
@@ -20,6 +21,7 @@ ShellRoot {
     Island {}
     LockScreen {}
     Background {}
+    Welcome {}
     readonly property string wallKind: Wallpaper.kind  // starts the Wallpaper singleton (restores the choice)
 
     // services that must run without anything showing them

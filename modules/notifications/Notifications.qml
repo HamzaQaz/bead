@@ -122,7 +122,7 @@ Scope {
     PanelWindow {
         id: win
 
-        // always the primary monitor (Settings.home: the island's screen, DP-1 by default)
+        // always the primary monitor (Settings.home: the island's screen, the first one by default)
         readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
         property ShellScreen held: focused
         screen: held

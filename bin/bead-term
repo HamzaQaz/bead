@@ -1,0 +1,27 @@
+#!/bin/sh
+# Run a command in your terminal: $TERMINAL if set, else the first of kitty,
+# foot, ghostty, alacritty, wezterm, konsole, xterm that's installed.
+#   bead-term [--class CLASS] [--title TITLE] -- COMMAND [ARGS...]
+class= title=
+while [ $# -gt 0 ]; do
+    case $1 in
+    --class) class=$2; shift 2 ;;
+    --title) title=$2; shift 2 ;;
+    --) shift; break ;;
+    *) break ;;
+    esac
+done
+for t in ${TERMINAL:-} kitty foot ghostty alacritty wezterm konsole xterm; do
+    command -v "$t" >/dev/null && break
+    t=
+done
+[ -n "$t" ] || { notify-send "bead" "No terminal found: set \$TERMINAL" 2>/dev/null; exit 1; }
+case $(basename "$t") in
+kitty)     exec kitty ${class:+--class "$class"} ${title:+--title "$title"} "$@" ;;
+foot)      exec foot ${class:+-a "$class"} ${title:+-T "$title"} "$@" ;;
+ghostty)   exec ghostty ${class:+--class="$class"} ${title:+--title="$title"} -e "$@" ;;
+alacritty) exec alacritty ${class:+--class "$class"} ${title:+--title "$title"} -e "$@" ;;
+wezterm)   exec wezterm start ${class:+--class "$class"} -- "$@" ;;
+konsole)   exec konsole -e "$@" ;;
+*)         exec "$t" ${title:+-T "$title"} -e "$@" ;;
+esac

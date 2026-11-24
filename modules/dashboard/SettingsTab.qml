@@ -14,6 +14,11 @@ import qs.services
 // Changes apply at once.
 Item {
     id: root
+    // after a change that needs a fresh start (Size): give the settings file
+    // a moment to be written, then restart from outside bead
+    function restartSoon(): void {
+        Quickshell.execDetached(["setsid", "-f", "sh", "-c", 'sleep 0.8; exec "$1" restart', "sh", Quickshell.env("HOME") + "/.local/bin/bead"]);
+    }
 
     property int section: 0
     readonly property var sections: [
@@ -122,90 +127,7 @@ Item {
         Btn { glyph: "add"; onHit: mins.step(1) }
         WheelHandler { onWheel: e => mins.step(e.angleDelta.y > 0 ? 1 : -1) }
     }
-    // a segmented choice
-    component Choice: Rectangle {
-        id: ch
-        property list<var> options: []   // { v, t }
-        property string value: ""
-        signal chose(string v)
-        width: seg.width + 4
-        height: 26
-        radius: 13
-        color: Qt.alpha(Theme.text, 0.06)
-        Rectangle { // the pill slides to the chosen one
-            readonly property Item at: seg.children[ch.options.findIndex(o => o.v === ch.value)] ?? null
-            visible: !!at
-            x: 2 + (at?.x ?? 0)
-            y: 2
-            width: at?.width ?? 0
-            height: 22
-            radius: 11
-            color: Theme.tone("action")
-            Behavior on x { SpringAnimation { spring: 5; damping: 0.34; epsilon: 0.2 } }
-            Behavior on width { SpringAnimation { spring: 5; damping: 0.34; epsilon: 0.2 } }
-        }
-        Row {
-            id: seg
-            x: 2; y: 2
-            Repeater {
-                model: ch.options
-                Item {
-                    id: opt
-                    required property var modelData
-                    width: optText.implicitWidth + 18
-                    height: 22
-                    Text {
-                        id: optText
-                        anchors.centerIn: parent
-                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
-                        color: ch.value === opt.modelData.v ? Theme.frame : Theme.text
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                        text: opt.modelData.t
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: ch.chose(opt.modelData.v) }
-                }
-            }
-        }
-    }
 
-    // a small round-cornered button with words
-    component Action: Rectangle {
-        id: act
-        property string text: ""
-        property string glyph: ""
-        property bool accent: false
-        signal hit()
-        width: actRow.implicitWidth + 22
-        height: 28
-        radius: 14
-        color: accent ? Theme.tone("action") : Qt.alpha(Theme.text, aMa.pressed ? 0.16 : aMa.containsMouse ? 0.11 : 0.06)
-        scale: aMa.pressed ? 0.94 : 1
-        Behavior on scale { SpringAnimation { spring: 6; damping: 0.3; epsilon: 0.002 } }
-        Row {
-            id: actRow
-            anchors.centerIn: parent
-            spacing: 5
-            Icon { visible: act.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: act.glyph; size: 15; color: act.accent ? Theme.frame : Theme.text }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
-                color: act.accent ? Theme.frame : Theme.text
-                text: act.text
-            }
-        }
-        MouseArea { id: aMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: act.hit() }
-    }
-    // a keyboard key
-    component Key: Rectangle {
-        property string text: ""
-        width: Math.max(24, kt.implicitWidth + 12)
-        height: 22
-        radius: 6
-        color: Qt.alpha(Theme.text, 0.08)
-        border.width: 1
-        border.color: Qt.alpha(Theme.text, 0.1)
-        Text { id: kt; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; color: Theme.text; text: parent.text }
-    }
 
     // ── the rail ──
     Rectangle {
@@ -426,6 +348,19 @@ Item {
                     order: 4; width: root.colW; height: 44
                     Line { label: "Wallpaper"; hint: "Or pick one on the Wallpapers tab"; Action { text: "Shuffle"; glyph: "shuffle"; onHit: Wallpaper.random("all") } }
                 }
+                Item { width: root.colW; height: 44 } // the palette sits here (below)
+                In {
+                    order: 6; width: root.colW; height: 44
+                    Line {
+                        label: "Size"
+                        hint: "bead restarts to apply it"
+                        Choice {
+                            options: [{ v: "1", t: "100%" }, { v: "1.15", t: "115%" }, { v: "1.35", t: "135%" }, { v: "1.5", t: "150%" }]
+                            value: String(Settings.scale)
+                            onChose: v => { if (Number(v) !== Settings.scale) { Settings.scale = Number(v); root.restartSoon(); } }
+                        }
+                    }
+                }
             }
             // the palette in use
             In {
@@ -551,9 +486,13 @@ Item {
                 In {
                     order: 3; width: root.colW; height: 44
                     Line {
-                        label: "Restart bead"
-                        hint: "Reloads the shell"
-                        Action { text: "Restart"; glyph: "restart_alt"; onHit: Quickshell.execDetached(["bead", "restart"]) }
+                        label: "bead"
+                        hint: "See the welcome again, or reload the shell"
+                        Row {
+                            spacing: 6
+                            Action { text: "Welcome"; glyph: "waving_hand"; onHit: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "welcome", "open"]) }
+                            Action { text: "Restart"; glyph: "restart_alt"; onHit: Quickshell.execDetached(["bead", "restart"]) }
+                        }
                     }
                 }
             }

@@ -27,7 +27,7 @@ Singleton {
             { match: [{ class: "Todoist" }], command: ["todoist"], move: true }
         ],
         sysmon: [
-            { match: [{ class: "btop", title: "btop", workspace: { name: "special:sysmon" } }], command: ["foot", "-a", "btop", "-T", "btop", "fish", "-C", "exec btop"] }
+            { match: [{ class: "btop", title: "btop", workspace: { name: "special:sysmon" } }], command: [Quickshell.env("HOME") + "/.local/bin/bead-term", "--class", "btop", "--title", "btop", "--", "sh", "-c", 'btop; exec "${SHELL:-sh}"'] }
         ],
         bitwarden: [
             { match: [{ class: "Bitwarden" }], command: ["bitwarden-desktop"], move: true }

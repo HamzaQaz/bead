@@ -18,13 +18,14 @@ Singleton {
     property alias theme: a.theme                   // "wallpaper" | "sileo"
     property alias tint: a.tint                     // Tint's strength: "vibrant" | "muted" | "mono"
     property alias showTitle: a.showTitle           // the window title down the bar
-    property alias islandScreen: a.islandScreen     // monitor name; "" = $BEAD_ISLAND_SCREEN or DP-1
+    property alias islandScreen: a.islandScreen     // monitor name; "" = $BEAD_ISLAND_SCREEN or the first screen
+    property alias scale: a.scale                   // UI size; read by `bead start` ($BEAD_SCALE wins)
     // other
     property alias units: a.units                   // "auto" | "celsius" | "fahrenheit"
     property alias askModel: a.askModel             // "sonnet" | "opus" | "haiku"
     property alias askVia: a.askVia                 // "claude" (Claude Code) | "api" (own key) | "local"
 
-    readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || "DP-1"
+    readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || (Quickshell.screens[0]?.name ?? "")
 
     FileView {
         id: file
@@ -47,6 +48,7 @@ Singleton {
             property string tint: "vibrant"
             property bool showTitle: true
             property string islandScreen: ""
+            property real scale: 1
             property string units: "auto"
             property string askModel: Quickshell.env("BEAD_ASK_MODEL") || "sonnet"
             property string askVia: "claude"

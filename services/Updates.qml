@@ -7,7 +7,7 @@ import Quickshell.Io
 // OS updates: checks the repos (checkupdates: a temporary copy of the sync
 // database, no root, nothing changes) and the AUR (paru -Qua) a couple of
 // minutes after start and every 3 hours. A notification says when there are
-// new ones; its Update button opens paru in a terminal, and a check follows.
+// new ones; its Update button opens paru (or yay, or pacman) in a terminal, and a check follows.
 Singleton {
     id: root
 
@@ -31,8 +31,9 @@ Singleton {
 
     function check(): void { if (!probe.running) { checking = true; probe.running = true; } }
     function update(): void {
-        Quickshell.execDetached(["kitty", "--title", "System update", "sh", "-c",
-            "paru; echo; read -rp 'Done. Press Enter to close… ' _"]);
+        Quickshell.execDetached([Quickshell.env("HOME") + "/.local/bin/bead-term", "--title", "System update", "--", "sh", "-c",
+            "if command -v paru >/dev/null; then paru; elif command -v yay >/dev/null; then yay; else sudo pacman -Syu; fi; "
+            + "echo; printf 'Done. Press Enter to close… '; read _"]);
         recheck.restart();
     }
 
@@ -44,7 +45,7 @@ Singleton {
     Process {
         id: probe
         // two blocks: repo lines, a marker, AUR lines ("name old -> new")
-        command: ["sh", "-c", "checkupdates 2>/dev/null; echo '--aur--'; paru -Qua 2>/dev/null"]
+        command: ["sh", "-c", "checkupdates 2>/dev/null; echo '--aur--'; if command -v paru >/dev/null; then paru -Qua; elif command -v yay >/dev/null; then yay -Qua; fi 2>/dev/null"]
         property list<string> lines: []
         stdout: SplitParser { onRead: line => probe.lines = [...probe.lines, line] }
         onStarted: lines = []
