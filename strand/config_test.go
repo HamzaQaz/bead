@@ -95,3 +95,30 @@ func TestSetSetting(t *testing.T) {
 		t.Errorf("key file mode %v", st.Mode().Perm())
 	}
 }
+
+// The keys sheet in bead (data/keys.json) must list every key strand writes,
+// saying the same thing about it.
+func TestKeysSheetListsEveryBind(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "data", "keys.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sheet []struct{ Keys, What, Group string }
+	if err := json.Unmarshal(raw, &sheet); err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]string{}
+	for _, k := range sheet {
+		if k.Group == "" {
+			t.Errorf("%s has no group", k.Keys)
+		}
+		listed[k.Keys] = k.What
+	}
+	for _, b := range binds {
+		if what, ok := listed[b.keys]; !ok {
+			t.Errorf("data/keys.json is missing %s (%s)", b.keys, b.what)
+		} else if what != b.what {
+			t.Errorf("%s: the sheet says %q, strand writes %q", b.keys, what, b.what)
+		}
+	}
+}

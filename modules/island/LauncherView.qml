@@ -11,6 +11,7 @@ import qs.components
 import qs.config
 import qs.services
 import "launcher-actions.js" as RowActions
+import "keys.js" as KeySheet
 
 // The island as a launcher: type to fuzzy-search apps (the ones you launch
 // most float up), do maths (qalc: "2^10", "5 usd to eur"; Enter copies the
@@ -109,8 +110,16 @@ Item {
         ">": { label: "Actions", hint: "Lock, timer, Wi-Fi, screenshot…" },
         ";": { label: "Clipboard", hint: "Search what you copied" },
         ":": { label: "Emoji", hint: "Search emoji and symbols" },
-        "/": { label: "Files", hint: "Search your home folder" }
+        "/": { label: "Files", hint: "Search your home folder" },
+        "#": { label: "Keys", hint: "Search bead's keyboard shortcuts" }
     })
+    // ── "#": the keys sheet (keys.js; `bead keys`, or type "keys") ──
+    readonly property bool keying: query.startsWith("#")
+    property var keyList: []
+    FileView {
+        path: Quickshell.shellPath("data/keys.json")
+        onLoaded: root.keyList = KeySheet.parse(text())
+    }
     function absorb(text: string): void {
         if (!acting && !mode && text.length && modes[text[0]]) {
             mode = text[0];
@@ -121,6 +130,8 @@ Item {
     }
     property int current: 0
     property string confirming: ""   // action id waiting for a second Enter
+    property string pinNote: ""      // why the selected clip can't be pinned, for a moment
+    Timer { id: pinNoteTimer; interval: 2400; onTriggered: root.pinNote = "" }
 
     function reset(seed: string): void {
         Ask.clear();
@@ -370,9 +381,10 @@ Item {
             // secrets match only by kind, so typing part of one doesn't find it
             const hay = e => e.image ? `image ${e.image.fmt} ${e.image.w}x${e.image.h} ${e.image.w}×${e.image.h}` : e.type === "secret" ? "secret hidden" : e.text.toLowerCase();
             const hit = e => !words.length || words.every(w => hay(e).includes(w));
-            return Clipboard.entries.filter(hit).slice(0, 80).map(e => ({ kind: "clip", c: e }));
+            return Clipboard.list.filter(hit).slice(0, 80).map(e => ({ kind: "clip", c: e }));
         }
         if (emojiing) return Emoji.search(q.slice(1)).map(e => ({ kind: "emoji", m: e }));
+        if (keying) return KeySheet.find(keyList, q.slice(1)).map(k => ({ kind: "key", k: k }));
         if (filing) return files.map(f => ({ kind: "file", f: f }));
         if (q.startsWith("?")) return askText ? [{ kind: "ask", q: askText }] : [];
         if (q.startsWith(">")) {
@@ -397,6 +409,7 @@ Item {
             return out.concat(scored.map(x => ({ kind: "action", a: x.x })));
         }
         const out = [];
+        if (KeySheet.asksFor(q)) out.push({ kind: "action", a: { id: "keysmenu", title: "Keyboard shortcuts", sub: "bead's keys, searchable", glyph: "keyboard" } });
         if (mathy && calc.result) out.push({ kind: "calc" });
         // open windows that match, above the apps: Enter switches to one
         if (q && !mathy) out.push(...windowsFor(q).map(w => ({ kind: "win", w: w })));
@@ -424,8 +437,10 @@ Item {
             else Quickshell.execDetached(["xdg-open", r.f.path]);
         }
         else if (r.kind === "calc") { Quickshell.execDetached(["wl-copy", calc.result]); close(); }
+        else if (r.kind === "key") return; // a list to read
         else {
             if (r.a.id === "timermenu") { root.mode = ">"; field.text = "timer "; return; } // stay open: pick a length
+            if (r.a.id === "keysmenu") { root.mode = "#"; field.text = ""; return; }
             if (r.a.act) {
                 if ((r.a.act === "open_on" || r.a.act === "move_to") && !r.a.ws) return; // wants a number first
                 if (r.a.confirm && confirming !== r.a.id) { current = i; confirming = r.a.id; return; }
@@ -455,7 +470,7 @@ Item {
         Icon {
             x: 14
             anchors.verticalCenter: parent.verticalCenter
-            name: root.acting ? "bolt" : root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
+            name: root.acting ? "bolt" : root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.keying ? "keyboard" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
             color: root.asking ? Theme.tone("action") : Theme.subtext
             size: 20
         }
@@ -527,13 +542,19 @@ Item {
                 else if (e.key === Qt.Key_Delete && (e.modifiers & Qt.ShiftModifier) && root.results[root.current]?.kind === "clip") {
                     Clipboard.remove(root.results[root.current].c); e.accepted = true;
                 }
+                else if (ctrl && e.key === Qt.Key_S && root.results[root.current]?.kind === "clip") { // pin it, or unpin
+                    const c = root.results[root.current].c;
+                    if (c.pinned) Clipboard.unpin(c); else root.pinNote = Clipboard.pin(c);
+                    if (root.pinNote) pinNoteTimer.restart();
+                    e.accepted = true;
+                }
                 else if (e.key === Qt.Key_Escape) { root.close(); e.accepted = true; }
             }
             Label {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !field.text && !field.preeditText
                 font.pixelSize: 15
-                text: root.acting ? "Pick one, or type a workspace number" : root.modes[root.mode]?.hint ?? "Search apps, = maths, > actions, ; clipboard, : emoji, ? ask Claude"
+                text: root.acting ? "Pick one, or type a workspace number" : root.modes[root.mode]?.hint ?? "Search apps, = maths, > actions, ; clipboard, : emoji, # keys, ? ask Claude"
             }
         }
     }
@@ -650,8 +671,9 @@ Item {
                         fill: 1
                         color: row.confirm ? Theme.tone("error") : Theme.tone("action")
                         name: row.modelData.kind === "calc" ? "calculate" : row.modelData.kind === "action" ? row.a.glyph
-                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? root.clipGlyph(row.modelData.c.type)
+                            : row.modelData.kind === "ask" ? "auto_awesome" : row.modelData.kind === "clip" ? (row.modelData.c.pinned ? "keep" : root.clipGlyph(row.modelData.c.type))
                             : row.modelData.kind === "win" ? "select_window"
+                            : row.modelData.kind === "key" ? "keyboard"
                             : row.modelData.kind === "file" ? root.fileGlyph(row.modelData.f) : "apps"
                     }
                 }
@@ -666,9 +688,21 @@ Item {
                 Key { text: "Tab"; anchors.verticalCenter: parent.verticalCenter }
                 Label { text: "more"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
             }
+            Row { // a shortcut's keys, as key caps
+                id: keyCaps
+                visible: row.modelData.kind === "key"
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 4
+                Repeater {
+                    model: row.modelData.kind === "key" ? KeySheet.caps(row.modelData.k.keys) : []
+                    Key { required property string modelData; text: modelData }
+                }
+            }
             Column {
                 x: 52
-                width: parent.width - 52 - 12 - (tabHint.visible ? tabHint.width + 10 : 0)
+                width: parent.width - 52 - 12 - (tabHint.visible ? tabHint.width + 10 : 0) - (keyCaps.visible ? keyCaps.width + 10 : 0)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 1
                 Text {
@@ -687,6 +721,7 @@ Item {
                             : row.modelData.c.text.replace(/\s+/g, " ").trim())
                         : row.modelData.kind === "emoji" ? row.modelData.m.name
                         : row.modelData.kind === "file" ? row.modelData.f.name
+                        : row.modelData.kind === "key" ? KeySheet.title(row.modelData.k.what)
                         : row.confirm ? "Press Enter again to " + row.a.title.toLowerCase() : row.a.title
                 }
                 Label {
@@ -698,9 +733,11 @@ Item {
                         : row.modelData.kind === "win" ? "Switch to " + row.modelData.w.name + (row.modelData.w.ws ? "  ·  workspace " + row.modelData.w.ws : "")
                         : row.modelData.kind === "calc" ? "= " + root.expr + "  ·  Enter copies"
                         : row.modelData.kind === "ask" ? "Ask Claude  ·  Enter"
-                        : row.modelData.kind === "clip" ? (row.sel ? "Enter pastes  ·  Shift+Enter copies  ·  Shift+Del forgets" : root.clipHint(row.modelData.c))
+                        : row.modelData.kind === "clip" ? (row.sel ? (root.pinNote || (row.modelData.c.pinned ? "Pinned  ·  Enter pastes  ·  Ctrl+S unpins" : "Enter pastes  ·  Shift+Enter copies  ·  Ctrl+S pins  ·  Shift+Del forgets"))
+                            : row.modelData.c.pinned ? "Pinned" : root.clipHint(row.modelData.c))
                         : row.modelData.kind === "emoji" ? (row.sel ? "Enter types it  ·  Shift+Enter copies" : "")
                         : row.modelData.kind === "file" ? (row.sel ? "Enter opens  ·  Shift+Enter copies the path" : row.modelData.f.dir)
+                        : row.modelData.kind === "key" ? row.modelData.k.group
                         : row.a.sub
                 }
             }
@@ -820,7 +857,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: 66
         visible: root.results.length === 0 && !root.answering
-        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : Clipboard.entries.length ? "No matches" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.filing ? (root.fileQ.length < 2 ? "Type a file or folder name" : root.fileBusy ? "Searching…" : "No files found") : root.mathy ? "Working it out…" : "Nothing found" }
+        Label { text: root.clipping ? (Clipboard.loading ? "Loading…" : Clipboard.list.length ? "No matches" : "Nothing on the clipboard history") : root.asking ? "Type a question for Claude" : root.filing ? (root.fileQ.length < 2 ? "Type a file or folder name" : root.fileBusy ? "Searching…" : "No files found") : root.keying ? "No key does that" : root.mathy ? "Working it out…" : "Nothing found" }
     }
 
     // ── Claude's answer ──

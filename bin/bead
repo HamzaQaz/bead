@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]: run the shell in the background.
+# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
 share=${XDG_DATA_HOME:-$HOME/.local/share}/bead
@@ -95,6 +95,7 @@ launcher) # bead launcher [toggle|open|close|search TEXT]
 	exec qs -p "$share" ipc call launcher "${2:-toggle}" ;;
 clip) exec qs -p "$share" ipc call launcher mode ";" ;;   # clipboard history (toggles)
 emoji) exec qs -p "$share" ipc call launcher mode ":" ;;  # emoji picker (toggles)
+keys) exec qs -p "$share" ipc call launcher mode "#" ;;   # bead's keyboard shortcuts (toggles)
 ask) # bead ask QUESTION: the launcher asks Claude
 	shift; exec qs -p "$share" ipc call launcher ask "$*" ;;
 timer) # bead timer <25m|90s|1h30m> | stopwatch | toggle | stop
@@ -125,5 +126,5 @@ EOT
 	*) echo "bead discord [status|mute|deafen|leave|setup]" >&2; exit 1 ;;
 	esac ;;
 log) exec qs -p "$share" log -f ;;
-*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]" >&2; exit 2 ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log]" >&2; exit 2 ;;
 esac

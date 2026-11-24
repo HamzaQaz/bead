@@ -80,6 +80,8 @@ yours to edit.
 | <kbd>Super</kbd>+<kbd>Space</kbd> (hold) | voice command (Murmur) |
 | <kbd>Super</kbd>+<kbd>A</kbd> | dictate (Murmur): tap for hands-free, hold to type on release |
 
+The same list is in bead itself: type `keys` (or `#`) in the launcher, or run `bead keys`. In the launcher, <kbd>Tab</kbd> on an app, window or file shows what you can do with it; in the clipboard list, <kbd>Ctrl</kbd>+<kbd>S</kbd> pins an entry so it stays on top. A notification's **Later** button sends it away for 20 minutes, an hour or until tomorrow morning.
+
 ## Using it
 
 ```sh
