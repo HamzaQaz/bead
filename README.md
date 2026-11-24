@@ -18,7 +18,7 @@ dashboard, a lock screen and notifications, all coloured by your wallpaper.
 Arch and Arch-based distros (CachyOS, EndeavourOS, Manjaro…) only.
 
 ```sh
-git clone https://github.com/<you>/bead && cd bead
+git clone https://github.com/HamzaQaz/bead && cd bead
 ./install.sh            # or ./install.sh --dry-run to look around first
 ```
 
