@@ -546,7 +546,7 @@ Scope {
                 if (h && /^[A-Za-z0-9._@-]+$/.test(h) && !h.startsWith("-")) return open(h);
                 if (Voice.mentionsClip(heard)) return root.toast("content_paste_off", "No server address on the clipboard", "error", 2600);
             }
-            // or an address said out loud ("ssh to 192.168.1.2")
+            // or an address said out loud ("ssh to 10.0.0.5")
             const said = Voice.hostIn(heard.replace(/\s+dot\s+/gi, "."));
             if (said && /^[A-Za-z0-9._@-]+$/.test(said)) return open(said);
             const hit = rest ? Voice.matchOption(rest, hosts, false) : "";

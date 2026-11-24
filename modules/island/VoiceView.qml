@@ -47,7 +47,7 @@ Item {
 
     // ── the words it'll act on, lit up as you say them: apps, open windows,
     // your SSH hosts and phrases, workspace numbers ──
-    property var known: []   // squashed names ("curseforge", "hlab")
+    property var known: []   // squashed names ("curseforge", "homelab")
     function squash(t: string): string { return String(t).toLowerCase().replace(/[^a-z0-9]/g, ""); }
     function gatherKnown(): var {
         const out = new Set();

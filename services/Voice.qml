@@ -264,7 +264,7 @@ Singleton {
     // which option was said: its name (allowing for mishearing), or "the
     // second one", "number two"…
     function matchOption(said: string, options: var, ordinals = true): string {
-        // spoken letters ("dee lax" is dlax, "el see" is lc): only when every
+        // spoken letters ("dee bee" is db, "el see" is lc): only when every
         // word in the run is a letter, so "I'll see" stays words
         const letters = { ay: "a", bee: "b", see: "c", sea: "c", dee: "d", ee: "e", ef: "f", gee: "g", aitch: "h",
             eye: "i", jay: "j", kay: "k", el: "l", elle: "l", em: "m", en: "n", oh: "o", pee: "p", cue: "q", queue: "q",
@@ -463,7 +463,7 @@ Singleton {
             return "ok";
         }
         function list(): string { return root.custom.map(c => c.name + (c.phrases.length ? " (\"" + c.phrases.join("\", \"") + "\")" : "")).join("\n") + (root.customError ? "\nskipped: " + root.customError : ""); }
-        // test how an answer would match, without acting: match "the h lab one" "dlax,lc,hlab"
+        // test how an answer would match, without acting: match "the web one" "nas,web,pi"
         function match(said: string, options: string): string { return root.matchOption(said, options.split(",")) || "(none)"; }
         // test a follow-up answer without speaking
         function answerText(text: string): string {
