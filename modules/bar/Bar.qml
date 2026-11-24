@@ -198,7 +198,7 @@ Scope {
                 target: root
                 function onPanelRequested(name, screen) {
                     if (screen !== scope.modelData.name) return;
-                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn, battery: batteryBtn }[name];
+                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn, battery: batteryBtn, updates: updatesBtn }[name];
                     if (from) win.toggle(name, from); else win.panel = "";
                 }
             }
@@ -217,7 +217,7 @@ Scope {
                 anchorY: win.panelY
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
-                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel, battery: batteryPanel })[win.shownPanel] ?? trayPanel
+                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel, battery: batteryPanel, updates: updatesPanel })[win.shownPanel] ?? trayPanel
                 panel: cur
                 contentW: cur.width
                 contentH: cur.implicitHeight
@@ -229,6 +229,7 @@ Scope {
                 UtilitiesPanel { id: utilsPanel; visible: win.shownPanel === "utils"; active: win.panel === "utils"; onDone: win.panel = "" }
                 PowerPanel { id: powerPanel; visible: win.shownPanel === "power"; active: win.panel === "power"; onDone: win.panel = "" }
                 BatteryPanel { id: batteryPanel; visible: win.shownPanel === "battery" }
+                UpdatesPanel { id: updatesPanel; visible: win.shownPanel === "updates"; active: win.panel === "updates"; onDone: win.panel = "" }
                 TrayPanel {
                     id: trayPanel
                     visible: win.shownPanel === "tray"
@@ -625,6 +626,21 @@ Scope {
                         pulsing: Recorder.recording
                         lit: win.panel === "utils"
                         onClicked: win.toggle("utils", utilsBtn)
+                    }
+                    // updates waiting: only then, with how many
+                    BarButton {
+                        id: updatesBtn
+                        visible: Updates.count > 0
+                        icon: "system_update_alt"
+                        tone: Updates.restart ? Theme.tone("warning") : Theme.text
+                        lit: win.panel === "updates"
+                        onClicked: win.toggle("updates", updatesBtn)
+                        Rectangle {
+                            x: parent.width - width + 1; y: -1
+                            width: Math.max(14, n.implicitWidth + 6); height: 14; radius: 7
+                            color: Updates.restart ? Theme.tone("warning") : Theme.tone("action")
+                            Text { id: n; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 8; font.weight: Font.Bold; color: Theme.frame; text: Updates.count > 99 ? "99+" : Updates.count }
+                        }
                     }
                     // the tray panel: every app, pin some to the bar
                     BarButton {

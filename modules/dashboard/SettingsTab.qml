@@ -530,7 +530,7 @@ Item {
                     order: 0; width: root.colW; height: 44
                     Line {
                         label: Updates.checking ? "Checking for updates…" : Updates.count > 0 ? Updates.count + (Updates.count === 1 ? " update" : " updates") : "Up to date"
-                        hint: Updates.count > 0 ? Updates.repo.length + " repo · " + Updates.aur.length + " AUR" : "Looks every 3 hours"
+                        hint: Updates.count > 0 ? Updates.repo.length + " repo · " + Updates.aur.length + " AUR · " + Updates.flatpak.length + " Flatpak" + (Updates.restart ? " · restart after" : "") : "Looks every 3 hours"
                         Row {
                             spacing: 6
                             Action { text: "Check"; glyph: "refresh"; onHit: Updates.check() }
@@ -605,7 +605,7 @@ Item {
                     width: parent.width
                     spacing: 6
                     Repeater {
-                        model: [...Updates.repo, ...Updates.aur]
+                        model: Updates.items.map(u => u.name)
                         Rectangle {
                             required property string modelData
                             width: pk.implicitWidth + 16; height: 24; radius: 12

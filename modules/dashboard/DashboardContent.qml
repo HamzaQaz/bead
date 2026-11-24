@@ -22,7 +22,7 @@ Item {
     signal select(int tab)
     signal close()
 
-    // ── the keyboard (focusnav.js). Only when it was opened by key: then 1-7 and
+    // ── the keyboard (focusnav.js). Only when it was opened by key: then 1-8 and
     // Ctrl+Tab switch tabs, arrows move a ring to the nearest control that way
     // (Left/Right adjust a slider or a choice instead), Enter or Space presses
     // it, Tab steps through in reading order, Esc closes. A control is a stop
@@ -121,6 +121,7 @@ Item {
         { name: "Weather", icon: "partly_cloudy_day" },
         { name: "Timers", icon: "timer" },
         { name: "Wallpapers", icon: "wallpaper" },
+        { name: "Apps", icon: "apps" },
         { name: "Settings", icon: "settings" }
     ]
 
@@ -360,6 +361,10 @@ Item {
         }
         Page {
             index: 6
+            AppsTab { anchors.fill: parent }
+        }
+        Page {
+            index: 7
             SettingsTab { anchors.fill: parent }
         }
     }
@@ -377,7 +382,7 @@ Item {
         Behavior on opacity { NumberAnimation { duration: 160 } }
         text: {
             const c = root.cur;
-            return Nav.hints(c ? { press: typeof c.focusPress === "function", adjust: typeof c.focusAdjust === "function", calendar: !!c.focusCalendar } : null);
+            return Nav.hints(c ? { press: typeof c.focusPress === "function", adjust: typeof c.focusAdjust === "function", calendar: !!c.focusCalendar } : null, root.tabs.length);
         }
     }
 }

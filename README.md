@@ -42,11 +42,14 @@ Then start it with `bead start`, or log out and back in.
   - `;` clipboard history
   - `:` emoji
   - `/` files
+  - `+` install apps from the repos, Flathub and the AUR (AUR builds open in a
+    terminal, so you see the build file first)
   - `?` questions for Pearl (see the optional parts below)
 - **Overview** (<kbd>Super</kbd>+<kbd>Tab</kbd>): every workspace and its windows, live.
 - **Dashboard** (<kbd>Super</kbd>+<kbd>K</kbd>): media, weather, performance, timers,
-  wallpapers and settings.
-- **Notifications**: grouped, swipe to dismiss, with history.
+  wallpapers, apps (sizes, last opened, uninstall, updates) and settings. Opened by
+  key, it's all reachable by keyboard: number keys for tabs, arrows to move.
+- **Notifications**: one app's pop-ups stack into one, swipe to dismiss, with history.
 - **Lock screen**: PAM, with your wallpaper, the time and what's playing.
 - **OSDs**: volume, brightness (including DDC monitors) and Caps Lock.
 

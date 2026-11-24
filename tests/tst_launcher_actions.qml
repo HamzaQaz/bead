@@ -11,7 +11,7 @@ TestCase {
     // ── apps ──
     function test_app_not_running_offers_opening_but_not_quitting() {
         const a = LA.actionsFor({ kind: "app", name: "Firefox", running: 0 }, "", { here: 1 });
-        compare(ids(a), ["open", "open_empty", "open_on"]);
+        compare(ids(a), ["open", "open_empty", "open_on", "uninstall"]);
     }
     function test_app_running_can_be_quit() {
         const a = LA.actionsFor({ kind: "app", name: "Firefox", running: 1 }, "", { here: 1 });
@@ -36,6 +36,16 @@ TestCase {
         const on = LA.actionsFor({ kind: "app", name: "Firefox", running: 0 }, "", { here: 1 }).find(x => x.id === "open_on");
         compare(on.ws, 0);
         compare(on.title, "Open on workspace…");
+    }
+
+    function test_an_app_can_be_uninstalled_after_asking() {
+        const u = LA.actionsFor({ kind: "app", name: "Kitty", running: 0 }, "", { here: 1 }).find(x => x.id === "uninstall");
+        compare(u.title, "Uninstall Kitty");
+        verify(u.confirm);
+    }
+    function test_uninstall_comes_last() {
+        const a = LA.actionsFor({ kind: "app", name: "Kitty", running: 1 }, "", { here: 1 });
+        compare(a[a.length - 1].id, "uninstall");
     }
 
     // ── windows ──

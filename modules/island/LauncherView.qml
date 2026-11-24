@@ -11,6 +11,7 @@ import qs.components
 import qs.config
 import qs.services
 import "launcher-actions.js" as RowActions
+import "../../services/pkgs.js" as Pkgs
 import "keys.js" as KeySheet
 
 // The island as a launcher: type to fuzzy-search apps (the ones you launch
@@ -29,6 +30,7 @@ Item {
     id: root
 
     signal close()
+    signal say(string icon, string text, string tone) // a short note on the island
 
     readonly property int rowH: 46
     readonly property int maxRows: 7
@@ -94,6 +96,10 @@ Item {
                 dispatch(`hl.dsp.focus({ workspace = "${n}" })`);
             }
             else if (a.act === "quit") for (const t of appWindows(r.e)) dispatch(`hl.dsp.window.close({ window = "address:${winAddr(t)}" })`);
+            else if (a.act === "uninstall") {
+                const name = r.e.name;
+                Packages.ownerOf(r.e.id, o => { o.title = name; root.say("delete", Packages.remove(o), "info"); });
+            }
         } else if (r.kind === "win") {
             const w = `window = "address:${winAddr(r.w.t)}"`;
             if (a.act === "bring") { dispatch(`hl.dsp.window.move({ workspace = "${here}", ${w}, follow = false })`); dispatch(`hl.dsp.focus({ ${w} })`); }
@@ -111,8 +117,20 @@ Item {
         ";": { label: "Clipboard", hint: "Search what you copied" },
         ":": { label: "Emoji", hint: "Search emoji and symbols" },
         "/": { label: "Files", hint: "Search your home folder" },
-        "#": { label: "Keys", hint: "Search bead's keyboard shortcuts" }
+        "#": { label: "Keys", hint: "Search bead's keyboard shortcuts" },
+        "+": { label: "Install", hint: "Search the repos, Flathub and the AUR" }
     })
+    // ── "+": bead's installer (Packages): results from all three, best first ──
+    readonly property bool installing: query.startsWith("+")
+    onQueryChanged: if (installing) Packages.search(query.slice(1)); else if (Packages.query) Packages.search("")
+    function pkgRow(r: var): var {
+        const src = r.source === "repo" ? "Repo \u00b7 " + r.repo : r.source === "flathub" ? "Flathub" : "AUR \u00b7 unreviewed";
+        const bits = [src, r.version, r.source === "repo" ? Pkgs.size(r.size) : "", r.source === "aur" ? r.votes + " votes" : "",
+            r.outdated ? "out of date" : "", r.installed ? "installed" : ""].filter(Boolean);
+        return { kind: "action", a: { id: "pkg:" + r.source + ":" + r.name, pkg: r, glyph: r.installed ? "check_circle" : r.source === "repo" ? "inventory_2" : r.source === "flathub" ? "deployed_code" : "construction",
+            title: (r.title || r.name) + (r.desc ? "  \u00b7  " + r.desc : ""), sub: bits.join(" \u00b7 ") + (r.source === "aur" && !r.installed ? " \u00b7 Enter twice: builds in a terminal" : ""),
+            confirm: r.source === "aur" && !r.installed } };
+    }
     // ── "#": the keys sheet (keys.js; `bead keys`, or type "keys") ──
     readonly property bool keying: query.startsWith("#")
     property var keyList: []
@@ -340,6 +358,8 @@ Item {
             return;
         }
         if (String(a.id).startsWith("voice:")) { Voice.decided({ action: a.id.slice(6), text: "" }, ""); return; }
+        if (a.pkg) { root.say(a.pkg.source === "aur" ? "construction" : "download", Packages.install(a.pkg), "info"); return; }
+        if (a.id === "pkg:none") return;
         switch (a.id) {
         case "dnd": Notifs.dnd = !Notifs.dnd; break;
         case "clear": Notifs.clear(); break;
@@ -347,7 +367,7 @@ Item {
         case "stopwatch": Countdown.startStopwatch(); break;
         case "awake": Idle.keepAwake = !Idle.keepAwake; break;
         case "walls": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "5"]); break;
-        case "settings": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "6"]); break;
+        case "settings": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "7"]); break;
         case "wallshuffle": Wallpaper.random("all"); break;
         case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
         case "wifi": Networking.wifiEnabled = !Networking.wifiEnabled; break;
@@ -385,6 +405,13 @@ Item {
         }
         if (emojiing) return Emoji.search(q.slice(1)).map(e => ({ kind: "emoji", m: e }));
         if (keying) return KeySheet.find(keyList, q.slice(1)).map(k => ({ kind: "key", k: k }));
+        if (installing) {
+            const rows = Packages.results.map(r => root.pkgRow(r));
+            if (!rows.length && q.slice(1).trim().length >= 2)
+                return [{ kind: "action", a: { id: "pkg:none", glyph: Packages.searching ? "hourglass_top" : "search_off",
+                    title: Packages.searching ? "Searching the repos, Flathub and the AUR\u2026" : "Nothing called \u201c" + q.slice(1).trim() + "\u201d", sub: "" } }];
+            return rows;
+        }
         if (filing) return files.map(f => ({ kind: "file", f: f }));
         if (q.startsWith("?")) return askText ? [{ kind: "ask", q: askText }] : [];
         if (q.startsWith(">")) {
@@ -470,7 +497,7 @@ Item {
         Icon {
             x: 14
             anchors.verticalCenter: parent.verticalCenter
-            name: root.acting ? "bolt" : root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.keying ? "keyboard" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
+            name: root.acting ? "bolt" : root.asking ? "auto_awesome" : root.clipping ? "content_paste" : root.emojiing ? "mood" : root.filing ? "folder_open" : root.keying ? "keyboard" : root.installing ? "download" : root.query.trim().startsWith(">") ? "bolt" : root.mathy ? "calculate" : "search"
             color: root.asking ? Theme.tone("action") : Theme.subtext
             size: 20
         }

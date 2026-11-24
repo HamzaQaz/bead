@@ -66,10 +66,11 @@ function action(key, ctx) {
 }
 
 // The hint strip's text for the focused control: what it can do
-// ({press, adjust, calendar}), or null when nothing has the ring yet.
-function hints(can) {
+// ({press, adjust, calendar}), or null when nothing has the ring yet; `tabs`
+// is how many tabs the number keys reach.
+function hints(can, tabs) {
     var bits = [];
-    if (!can) bits.push("←↑↓→ move", "1–7 tabs");
+    if (!can) bits.push("←↑↓→ move", "1–" + (tabs || 7) + " tabs");
     else if (can.calendar) bits.push("←↑↓→ day", "[ ] month", "t today");
     else {
         if (can.adjust) bits.push("←→ adjust");

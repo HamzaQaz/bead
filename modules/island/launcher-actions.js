@@ -34,6 +34,8 @@ function actionsFor(row, typed, ctx) {
         if (row.running > 0)
             all.push({ id: "quit", title: "Quit " + row.name, sub: row.running === 1 ? "Closes its window" : "Closes " + row.running + " windows",
                        glyph: "close", confirm: row.running > 1 });
+        // removes the package it came from (bead's installer); Enter twice
+        all.push({ id: "uninstall", title: "Uninstall " + row.name, sub: "Removes the package it came from \u00b7 Enter again to confirm", glyph: "delete", confirm: true });
     } else if (row.kind === "win") {
         if (row.ws !== ctx.here)
             all.push({ id: "bring", title: "Bring here", sub: "From workspace " + row.ws, glyph: "call_received" });

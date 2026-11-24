@@ -77,5 +77,5 @@ TestCase {
     function test_hints_for_a_button() { compare(Nav.hints({ press: true }), "⏎ press · esc close"); }
     function test_hints_for_a_slider() { compare(Nav.hints({ press: true, adjust: true }), "←→ adjust · ⏎ press · esc close"); }
     function test_hints_for_the_calendar() { compare(Nav.hints({ calendar: true }), "←↑↓→ day · [ ] month · t today · esc close"); }
-    function test_hints_with_nothing_focused() { compare(Nav.hints(null), "←↑↓→ move · 1–7 tabs · esc close"); }
+    function test_hints_with_nothing_focused() { compare(Nav.hints(null, 8), "←↑↓→ move · 1–8 tabs · esc close"); }
 }

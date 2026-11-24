@@ -800,7 +800,7 @@ Scope {
         function toggle(): void { root.pinnedOn = root.pinnedOn ? "" : root.home.name; }
         function open(): void { root.pinnedOn = root.home.name; }
         function close(): void { root.pinnedOn = ""; }
-        function tab(n: int): void { root.tab = Math.max(0, Math.min(6, n)); root.pinnedOn = root.home.name; }
+        function tab(n: int): void { root.tab = Math.max(0, Math.min(7, n)); root.pinnedOn = root.home.name; }
         // a key, by name (Down, Return, Escape, 3, ]…), straight into the open
         // dashboard's key handler: no synthetic typing, so nothing can land in
         // another window. Does nothing unless the dashboard is open by key.
@@ -2002,6 +2002,7 @@ Scope {
                 // ── launcher ──
                 LauncherView {
                     id: launcherView
+                    onSay: (icon, text, tone) => root.toast(icon, text, tone, 2600)
                     anchors.horizontalCenter: parent.horizontalCenter
                     // follow the springing shape, so switching modes (; clipboard,
                     // : emoji) or a longer result list grows smoothly, not in a snap
