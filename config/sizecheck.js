@@ -1,5 +1,5 @@
 .pragma library
-// Changing bead's size (Settings → Looks → Size). Nothing changes until it's
+// Changing bead's size (Settings → Appearance → Size). Nothing changes until it's
 // applied, and after the restart the island asks whether to keep it, going
 // back by itself if nobody says so: a size that turns out unusable undoes
 // itself. Plain logic: tests/tst_sizecheck.qml.

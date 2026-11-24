@@ -7,7 +7,7 @@ import qs.config
 
 // bead's own version and updates. `version` is the installed VERSION; the
 // first start of a new version says so on the island (what's new is in
-// Settings → System). Once a day, and on asking, `bead update --check` looks
+// Settings → About bead). Once a day, and on asking, `bead update --check` looks
 // for a newer release: state is uptodate | available | dev | package |
 // nosource | offline (bin/bead-update).
 Singleton {

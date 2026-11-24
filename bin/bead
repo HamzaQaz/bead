@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor|update|uninstall|version]: run the shell in the background.
+# bead [start|stop|restart|welcome|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|settings|log|doctor|update|uninstall|version]: run the shell in the background.
 # claim: take the notification service back from Caelestia by restarting it
 # (its server then waits behind ours).
 # the shell sits next to this script's folder: <prefix>/bin → <prefix>/share/bead
@@ -8,7 +8,7 @@ case ${1:-start} in
 start)
 	mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/bead"
 	qs -p "$share" kill >/dev/null 2>&1
-	# size: $BEAD_SCALE, else Settings → Looks → Size (settings.json), else 1
+	# size: $BEAD_SCALE, else Settings → Appearance → Size (settings.json), else 1
 	scale=${BEAD_SCALE:-$(jq -r '.scale // empty' "${XDG_CONFIG_HOME:-$HOME/.config}/bead/settings.json" 2>/dev/null)}
 	QT_SCALE_FACTOR=${scale:-1} exec qs -p "$share" -n -d ;;
 stop) exec qs -p "$share" kill ;;
@@ -126,10 +126,13 @@ EOT
 	status|mute|deafen|leave) exec qs -p "$share" ipc call discord "${2:-status}" ;;
 	*) echo "bead discord [status|mute|deafen|leave|setup]" >&2; exit 1 ;;
 	esac ;;
+settings) # bead settings [page] | search WORDS: the Settings window
+	if [ "${2:-}" = search ]; then shift 2; exec qs -p "$share" ipc call settings search "$*"; fi
+	exec qs -p "$share" ipc call settings open "${2:-}" ;;
 log) exec qs -p "$share" log -f ;;
 doctor) exec "$(dirname "$0")/bead-doctor" "${2:-}" ;;
 update) shift; exec "$(dirname "$0")/bead-update" "$@" ;;
 uninstall) shift; exec "$(dirname "$0")/bead-uninstall" "$@" ;;
 version|--version|-v) cat "$share/VERSION" 2>/dev/null || echo unknown ;;
-*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|log|doctor|update|uninstall|version]" >&2; exit 2 ;;
+*) echo "usage: bead [start|stop|restart|claim|brightness up|down|notifs|dashboard|island|launcher|clip|emoji|keys|ask|timer|shot|record|pick|wallpaper|special|lock|idle|settings|log|doctor|update|uninstall|version]" >&2; exit 2 ;;
 esac

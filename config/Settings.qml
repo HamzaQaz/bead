@@ -5,7 +5,7 @@ import Quickshell
 import Quickshell.Io
 
 // bead's settings, kept in ~/.config/bead/settings.json. Changing one here (or
-// in the dashboard's Settings tab) saves it; editing the file applies live.
+// in the Settings window) saves it; editing the file applies live.
 Singleton {
     id: root
 

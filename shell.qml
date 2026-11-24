@@ -7,6 +7,7 @@ import qs.modules.bar
 import qs.modules.island
 import qs.modules.lock
 import qs.modules.notifications
+import qs.modules.settings
 import qs.modules.welcome
 import qs.services
 
@@ -22,6 +23,8 @@ ShellRoot {
     LockScreen {}
     Background {}
     Welcome {}
+    // the Settings window, made when it opens (services/SettingsApp.qml)
+    LazyLoader { active: SettingsApp.open; SettingsWindow {} }
     readonly property string wallKind: Wallpaper.kind  // starts the Wallpaper singleton (restores the choice)
 
     // services that must run without anything showing them
