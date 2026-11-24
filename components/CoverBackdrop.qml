@@ -32,9 +32,18 @@ Item {
         blurEnabled: root.blur > 0
         blur: root.blur
         blurMax: 48
-        saturation: 0.2
+        // dimmed before the veil: a bright cover (white, pastel) otherwise
+        // washes out what's on top
+        saturation: 0.3
+        brightness: -0.32
+        contrast: -0.15
+        // no padding for the blur: with it the mask is stretched over the
+        // padded area and the rounded corners land outside the card
+        autoPaddingEnabled: false
         maskEnabled: true
         maskSource: mask
+        maskThresholdMin: 0.5
+        maskSpreadAtMin: 1.0
         opacity: root.ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 450 } }
     }
@@ -44,8 +53,8 @@ Item {
         opacity: root.ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 450 } }
         gradient: Gradient {
-            GradientStop { position: 0; color: Qt.alpha(Theme.frame, root.veil * 0.75) }
-            GradientStop { position: 1; color: Qt.alpha(Theme.frame, Math.min(0.92, root.veil * 1.35)) }
+            GradientStop { position: 0; color: Qt.alpha(Theme.frame, Math.min(0.9, root.veil * 1.2)) }
+            GradientStop { position: 1; color: Qt.alpha(Theme.frame, Math.min(0.95, root.veil * 1.75)) }
         }
     }
 }
