@@ -30,7 +30,8 @@ import qs.services
 // It lives on one monitor ($BEAD_ISLAND_SCREEN or Settings, default the first screen). Hidden (IPC
 // "island", saved across restarts), when a window on that monitor reaches up
 // under it (so it never covers a URL bar), or under a fullscreen window, the
-// resting pill tucks into the frame; activities still show, and hovering the top edge
+// resting pill tucks into the frame; activities still show (but not the
+// workspace bar under fullscreen), and hovering the top edge
 // still opens the dashboard (not under fullscreen).
 // IPC targets: "island" (toggle | show | hide), "dashboard" (toggle | open |
 // close | tab N), "osd" (brightnessUp/Down).
@@ -743,6 +744,8 @@ Scope {
     // the screen it is about (brightness), how long to show it (ms)
     function flash(what, screenName, ms) {
         if (openCount > 0 && what !== "workspace") return; // the dashboard shows it already
+        // a game (or video) fullscreen: no workspace bar dropping over it
+        if (what === "workspace" && (root.fullscreen || (Hyprland.focusedWorkspace?.hasFullscreen ?? false))) return;
         activityOn = screenName || focused.name;
         activity = what;
         activityTimer.interval = ms || 1600;

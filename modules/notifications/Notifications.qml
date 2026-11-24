@@ -28,6 +28,24 @@ Scope {
     property list<var> popups: []
     property int serial: 0
 
+    // ── fullscreen (a game, a video): no pop-ups, just a dot each, top right,
+    // in front of it and never in the way. Critical ones still pop up. Back
+    // out of fullscreen: the dots go, and the island says what came in.
+    readonly property bool quiet: Hyprland.focusedWorkspace?.hasFullscreen ?? false
+    property list<var> dots: []   // newest first: { key, critical, entry }
+    function dot(entry: var, critical: bool): void {
+        root.dots = [{ key: ++root.serial, critical: critical, entry: entry }, ...root.dots].slice(0, 30);
+    }
+    onQuietChanged: {
+        if (quiet || !dots.length) return;
+        const list = dots.map(d => d.entry).filter(e => e && e.time);
+        dots = [];
+        if (!list.length) return;
+        Notifs.awayFrom = Math.min(...list.map(e => e.time));
+        Notifs.awayTo = Date.now();
+        Notifs.missed(list);
+    }
+
     // a popup for a recorded history entry (same key)
     function popupFor(n: Notification, e: var): var {
         return Object.assign({}, e, {
@@ -83,6 +101,13 @@ Scope {
             try { s = JSON.parse(spec); } catch (e) { return "error: bad json"; }
             s.id = String(s.id || Date.now());
             const interactive = s.type === "confirm" || s.type === "choose" || s.type === "loading" || s.type === "ask";
+            if (root.quiet) {
+                // not shown: anything waiting on it hears so at once (a question
+                // is then asked where it came from, the terminal)
+                root.report(s.id, "result", "dismissed");
+                root.dot(null, false);
+                return s.id;
+            }
             root.add({ key: ++root.serial, spec: s, sticky: interactive || s.duration === 0 });
             return s.id;
         }
@@ -115,8 +140,63 @@ Scope {
             // the history panel shows it live; Do Not Disturb holds all but critical
             if (Notifs.panelOpen) return;
             if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical) return;
+            if (root.quiet && n.urgency !== NotificationUrgency.Critical) {
+                root.dot(e, false);
+                return;
+            }
             root.add(root.popupFor(n, e));
             Notifs.posted(e);
+        }
+    }
+
+    // the dots: on the screen with the fullscreen window, click-through
+    PanelWindow {
+        id: dotsWin
+        screen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
+        visible: root.quiet && root.dots.length > 0
+        anchors.top: true
+        anchors.right: true
+        implicitWidth: 220
+        implicitHeight: 30
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        exclusiveZone: 0
+        mask: Region {}
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "bead-notification-dots"
+
+        Rectangle { // a faint backing, so they show on bright games too
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            width: dotRow.width + 12
+            height: 15
+            radius: 7.5
+            color: Qt.alpha("black", 0.3)
+        }
+        Row {
+            id: dotRow
+            anchors.right: parent.right
+            anchors.rightMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            layoutDirection: Qt.RightToLeft // the newest on the right, by the corner
+            spacing: 5
+            Repeater {
+                model: ScriptModel {
+                    values: root.dots.slice(0, 8)
+                    objectProp: "key"
+                }
+                delegate: Rectangle {
+                    required property var modelData
+                    width: 7
+                    height: 7
+                    radius: 3.5
+                    color: modelData.critical ? Theme.tone("error") : Theme.tone("action")
+                    scale: 0
+                    Component.onCompleted: scale = 1
+                    Behavior on scale { NumberAnimation { duration: 280; easing.type: Easing.OutBack } }
+                }
+            }
         }
     }
 
