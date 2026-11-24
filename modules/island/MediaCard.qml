@@ -22,6 +22,7 @@ Item {
     property bool pointerIn: false // the island is hovered (passed in)
     signal expand()
 
+    property real radius: 0 // the island's corners, for the cover behind it
     readonly property real pad: 16
     readonly property real artSize: 48
     readonly property real rowH: 18
@@ -36,6 +37,8 @@ Item {
         running: root.active && root.pointerIn && !root.usingControls // restarts after you stop using it
         onTriggered: root.expand()
     }
+    // the cover, behind it all
+    CoverBackdrop { anchors.fill: parent; radius: root.radius; source: root.player?.trackArtUrl ?? ""; blur: 0.6; veil: 0.4 }
     MouseArea { // clicking the card itself: at once
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor

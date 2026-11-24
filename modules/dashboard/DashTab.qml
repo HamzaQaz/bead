@@ -152,6 +152,8 @@ Row {
         width: 226
         height: parent.height
         readonly property MprisPlayer p: root.player
+        clip: true
+        CoverBackdrop { anchors.fill: parent; radius: media.radius; source: media.p?.trackArtUrl ?? ""; blur: 0.6; veil: 0.45 }
         Column {
             // fills the card: track, progress, controls, then the volume
             x: 14

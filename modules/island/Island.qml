@@ -967,7 +967,7 @@ Scope {
     // a toast you can tap (the DND digest opens the history)
     property var toastTap: null
 
-    // ── a new size, just applied (Settings → Looks → Size): keep it? Ten
+    // ── a new size, just applied (Settings → Appearance → Size): keep it? Ten
     // seconds on the island, then back to the size before, so one that turns
     // out unusable undoes itself (config/sizecheck.js) ──
     property int sizeLeft: 0
@@ -2025,6 +2025,7 @@ Scope {
                     width: wantW
                     height: wantH
                     player: root.player
+                    radius: win.radius
                     active: win.state === "media"
                     pointerIn: win.pointerIn
                     opacity: active ? 1 : 0

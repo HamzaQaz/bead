@@ -7,7 +7,7 @@ import Quickshell.Services.Mpris
 import qs.components
 import qs.config
 
-// Now playing, big: the cover over a blurred, dimmed copy of itself, title,
+// Now playing, big: the cover over a blurred copy of itself filling the card, title,
 // artist and album, a seekable progress bar, controls with shuffle/loop, and
 // chips to switch between players when several are running.
 Item {
@@ -42,30 +42,8 @@ Item {
         anchors.fill: parent
         clip: true
 
-        // blurred backdrop
-        Image {
-            id: backdrop
-            anchors.fill: parent
-            source: root.player?.trackArtUrl ?? ""
-            sourceSize: Qt.size(200, 200)
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            visible: false
-        }
-        Rectangle { id: cardMask; anchors.fill: parent; radius: card.radius; visible: false; layer.enabled: true }
-        MultiEffect {
-            anchors.fill: parent
-            source: backdrop
-            blurEnabled: true
-            blur: 1
-            blurMax: 64
-            saturation: 0.2
-            maskEnabled: true
-            maskSource: cardMask
-            opacity: backdrop.status === Image.Ready ? 0.45 : 0
-            Behavior on opacity { NumberAnimation { duration: 400 } }
-        }
-        Rectangle { anchors.fill: parent; radius: card.radius; color: Qt.alpha(Theme.frame, 0.35) }
+        // the cover, as the whole background
+        CoverBackdrop { anchors.fill: parent; radius: card.radius; source: root.player?.trackArtUrl ?? ""; blur: 0.55; veil: 0.4 }
 
         Row {
             anchors.fill: parent
