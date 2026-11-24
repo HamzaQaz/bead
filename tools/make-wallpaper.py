@@ -1,217 +1,232 @@
 #!/usr/bin/env python3
-"""bead's default wallpaper: a string of glass beads arcing through dark space.
+"""bead's wallpapers: glossy ribbons of colour folding through the dark, and
+one glass bead among them that bends them like a lens.
 
-The nearest bead is big and sharp low on the right; the string recedes up to
-the left, each bead smaller and softer (depth of field). Each bead is shaded
-as glass: a body that shifts hue across it, a bright rim, a sharp highlight
-from a light up and to the left, and the caustic crescent glass throws on the
-side away from the light. A faint thread runs through them, soft glows of
-their colours sit behind, then a vignette and fine grain. The top stays dark
-for the bar and the island.
+Each ribbon twists as it flows (its back face shows where it turns over), is
+lit by a soft key light with a sharp sheen and a bright edge, and casts a soft
+shadow on the ones behind it; one is frosted glass. The bead refracts the
+picture behind it (upside down, as a glass ball does, with a little colour
+fringing) and reflects what's around it. Then bloom, a vignette, a filmic
+tone curve and grain.
 
 Variants change the colours and the layout:
-  bead   cyan → violet → magenta, the string from the upper left (the default)
+  bead   cyan → violet → magenta (the default)
   ember  deep red → amber
   tide   deep blue → teal → mint
-  mono   graphite glass, for the Mono colour setting
-  dusk   indigo → rose → peach, mirrored: the string from the upper right
-  solo   one big bead, a few far ones behind it
+  mono   graphite, for the Mono colour setting
+  dusk   indigo → rose → peach, mirrored
+  solo   a big bead, the ribbons passing behind it
 
     tools/make-wallpaper.py [variant] [out.jpg] [width] [height]
-    tools/make-wallpaper.py all [dir]        every variant, 4K, as <dir>/<variant>.jpg
+    tools/make-wallpaper.py all [dir]      every variant, 4K, as <dir>/<variant>.jpg
+
+Only numpy and Pillow.
 """
+import math
 import sys
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
+
+F = np.float32
 
 VARIANTS = {
-    "bead": dict(ramp=((40, 200, 230), (70, 110, 255), (130, 70, 255), (200, 50, 230), (255, 50, 150)), warm=(255, 150, 70), bg=(7, 6, 13)),
-    "ember": dict(ramp=((110, 20, 40), (190, 35, 40), (235, 85, 40), (255, 145, 55), (255, 196, 105)), warm=(255, 232, 170), bg=(10, 5, 5)),
-    "tide": dict(ramp=((25, 55, 150), (20, 115, 205), (20, 175, 205), (55, 215, 190), (140, 250, 210)), warm=(205, 255, 240), bg=(3, 8, 12)),
-    "mono": dict(ramp=((70, 72, 82), (105, 107, 118), (145, 147, 158), (185, 187, 198), (228, 230, 240)), warm=(255, 255, 255), bg=(8, 8, 9)),
-    "dusk": dict(ramp=((60, 45, 150), (140, 60, 175), (230, 90, 145), (255, 140, 110), (255, 192, 140)), warm=(255, 222, 165), bg=(9, 6, 14), mirror=True),
-    "solo": dict(ramp=((40, 200, 230), (70, 110, 255), (130, 70, 255), (200, 50, 230), (255, 50, 150)), warm=(255, 150, 70), bg=(6, 5, 12), layout="solo"),
+    "bead": dict(ramp=[(40, 190, 240), (80, 110, 255), (150, 70, 255), (220, 60, 220), (255, 80, 150)],
+                 bg=(9, 7, 18), seed=4),
+    "ember": dict(ramp=[(120, 20, 40), (200, 40, 40), (240, 95, 40), (255, 150, 60), (255, 210, 130)],
+                  bg=(13, 7, 6), seed=6),
+    "tide": dict(ramp=[(30, 50, 170), (30, 120, 220), (20, 180, 210), (50, 220, 180), (170, 250, 220)],
+                 bg=(4, 9, 14), seed=12),
+    "mono": dict(ramp=[(70, 72, 80), (120, 122, 130), (170, 172, 180), (215, 216, 222), (245, 245, 248)],
+                 bg=(9, 9, 10), seed=3),
+    "dusk": dict(ramp=[(70, 50, 190), (150, 70, 200), (235, 95, 160), (255, 145, 120), (255, 200, 160)],
+                 bg=(11, 8, 16), seed=9, mirror=True),
+    "solo": dict(ramp=[(40, 190, 240), (80, 110, 255), (150, 70, 255), (220, 60, 220), (255, 80, 150)],
+                 bg=(8, 7, 17), seed=9, orb=(0.64, 0.5, 0.25), ribbons=5),
 }
+
 if len(sys.argv) > 1 and sys.argv[1] == "all":
     import subprocess
     out = sys.argv[2] if len(sys.argv) > 2 else "data/wallpapers"
     for v in VARIANTS:
         subprocess.run([sys.executable, __file__, v, f"{out}/{v}.jpg"], check=True)
     sys.exit(0)
+
 NAME = sys.argv[1] if len(sys.argv) > 1 else "bead"
 V = VARIANTS[NAME]
 OUT = sys.argv[2] if len(sys.argv) > 2 else f"data/wallpapers/{NAME}.jpg"
 W = int(sys.argv[3]) if len(sys.argv) > 3 else 3840
 H = int(sys.argv[4]) if len(sys.argv) > 4 else 2160
-S = H / 2160  # sizes below are for 2160 high
-rng = np.random.default_rng(7)
+AR = W / H
+rng = np.random.default_rng(V["seed"])
 
-BG = np.array(V["bg"], float) / 255
-# along the string, far to near
-RAMP = [np.array(c, float) / 255 for c in V["ramp"]]
-WARM = np.array(V["warm"], float) / 255   # what the light turns into inside the glass
+
+def col(c, k=1.0):
+    return (np.array(c, F) / 255) ** 2.2 * k   # sRGB → linear
+
+
+RAMP = np.array([col(c) for c in V["ramp"]], F)
 
 
 def ramp(t):
-    t = min(max(t, 0.0), 1.0) * (len(RAMP) - 1)
-    i = min(int(t), len(RAMP) - 2)
-    return RAMP[i] + (RAMP[i + 1] - RAMP[i]) * (t - i)
+    t = np.clip(t, 0, 1) * (len(RAMP) - 1)
+    i = np.minimum(t.astype(int), len(RAMP) - 2)
+    f = (t - i)[..., None]
+    return RAMP[i] * (1 - f) + RAMP[i + 1] * f
 
 
-yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-
-# ── backdrop: dark, with soft glows of the beads' colours ──
-img = np.ones((H, W, 3), np.float32) * BG
-for (cx, cy, r, t, a) in ((0.66, 0.70, 0.42, 1.0, 0.16), (0.30, 0.45, 0.40, 0.45, 0.10), (0.08, 0.25, 0.30, 0.0, 0.07)):
-    d = np.hypot(xx / W - cx, (yy / H - cy) * H / W) / r
-    img += ramp(t) * (a * np.exp(-d * d * 3.2))[..., None]
-# out-of-focus specks drifting in the dark
-for _ in range(int(70)):
-    sx, sy = rng.uniform(0, W), rng.uniform(H * 0.15, H)
-    sr = rng.uniform(4, 22) * S
-    x0, x1, y0, y1 = int(max(sx - sr * 2, 0)), int(min(sx + sr * 2, W)), int(max(sy - sr * 2, 0)), int(min(sy + sr * 2, H))
-    if x0 >= x1 or y0 >= y1:
-        continue
-    dd = np.hypot(xx[y0:y1, x0:x1] - sx, yy[y0:y1, x0:x1] - sy) / sr
-    img[y0:y1, x0:x1] += ramp(rng.uniform(0.2, 1.0)) * (np.clip(1.15 - dd, 0, 1) ** 1.5 * rng.uniform(0.03, 0.10))[..., None]
-
-# ── the string: a curve through 3D, projected ──
-# a string coming out of the dark at the upper left, curving down through the
-# hero (sharp, low on the right of centre), on past the camera at the bottom
-N = 9
-u = np.linspace(0, 1, N)
-px = 0.03 + 0.70 * u ** 1.3
-py = 0.25 + 0.47 * u ** 2.3 - 0.05 * np.sin(u * np.pi)
-z = 9.0 - 7.6 * u ** 0.75
-HERO = N - 2
-focus = z[HERO]
-beads = []
-for i in range(N):
-    r = 560 * S / z[i]
-    beads.append(dict(x=px[i] * W, y=py[i] * H, r=r, z=z[i], t=0.15 + 0.85 * u[i] ** 0.8, blur=float(abs(z[i] - focus) * 2.4 * S)))
-# the near one, past the hero: big, off the bottom edge, out of focus
-beads[-1].update(x=0.93 * W, y=1.02 * H, r=360 * S, blur=34 * S, t=1.0)
-if V.get("layout") == "solo":
-    # one big bead low of centre; a few far ones up behind it, softly
-    # (in order along the thread: far ones first)
-    beads = [dict(x=fx * W, y=fy * H, r=fr * S, z=6.0 - k, t=ft, blur=(10 - 2 * k) * S)
-             for k, (fx, fy, fr, ft) in enumerate(((0.20, 0.30, 38, 0.15), (0.30, 0.36, 52, 0.35), (0.42, 0.44, 70, 0.6)))]
-    beads.append(dict(x=0.62 * W, y=0.60 * H, r=470 * S, z=1.0, t=1.0, blur=0.0))
+def smooth(e0, e1, x):
+    t = np.clip((x - e0) / (e1 - e0), 0, 1)
+    return t * t * (3 - 2 * t)
 
 
-def blur(a, r):
-    """Gaussian blur of a 2D float array (separable, reflect at the edges)"""
-    if r < 0.3:
+def box(a, r, axis):
+    if r < 1:
         return a
-    k = np.arange(-int(r * 3) - 1, int(r * 3) + 2, dtype=np.float32)
-    k = np.exp(-k * k / (2 * r * r))
-    k /= k.sum()
-    n = len(k) // 2
-    for axis in (0, 1):
-        p = np.pad(a, [(n, n) if ax == axis else (0, 0) for ax in (0, 1)], mode="reflect")
-        out = np.zeros_like(a)
-        for i, w in enumerate(k):
-            out += w * (p[i:i + a.shape[0]] if axis == 0 else p[:, i:i + a.shape[1]])
-        a = out
+    pad = [(0, 0)] * a.ndim
+    pad[axis] = (r + 1, r)
+    c = np.cumsum(np.pad(a, pad, mode="edge"), axis=axis, dtype=np.float64)
+    n = a.shape[axis]
+    hi = np.take(c, np.arange(2 * r + 1, 2 * r + 1 + n), axis=axis)
+    lo = np.take(c, np.arange(0, n), axis=axis)
+    return ((hi - lo) / (2 * r + 1)).astype(F)
+
+
+def blur(a, sigma):
+    """near-gaussian: three box passes each way (sigma in pixels)"""
+    if sigma < 0.5:
+        return a
+    r = max(1, int(round((math.sqrt(4 * sigma * sigma + 1) - 1) / 2)))
+    for _ in range(3):
+        a = box(box(a, r, 0), r, 1)
     return a
 
 
-def layer_add(base, rgb, alpha):
-    return base * (1 - alpha[..., None]) + rgb * alpha[..., None]
+def norm3(x, y, z):
+    n = np.sqrt(x * x + y * y + z * z) + 1e-6
+    return x / n, y / n, z / n
 
 
-# the thread: a thin line through the centres, faint, behind the beads
-th = np.zeros((H, W), np.float32)
-pts = np.array([[b["x"], b["y"]] for b in beads])
-fine = []
-for k in range(len(pts) - 1):
-    for s in np.linspace(0, 1, 40, endpoint=False):
-        fine.append(pts[k] * (1 - s) + pts[k + 1] * s)
-fine = np.array(fine + [pts[-1]])
-thread = Image.new("L", (W, H), 0)
+# ── coordinates: units of the screen's height, y down ──
+xs = ((np.arange(W) + 0.5) / H).astype(F)
+ys = ((np.arange(H) + 0.5) / H).astype(F)
+u = xs / AR                       # 0..1 across
+X, Y = np.meshgrid(xs, ys)
 
-ImageDraw.Draw(thread).line([(float(p[0]), float(p[1])) for p in fine], fill=255, width=max(1, int(2 * S)))
-thread = blur(np.asarray(thread, np.float32) / 255, 1.2 * S)
-img = layer_add(img, np.array([1.0, 0.85, 0.95]), thread * 0.22)
+# ── the background: near black, lifted by big soft glows of the palette ──
+img = np.broadcast_to(col(V["bg"]), (H, W, 3)).astype(F).copy()
+for gx, gy, gs, gt, gk in ((0.25, 0.25, 0.45, 0.1, 0.10), (0.75, 0.8, 0.5, 0.9, 0.09), (0.55, 0.45, 0.3, 0.5, 0.05)):
+    g = np.exp(-(((X - gx * AR) / (gs * 1.3)) ** 2 + ((Y - gy) / gs) ** 2))
+    img += g[..., None] * ramp(np.array(gt)) * gk
 
-L = np.array([-0.55, -0.65, 0.52])
-L /= np.linalg.norm(L)
-
-
-def bead_rgba(b):
-    """one bead as an RGBA patch (premultiplied), with its box"""
-    pad = int(b["r"] * 1.6 + b["blur"] * 3 + 4)
-    x0, y0 = int(b["x"] - pad), int(b["y"] - pad)
-    x1, y1 = int(b["x"] + pad), int(b["y"] + pad)
-    gy, gx = np.mgrid[y0:y1, x0:x1].astype(np.float32)
-    dx, dy = (gx - b["x"]) / b["r"], (gy - b["y"]) / b["r"]
-    d = np.hypot(dx, dy)
-    inside = d < 1
-    nz = np.sqrt(np.clip(1 - d * d, 0, 1))
-    ndl = dx * L[0] + dy * L[1] + nz * L[2]
-    col = ramp(b["t"])
-    deep = col * 0.10 + BG
-    # body: dark glass tinted by its colour, deepest through the middle
-    body = deep[None, None] + col[None, None] * (0.10 + 0.30 * np.clip(ndl, 0, 1) + 0.25 * (1 - nz))[..., None]
-    # the caustic: light through the glass gathers on the far side, inside the rim
-    away = np.clip(-(dx * L[0] + dy * L[1]) / np.maximum(d, 1e-3), 0, 1)
-    caustic = np.exp(-((d - 0.72) / 0.16) ** 2) * away ** 2.2
-    warm = np.clip(WARM * 0.7 + col * 0.5, 0, 1.2)
-    body += warm[None, None] * (caustic * 1.15)[..., None]
-    # rim: glass edges catch the light around them
-    rim = (1 - nz) ** 3
-    body += (col * 0.8 + 0.2)[None, None] * (rim * 1.1)[..., None]
-    # highlights: a sharp one and a soft window
-    R = 2 * ndl[..., None] * np.stack([dx, dy, nz], -1) - L
-    spec = np.clip(R[..., 2], 0, 1)
-    body += (spec ** 120 * 1.6 + spec ** 14 * 0.22)[..., None]
-    # a softbox reflected up on the left: a soft bright window shape
-    wx, wy = dx + 0.42, dy + 0.48
-    window = np.clip(1 - np.maximum(np.abs(wx) / 0.20, np.abs(wy) / 0.11) ** 4, 0, 1) * inside
-    body += (window * 0.35)[..., None]
-    body = np.clip(body, 0, 1.6)
-    # coverage, antialiased over about a pixel
-    a = np.clip((1 - d) * b["r"] + 0.5, 0, 1)
-    rgba = np.dstack([body * a[..., None], a])
-    # its glow on the dark around it
-    # (fading to nothing before the patch's edge, so no seams)
-    edge = np.clip((pad / b["r"] - d) / 0.3, 0, 1)
-    glow = np.exp(-np.clip(d - 1, 0, None) * 3.2) * (~inside) * 0.30 * edge
-    rgba[..., :3] += (col[None, None] * glow[..., None])
-    rgba[..., 3] = np.clip(rgba[..., 3] + glow * 0.0, 0, 1)
-    if b["blur"] > 0.6:
-        rgba = np.dstack([blur(rgba[..., k], b["blur"]) for k in range(4)])
-    return x0, y0, rgba
-
-
-# far to near
-for b in sorted(beads, key=lambda b: -b["z"]):
-    x0, y0, p = bead_rgba(b)
-    h, w = p.shape[:2]
-    ax0, ay0, ax1, ay1 = max(x0, 0), max(y0, 0), min(x0 + w, W), min(y0 + h, H)
-    if ax0 >= ax1 or ay0 >= ay1:
+# ── the ribbons, back to front ──
+L = np.array(norm3(-0.35, 0.7, 0.62), F)      # the key light: up and to the left (y up here)
+Hh = np.array(norm3(L[0], L[1], L[2] + 1), F)
+N = V.get("ribbons", 7)
+order = list(range(N))
+rng.shuffle(order)                             # depth order differs from the stacking order
+glass = order[-2]                              # one ribbon near the front is frosted glass
+for k in order:
+    off = k - (N - 1) / 2
+    a1, f1, p1 = rng.uniform(0.015, 0.04), rng.uniform(0.6, 1.1), rng.uniform(0, 1)
+    tw, tf, tp = rng.uniform(0.9, 1.8), rng.uniform(0.5, 1.0), rng.uniform(0, 1)
+    wd = rng.uniform(0.028, 0.06)
+    c0 = k / max(1, N - 1)
+    # the bundle: tight at the upper left, fanning out to the lower right
+    spread = 0.01 + 0.085 * u ** 1.25
+    yc = (0.18 + 0.62 * u - 0.12 * u * u + 0.055 * np.sin(2 * np.pi * (0.85 * u + 0.15))
+          + off * spread + a1 * np.sin(2 * np.pi * (f1 * u + p1)) * (0.3 + u))
+    dyc = np.gradient(yc, xs)
+    hw = wd * (0.55 + 0.45 * u) * (0.8 + 0.2 * np.sin(2 * np.pi * (1.3 * u + p1)))
+    th = tw * np.sin(2 * np.pi * (tf * u + tp))           # the twist along it
+    hwp = hw * (0.12 + 0.88 * np.abs(np.cos(th)))         # the width you see
+    top, bot = int(max(0, (yc - hwp).min() * H - 3)), int(min(H, (yc + hwp).max() * H + 3))
+    if bot <= top:
         continue
-    sub = p[ay0 - y0:ay1 - y0, ax0 - x0:ax1 - x0]
-    dst = img[ay0:ay1, ax0:ax1]
-    img[ay0:ay1, ax0:ax1] = dst * (1 - sub[..., 3:4]) + sub[..., :3]
+    yy = ys[top:bot, None]
+    v = (yy - yc[None, :]) / hwp[None, :]                  # -1 top edge … 1 bottom edge
+    a = np.clip((1 - np.abs(v)) * hwp[None, :] * H, 0, 1)  # anti-aliased coverage
+    phi = th[None, :] - v * 0.9                            # it curls across its width too
+    s = (dyc / np.sqrt(1 + dyc * dyc))[None, :]
+    nx, ny, nz = norm3(s * np.sin(phi) * 0.8, np.cos(phi) * 0 + np.sin(phi), np.cos(phi))
+    face = np.sign(nz)                                     # back face where it has turned over
+    nx, ny, nz = nx * face, ny * face, nz * face
+    dif = np.clip(nx * L[0] + ny * L[1] + nz * L[2], 0, 1)
+    nh = np.clip(nx * Hh[0] + ny * Hh[1] + nz * Hh[2], 0, 1)
+    spec = nh ** 90 * 2.2 + nh ** 12 * 0.22
+    fres = (1 - nz) ** 3
+    t = c0 * 0.6 + 0.45 * u[None, :]
+    base = np.where((face > 0)[..., None], ramp(t), ramp(t + 0.3) * 0.5)
+    c = base * (0.1 + 0.95 * dif)[..., None] + base * (fres * 0.9)[..., None] + spec[..., None] * 0.9
+    c += base * (smooth(0.86, 1, np.abs(v)) * 0.5)[..., None]   # the bright cut edge
+    region = img[top:bot]
+    if k == glass:                                         # frosted: the picture behind, blurred and lit
+        behind = blur(region, 0.025 * H)
+        c = behind * 0.55 + base * 0.35 * (0.3 + dif)[..., None] + spec[..., None] * 0.9 + base * (fres * 0.9)[..., None]
+        a = a * 0.92
+    # its shadow on what's behind: soft, a little below
+    sh = np.zeros((H, W), F)
+    sh[top:bot] = a
+    sh = blur(np.roll(sh, int(0.018 * H), axis=0), 0.022 * H)
+    img *= (1 - 0.6 * sh)[..., None]
+    region = img[top:bot]
+    img[top:bot] = region * (1 - a[..., None]) + c * a[..., None]
 
-# ── bloom: what's bright spills a little ──
-bright = np.clip(img - 0.75, 0, None)
-small = bright[::4, ::4]   # a wide blur is cheaper at a quarter size
-bl = np.dstack([blur(small[..., k], 7 * S) for k in range(3)])
-bl = np.asarray(Image.fromarray((np.clip(bl, 0, 4) * 60).astype(np.uint8)).resize((W, H), Image.BILINEAR), np.float32) / 60
-img += bl * 0.9
+# ── the bead: a glass ball over it all ──
+ox, oy, orr = V.get("orb", (0.7, 0.3, 0.085))
+cx, cy, r = ox * W, oy * H, orr * H                        # pixels
+dist = np.hypot(X * H - cx, Y * H - cy) / r
+img *= (1 - 0.45 * np.exp(-np.maximum(dist - 0.95, 0) ** 2 / 0.12) * (dist > 0.9))[..., None]  # a soft dark halo
+x0, x1, y0, y1 = int(max(0, cx - r - 2)), int(min(W, cx + r + 3)), int(max(0, cy - r - 2)), int(min(H, cy + r + 3))
+py, px = np.mgrid[y0:y1, x0:x1].astype(F) + 0.5
+dx, dy = (px - cx) / r, (py - cy) / r
+rr = np.sqrt(dx * dx + dy * dy)
+z = np.sqrt(np.clip(1 - rr * rr, 0, 1))
+soft = blur(img, 0.004 * H)
+wide = blur(img, 0.03 * H)
 
-# ── vignette, a darker top for the bar, grain ──
-v = np.hypot((xx / W - 0.55) * 1.1, yy / H - 0.55)
-img *= (1 - 0.55 * np.clip(v - 0.25, 0, 1) ** 1.4)[..., None]
-img *= (0.72 + 0.28 * np.clip(yy / (H * 0.22), 0, 1))[..., None]
-img = img / (1 + img * 0.35)  # gentle tone curve so highlights roll off
-img += rng.normal(0, 0.012, (H, W, 1)).astype(np.float32)
 
+def sample(a, sx, sy):
+    sx = np.clip(sx, 0, W - 1.001); sy = np.clip(sy, 0, H - 1.001)
+    i0, j0 = sx.astype(int), sy.astype(int)
+    fx, fy = (sx - i0)[..., None], (sy - j0)[..., None]
+    return (a[j0, i0] * (1 - fx) * (1 - fy) + a[j0, i0 + 1] * fx * (1 - fy)
+            + a[j0 + 1, i0] * (1 - fx) * fy + a[j0 + 1, i0 + 1] * fx * fy)
+
+
+# refraction: what's behind, upside down and magnified, each colour bent a little differently
+refr = np.zeros(dx.shape + (3,), F)
+for ch, disp in enumerate((0.97, 1.0, 1.03)):
+    k = (1.3 - 0.6 * z) * disp
+    refr[..., ch] = sample(soft, cx - dx * r * k, cy - dy * r * k)[..., ch]
+tint = 0.6 + 0.4 * ramp(np.array(0.75)) / ramp(np.array(0.75)).max()
+refr *= tint * 0.95
+# reflection: what's around it, and a little sky
+refl = sample(wide, cx + dx * r * 1.6, cy + dy * r * 1.6) * 1.4 + (smooth(0.0, 0.9, -dy) * 0.12)[..., None]
+fr = (0.04 + 0.96 * (1 - z) ** 4)[..., None]
+c = refr * (1 - fr) + refl * fr
+# the key light's reflection: a soft rounded window, and a sharp glint in it
+q = ((dx + 0.36) / 0.24) ** 2 + ((dy + 0.46) / 0.14) ** 2
+c += (np.clip(1.15 - q, 0, 1) ** 1.6 * 1.3)[..., None]
+c += (np.exp(-((dx + 0.3) ** 2 + (dy + 0.42) ** 2) / 0.0015) * 4)[..., None]
+# light focused through it, glowing low inside; and a coloured rim on the shadow side
+c += np.exp(-((dx - 0.12) ** 2 + (dy - 0.62) ** 2) / 0.05)[..., None] * ramp(np.array(0.85)) * 1.6
+c += (smooth(0.8, 1.0, rr) * np.clip(dx * 0.4 + dy * 0.9, 0, 1))[..., None] * ramp(np.array(0.35)) * 2.2
+a = np.clip((1 - rr) * r, 0, 1)[..., None]
+img[y0:y1, x0:x1] = img[y0:y1, x0:x1] * (1 - a) + c * a
+del soft, wide
+
+# ── post ──
+bright = np.maximum(img - 0.85, 0)
+img += blur(bright, 0.003 * H) * 0.5 + blur(bright, 0.012 * H) * 0.35 + blur(bright, 0.04 * H) * 0.25
+del bright
+img *= np.clip(1 - 0.75 * (((X / AR - 0.5) * 1.1) ** 2 + ((Y - 0.5) * 1.2) ** 2), 0, 1)[..., None]
+img *= 1.2
+img = (img * (2.51 * img + 0.03)) / (img * (2.43 * img + 0.59) + 0.14)   # ACES
+img = np.clip(img, 0, 1) ** (1 / 2.2)
+img += np.random.default_rng(11).normal(0, 0.008, (H, W, 1)).astype(F)
+out = (np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8)
 if V.get("mirror"):
-    img = img[:, ::-1]
-out = Image.fromarray((np.clip(img, 0, 1) ** (1 / 1.05) * 255 + 0.5).astype(np.uint8), "RGB")
-out.save(OUT, quality=93, subsampling=0, optimize=True)
+    out = out[:, ::-1]
+Image.fromarray(np.ascontiguousarray(out), "RGB").save(OUT, quality=94, subsampling=0, optimize=True)
 print(OUT, W, H)
