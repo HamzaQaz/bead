@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
+import Quickshell.Hyprland
 import qs.components
 import qs.config
 import qs.services
@@ -41,7 +43,48 @@ Item {
             root.history = h;
         }
     }
-    onActiveChanged: if (active) { history = []; gain = 0.2; }
+    onActiveChanged: if (active) { history = []; gain = 0.2; known = gatherKnown(); }
+
+    // ── the words it'll act on, lit up as you say them: apps, open windows,
+    // your SSH hosts and phrases, workspace numbers ──
+    property var known: []   // squashed names ("curseforge", "hlab")
+    function squash(t: string): string { return String(t).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+    function gatherKnown(): var {
+        const out = new Set();
+        for (const e of DesktopEntries.applications.values) if (e.name && !e.noDisplay) out.add(squash(e.name));
+        for (const t of Hyprland.toplevels.values) out.add(squash(String(t.wayland?.appId ?? "").split(".").pop()));
+        for (const h of Voice.sshHosts) out.add(squash(h));
+        for (const c of Voice.custom) for (const p of c.phrases) out.add(squash(p));
+        out.delete("");
+        return [...out].filter(k => k.length >= 2);
+    }
+    // the words as rich text: runs of 1-3 words that are (or sound like) a known name
+    function marked(t: string): string {
+        const esc = x => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const words = t.split(" ");
+        const lit = new Array(words.length).fill(false);
+        const isKnown = g => g.length >= 2 && (known.includes(g)
+            || (g.length >= 5 && known.some(k => Math.abs(k.length - g.length) <= 3 && Apps.similar(g, k) >= 0.8)));
+        for (let n = 3; n >= 1; n--) for (let i = 0; i + n <= words.length; i++) {
+            if (lit.slice(i, i + n).some(x => x)) continue;
+            const g = squash(words.slice(i, i + n).join(""));
+            // short single words ("on", "it") only when they're exactly a name
+            if (n === 1 && g.length < 4 && !Voice.sshHosts.some(h => squash(h) === g)) continue;
+            if (isKnown(g)) for (let j = i; j < i + n; j++) lit[j] = true;
+        }
+        // "workspace 5", "window three"
+        const ws = /^(workspace|window|desktop|screen)$/i;
+        for (let i = 0; i + 1 < words.length; i++)
+            if (ws.test(words[i]) && /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\W*$/i.test(words[i + 1])) lit[i] = lit[i + 1] = true;
+        const accent = Theme.tone("action");
+        let html = "", on = false;
+        for (let i = 0; i < words.length; i++) {
+            if (lit[i] && !on) { html += "<font color=\"" + accent + "\"><b>"; on = true; }
+            if (!lit[i] && on) { html += "</b></font>"; on = false; }
+            html += esc(words[i]) + (i < words.length - 1 ? " " : "");
+        }
+        return html + (on ? "</b></font>" : "");
+    }
 
     // 0 while listening → 1 once released: the bars gather and the blob takes over
     property real collapse: listening || !active || (asking && phase === "") ? 0 : 1
@@ -115,7 +158,8 @@ Item {
         font.pixelSize: 14
         font.weight: Voice.partial ? Font.Medium : Font.Normal
         color: Voice.partial ? Theme.text : Theme.subtext
-        text: Voice.partial || (root.asking ? Voice.question.prompt : root.listening ? "Listening…" : "")
+        textFormat: Text.StyledText
+        text: Voice.partial ? root.marked(Voice.partial) : (root.asking ? Voice.question.prompt : root.listening ? "Listening…" : "")
         Behavior on color { ColorAnimation { duration: 200 } }
     }
     Label {

@@ -17,6 +17,7 @@ Singleton {
     readonly property bool active: state !== ""
     property real level: 0
     property string lastText: ""
+    property string partial: ""   // what you've said so far, live
     signal failed(string why)
     signal typed(string text)
 
@@ -26,6 +27,7 @@ Singleton {
         if (Audio.micMuted) { root.failed("Your mic is muted"); return; }
         Voice.ensureWhisper();
         level = 0;
+        partial = "";
         state = "listening";
         helper.running = true;
     }
@@ -61,12 +63,13 @@ Singleton {
                 let m;
                 try { m = JSON.parse(line); } catch (e) { return; }
                 if (m.level !== undefined) root.level = m.level;
+                else if (m.partial !== undefined) root.partial = m.partial;
                 else if (m.state) { root.state = m.state; root.level = 0; }
                 else if (m.error) root.failed(m.error);
                 else if (m.text !== undefined) { root.lastText = m.text; if (m.text) root.typed(m.text); }
             }
         }
-        onExited: { root.state = ""; root.level = 0; root.handsFree = false; }
+        onExited: { root.state = ""; root.level = 0; root.handsFree = false; root.partial = ""; }
     }
 
     IpcHandler {

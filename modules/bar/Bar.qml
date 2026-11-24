@@ -328,10 +328,38 @@ Scope {
                             font.weight: Font.Black
                             color: Theme.tone("action")
                         }
-                        Rectangle {
-                            width: 5; height: 5; radius: 2.5
+                        // the bead comes alive while voice listens (with your voice)
+                        // or thinks (breathing), so you can see it under fullscreen too
+                        Item {
+                            id: beadDot
+                            width: 5; height: 5
                             y: markB.baselineOffset - height
-                            color: Theme.tone("action")
+                            readonly property bool listening: Voice.state === "listening" || Dictation.state === "listening"
+                            readonly property bool busy: Voice.active || Dictation.active
+                            readonly property real level: Voice.active ? Voice.level : Dictation.level
+                            property real breath: 0
+                            SequentialAnimation on breath {
+                                running: beadDot.busy && !beadDot.listening
+                                loops: Animation.Infinite
+                                NumberAnimation { from: 0; to: 1; duration: 520; easing.type: Easing.InOutSine }
+                                NumberAnimation { from: 1; to: 0; duration: 520; easing.type: Easing.InOutSine }
+                            }
+                            Rectangle { // a soft halo
+                                anchors.centerIn: parent
+                                property real d: 5 * (1.6 + (parent.listening ? 1.8 * Math.min(1, parent.level * 1.3) : 1.2 * parent.breath))
+                                width: d; height: d; radius: d / 2
+                                color: Theme.tone("action")
+                                opacity: parent.busy ? 0.28 : 0
+                                Behavior on opacity { NumberAnimation { duration: 200 } }
+                                Behavior on d { NumberAnimation { duration: 90 } }
+                            }
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 5; height: 5; radius: 2.5
+                                color: Theme.tone("action")
+                                scale: !parent.busy ? 1 : parent.listening ? 1.15 + 0.5 * Math.min(1, parent.level * 1.3) : 1 + 0.3 * parent.breath
+                                Behavior on scale { NumberAnimation { duration: 90 } }
+                            }
                         }
                     }
                     MouseArea { id: logoMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.ipc("launcher", "toggle") }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Find something on the screen and click it: "click the update button".
 
-    bead-look click "the update button" [--dry]
+    bead-look click "the update button" [--dry] [--confirm]
     bead-look shot      just the screenshot: prints {"dir": ...} holding screen.png
                         (for a question about the screen; the asker deletes it)
 
@@ -10,6 +10,9 @@ Claude Code CLI with your logged-in account, print mode, --restricted, the Read
 tool only, run inside the screenshot's own folder), then moves the pointer
 there (Hyprland) and clicks (ydotool, through a private ydotoold that lives
 only for the click). --dry finds it and moves the pointer, but doesn't click.
+--confirm: after {"found"}, waits for a line on stdin, `go` to click and
+anything else (or nothing within 5 s) to stop: bead shows where it's
+about to click first.
 
 The screenshot goes to Anthropic, the same as anything you ask Claude; it's
 deleted here afterwards. Only the Claude CLI's coordinates are used: whatever
@@ -28,7 +31,7 @@ import sys
 import tempfile
 import time
 
-WIDTH = 1400  # the screenshot's width: what Claude sees, and its coordinates
+WIDTH = 1280  # the screenshot's width: what Claude sees, and its coordinates
 
 
 def say(**kw):
@@ -74,8 +77,9 @@ def shot_only():
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "--dry"]
+    args = [a for a in sys.argv[1:] if a not in ("--dry", "--confirm")]
     dry = "--dry" in sys.argv
+    confirm = "--confirm" in sys.argv
     if args[:1] == ["shot"]:
         return shot_only()
     if len(args) < 2 or args[0] != "click" or not args[1].strip():
@@ -122,6 +126,12 @@ def main():
                        capture_output=True, timeout=5)
         if dry:
             return 0
+        if confirm:
+            import select
+            ready, _, _ = select.select([sys.stdin], [], [], 5)
+            if not ready or sys.stdin.readline().strip() != "go":
+                say(error="Stopped")
+                return 1
         time.sleep(0.12)
         sock = os.path.join(work, "ydotool.sock")
         d = subprocess.Popen(["ydotoold", "-p", sock, "-P", "0600"],

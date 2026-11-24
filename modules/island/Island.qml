@@ -185,15 +185,47 @@ Scope {
     Process {
         id: looker
         property string what: ""
+        stdinEnabled: true
+        onRunningChanged: if (!running) clickRing.finish(false)
         stdout: SplitParser {
             onRead: line => {
                 let m;
                 try { m = JSON.parse(line); } catch (e) { return; }
-                if (m.error) root.toast("ads_click", m.error, "error", 3200);
+                if (m.found) clickRing.show(m.found.x, m.found.y, m.found.label || looker.what);
+                else if (m.error === "Stopped") root.toast("block", "Didn't click", "info", 1400);
+                else if (m.error) root.toast("ads_click", m.error, "error", 3200);
                 else if (m.clicked) root.toast("ads_click", "Clicked " + looker.what, "action", 1800);
             }
         }
     }
+    // where a voice click will land, a moment before it does (Esc: don't)
+    ClickRing {
+        id: clickRing
+        onGo: if (looker.running) looker.write("go\n")
+        onCancelled: if (looker.running) looker.write("cancel\n")
+    }
+
+    // ── a moment to change your mind: things that can't be undone (closing
+    // windows) wait ~1.4 s on the island first; tap it to stop them ──
+    property var pendingRun: null
+    function confirmThen(icon: string, text: string, run: var): void {
+        if (root.pendingRun) pendingTimer.triggered(); // the one before goes ahead
+        root.pendingRun = run;
+        root.toast(icon, text + " \u00b7 tap to stop", "error", pendingTimer.interval + 200);
+        pendingTimer.restart();
+    }
+    function cancelPending(): void {
+        if (!root.pendingRun) return;
+        root.pendingRun = null;
+        pendingTimer.stop();
+        root.toast("block", "Stopped", "info", 1200);
+    }
+    Timer {
+        id: pendingTimer
+        interval: 1400
+        onTriggered: { const f = root.pendingRun; root.pendingRun = null; if (f) f(); }
+    }
+
     Connections {
         target: Dictation
         function onFailed(why) { root.toast("mic_off", why, "error", 3500); }
@@ -383,16 +415,15 @@ Scope {
                 if (ws && wasOn) dispatch(`hl.dsp.focus({ workspace = "${wasOn}" })`);
             });
             if (!ws) { Apps.launch(e); return say("open_in_new", "Opening " + e.name); }
-            let closed = 0;
-            if (alone) for (const t of Hyprland.toplevels.values) {
-                if (t.workspace?.id !== ws) continue;
-                const ad = t.address.startsWith("0x") ? t.address : "0x" + t.address;
-                dispatch(`hl.dsp.window.close({ window = "address:${ad}" })`);
-                closed++;
-            }
-            Apps.launchOn(e, ws);
-            dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
-            return say("open_in_new", "Opening " + e.name + " on " + ws + (closed ? " \u00b7 closed " + closed : ""));
+            const doomed = alone ? Hyprland.toplevels.values.filter(t => t.workspace?.id === ws).map(t => root.addr(t)) : [];
+            const go = () => {
+                for (const ad of doomed) dispatch(`hl.dsp.window.close({ window = "address:${ad}" })`);
+                Apps.launchOn(e, ws);
+                dispatch(`hl.dsp.focus({ workspace = "${ws}" })`);
+            };
+            if (doomed.length) return root.confirmThen("close", "Closing " + doomed.length + " on " + ws + ", opening " + e.name, go);
+            go();
+            return say("open_in_new", "Opening " + e.name + " on " + ws);
         }
         case "window": {
             // something done to an open window, found by its app's name ("this": the focused one)
@@ -412,11 +443,12 @@ Scope {
             }
             case "close": {
                 const cls = t.wayland?.appId ?? t.lastIpcObject?.class ?? "";
-                dispatch(`hl.dsp.window.close({ ${sel} })`);
-                // a window can't come back, but its app can
+                // a window can't come back, but its app can (once it's really closed)
                 const e = Apps.entryFor(cls);
-                if (e) remember("closing " + name + " (reopened)", () => Apps.launch(e));
-                return say("close", "Closed " + name);
+                let gone = false;
+                if (e) remember("closing " + name + " (reopened)", () => { if (gone) Apps.launch(e); });
+                root.confirmThen("close", "Closing " + name, () => { gone = true; dispatch(`hl.dsp.window.close({ ${sel} })`); });
+                return;
             }
             case "move": {
                 const ws = root.spokenWorkspace(heard) || (a.workspace > 0 ? a.workspace : 0);
@@ -475,7 +507,7 @@ Scope {
             if (!what) break;
             if (looker.running) return root.toast("ads_click", "Still looking…", "action", 1600);
             looker.what = what;
-            looker.command = [Quickshell.env("HOME") + "/.local/bin/bead-look", "click", what];
+            looker.command = [Quickshell.env("HOME") + "/.local/bin/bead-look", "click", what, "--confirm"];
             looker.running = true;
             root.toast("ads_click", "Looking for " + what + "…", "action", 6000);
             return;
@@ -1000,15 +1032,32 @@ Scope {
                         readonly property real level: cmd ? Voice.level : Dictation.level
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 6
+                        // hands-free dictation: a recording dot, then the words as they go in
+                        readonly property bool free: !cmd && Dictation.handsFree
                         Icon {
+                            visible: !voiceChip.free
                             anchors.verticalCenter: parent.verticalCenter
                             name: voiceChip.cmd ? "graphic_eq" : "mic"
                             size: 17
                             fill: 1
                             color: Theme.tone("action")
                         }
+                        Rectangle {
+                            visible: voiceChip.free
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 9; height: 9; radius: 4.5
+                            color: Theme.tone("error")
+                            scale: 0.85 + 0.5 * Math.min(1, voiceChip.level * 1.4)
+                            Behavior on scale { NumberAnimation { duration: 90 } }
+                            SequentialAnimation on opacity {
+                                running: voiceChip.free && voiceChip.visible
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.45; duration: 700; easing.type: Easing.InOutSine }
+                                NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
+                            }
+                        }
                         Row {
-                            visible: voiceChip.phase === "listening"
+                            visible: voiceChip.phase === "listening" && !voiceChip.free
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 2
                             Repeater {
@@ -1048,6 +1097,17 @@ Scope {
                                     }
                                 }
                             }
+                        }
+                        // dictation: the last few words, newest at the right
+                        Text {
+                            visible: !voiceChip.cmd && text !== ""
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.min(implicitWidth, 210)
+                            elide: Text.ElideLeft
+                            font.family: Theme.font
+                            font.pixelSize: 13
+                            color: voiceChip.free ? Theme.text : Theme.subtext
+                            text: Dictation.partial.split(" ").slice(-7).join(" ")
                         }
                         TapHandler { onTapped: voiceChip.cmd ? (Voice.state === "listening" ? Voice.stop() : Voice.cancel()) : Dictation.state === "listening" ? Dictation.stop() : Dictation.cancel() }
                     }
@@ -1557,6 +1617,32 @@ Scope {
                         font.weight: Font.DemiBold
                         color: Theme.text
                         text: eventRow.isToast ? root.toastText : eventRow.done ? "Timer done · " + Countdown.fmtTotal(root.doneTotal) : "Recording"
+                    }
+                }
+
+                // a pending close: tap to stop it, and a bar running out
+                MouseArea {
+                    anchors.fill: parent
+                    visible: root.pendingRun !== null
+                    z: 5
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.cancelPending()
+                }
+                Rectangle {
+                    id: pendingBar
+                    visible: root.pendingRun !== null && win.state === "activity"
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 5
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    height: 2
+                    radius: 1
+                    color: Theme.tone("error")
+                    property real remaining: 1
+                    width: (parent.width - 48) * remaining
+                    NumberAnimation on remaining {
+                        running: root.pendingRun !== null
+                        from: 1; to: 0
+                        duration: pendingTimer.interval
                     }
                 }
 
