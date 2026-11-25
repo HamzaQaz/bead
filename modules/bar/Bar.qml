@@ -32,7 +32,7 @@ Scope {
     function ipc(...args): void {
         Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", ...args]);
     }
-    function go(ws: int): void { Hyprland.dispatch(`hl.dsp.focus({ workspace = ${Math.max(1, ws)} })`); }
+    function go(ws: int): void { Windows.goId(ws); }
 
     // ── window icons ──
     function appIcon(t: HyprlandToplevel): string {
@@ -120,15 +120,7 @@ Scope {
         function panel(name: string): void { root.panelRequested(name, Hyprland.focusedMonitor?.name ?? ""); }
     }
 
-    // window details (app ids) aren't pushed: refresh after window events
-    Component.onCompleted: Hyprland.refreshToplevels()
-    Connections {
-        target: Hyprland
-        function onRawEvent(e: var) {
-            if (/^(openwindow|closewindow|movewindow|windowtitle|activewindow)/.test(e.name)) refresh.restart();
-        }
-    }
-    Timer { id: refresh; interval: 100; onTriggered: Hyprland.refreshToplevels() }
+    // window details (app ids) are kept fresh by services/Windows.qml
 
     Variants {
         model: Quickshell.screens
@@ -402,25 +394,24 @@ Scope {
                         blurMax: 20
                     }
 
-                    // 1-5 always, plus any other workspace in use or active
-                    readonly property list<int> ids: {
-                        const set = [1, 2, 3, 4, 5];
-                        for (const w of Hyprland.workspaces.values) if (w.id > 0 && !set.includes(w.id)) set.push(w.id);
-                        if (win.activeWs > 0 && !set.includes(win.activeWs)) set.push(win.activeWs);
-                        return set.sort((a, b) => a - b);
-                    }
+                    // this monitor's own: its group's 1–5 always, the rest while in use
+                    readonly property list<int> ids: Windows.barIds(Hyprland.workspaces.values, Windows.monitors, Windows.groups, win.monitor, win.activeWs)
                     readonly property int activeIndex: ids.indexOf(win.activeWs)
                     // each workspace grows with its windows (up to three glyphs)
                     readonly property int glyphH: 20
-                    function winsOf(id: int): list<var> { return Hyprland.toplevels.values.filter(t => t.workspace?.id === id); }
+                    // (bindings pass Windows.byId in: a binding doesn't see what a
+                    // function it calls reads, so it would never update)
+                    readonly property var byId: Windows.byId
+                    function winsOf(m: var, id: int): list<var> { return m[id] ?? []; }
                     // the shape on top, then a glyph per window: the last glyph sits as far
                     // from the bottom as the shape does from the top (14px, the pill's
                     // radius), so the highlight's ends match
-                    function heightOf(id: int): real { const n = Math.min(3, winsOf(id).length); return n ? 26 + n * glyphH + 4 : 28; }
+                    function heightOf(m: var, id: int): real { const n = Math.min(3, winsOf(m, id).length); return n ? 26 + n * glyphH + 4 : 28; }
                     readonly property var offsets: {
                         const out = [];
                         let y = 0;
-                        for (const id of ids) { out.push(y); y += heightOf(id); }
+                        const m = byId;
+                        for (const id of ids) { out.push(y); y += heightOf(m, id); }
                         return out;
                     }
 
@@ -431,7 +422,7 @@ Scope {
                         x: 2
                         y: 4 + (wsBox.offsets[wsBox.activeIndex] ?? 0)
                         width: 28
-                        height: wsBox.activeIndex >= 0 ? wsBox.heightOf(win.activeWs) : 28
+                        height: wsBox.activeIndex >= 0 ? wsBox.heightOf(wsBox.byId, win.activeWs) : 28
                         radius: 14
                         visible: wsBox.activeIndex >= 0
                         color: Theme.tone("action")
@@ -451,9 +442,9 @@ Scope {
                                 required property int modelData
                                 readonly property int num: modelData
                                 readonly property bool active: num === win.activeWs
-                                readonly property var wins: wsBox.winsOf(num)
+                                readonly property var wins: wsBox.winsOf(wsBox.byId, num)
                                 width: wsBox.width
-                                height: wsBox.heightOf(num)
+                                height: wsBox.heightOf(wsBox.byId, num)
                                 Behavior on height { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
                                 // how much of this workspace the highlight covers right now
                                 // (0-1): colours and size follow the highlight itself, not
@@ -507,7 +498,7 @@ Scope {
                         }
                     }
                     WheelHandler {
-                        onWheel: e => root.go(win.activeWs + (e.angleDelta.y < 0 ? 1 : -1))
+                        onWheel: e => Windows.step(e.angleDelta.y < 0 ? 1 : -1, win.monitor)
                     }
                 }
 
@@ -547,7 +538,7 @@ Scope {
                             id: sp
                             required property var modelData
                             readonly property bool open: spBox.open === modelData.name
-                            readonly property bool used: Hyprland.toplevels.values.some(t => t.workspace?.name === "special:" + sp.modelData.name)
+                            readonly property bool used: (Windows.special("special:" + sp.modelData.name)?.toplevels.values.length ?? 0) > 0
                             x: 2
                             width: 28; height: 28; radius: 14
                             color: open ? Theme.tone("action") : Qt.alpha(Theme.text, spMa.containsMouse ? 0.1 : 0)
@@ -580,8 +571,9 @@ Scope {
                 anchors.bottomMargin: 14
                 width: win.fullW
                 clip: true
-                readonly property HyprlandToplevel t: Hyprland.activeToplevel
-                readonly property bool here: (t?.workspace?.id ?? -999) === win.activeWs
+                // this monitor's own window, even while you're on the other one
+                readonly property HyprlandToplevel t: Windows.titles[win.monitor?.name ?? ""] ?? null
+                readonly property bool here: !!t
                 Text {
                     id: title
                     visible: Settings.showTitle && parent.here && !!parent.t

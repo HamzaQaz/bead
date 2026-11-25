@@ -570,6 +570,12 @@ FloatingWindow {
                         Toggle { checked: Settings.showTitle; onToggled: Settings.showTitle = !Settings.showTitle }
                     }
                     Setting {
+                        label: "Workspaces per monitor"
+                        hint: Settings.workspaceGroups ? "Each monitor has its own 1–10 (the main one 1–10, the next 11–20)" : "One set of workspaces across monitors"
+                        words: "workspace monitor screen group bar keys"
+                        Toggle { checked: Settings.workspaceGroups; onToggled: Settings.workspaceGroups = !Settings.workspaceGroups }
+                    }
+                    Setting {
                         label: "Main monitor"; hint: "Where the island and the lock screen live"; words: "screen island lock primary"
                         Choice { options: Quickshell.screens.map(s => ({ v: s.name, t: s.name })); value: Settings.home; onChose: v => Settings.islandScreen = v }
                     }
