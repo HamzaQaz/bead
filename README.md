@@ -8,6 +8,12 @@ A desktop shell for [Hyprland](https://hyprland.org), built with
 a bar, an island at the top of the screen that grows into a launcher, a
 dashboard, a lock screen and notifications, all coloured by your wallpaper.
 
+**[bead.n1ghtly.dev](https://bead.n1ghtly.dev)**: see it move, then install it.
+
+| | |
+|---|---|
+| ![The island at the top of the screen: resting, growing into the media card, then the launcher](docs/screenshots/island.gif) | ![Notifications growing out of the frame's corner, opening, and tucking back in](docs/screenshots/notifications.gif) |
+
 ![bead's welcome card, the first thing a new install shows](docs/screenshots/welcome.webp)
 
 | | |
