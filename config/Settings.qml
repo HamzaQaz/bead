@@ -12,6 +12,7 @@ Singleton {
 
     // idle, in minutes (0 = never)
     property alias lockAfter: a.lockAfter
+    property alias lockAtLogin: a.lockAtLogin       // "auto" (when the machine logs in by itself) | "on" | "off"
     property alias screenOffAfter: a.screenOffAfter
     property alias suspendAfter: a.suspendAfter
     property alias pauseForMedia: a.pauseForMedia   // stay awake while something plays
@@ -50,6 +51,7 @@ Singleton {
         JsonAdapter {
             id: a
             property real lockAfter: 3
+            property string lockAtLogin: "auto"
             property real screenOffAfter: 5
             property real suspendAfter: 10
             property bool pauseForMedia: true

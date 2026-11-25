@@ -23,6 +23,13 @@ Singleton {
     }
 
     readonly property string user: Quickshell.env("USER") || ""
+    property string realName: ""   // from /etc/passwd ("Ada Lovelace"); "" if none
+    readonly property string firstName: realName.split(" ")[0] || user
+    Process {
+        running: true
+        command: ["sh", "-c", 'getent passwd "$(id -un)" | cut -d: -f5 | cut -d, -f1']
+        stdout: StdioCollector { onStreamFinished: root.realName = text.trim() }
+    }
     property string host: ""
     property real uptime: 0 // seconds
     readonly property string uptimeText: {

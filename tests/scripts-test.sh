@@ -63,4 +63,31 @@ is "hyprland.lua backed up" "$(ls "$XDG_CONFIG_HOME/hypr" | grep -c 'hyprland.lu
 is "bead.lua gone" "$(test -e "$XDG_CONFIG_HOME/hypr/bead.lua" && echo there)" ""
 is "only Glint's hooks gone" "$(python3 -c 'import json,sys;m=json.load(open(sys.argv[1]));print(m["model"],list(m["hooks"]),len(m["hooks"]["Stop"]))' "$HOME/.claude/settings.json")" "x ['Stop'] 1"
 is "settings kept" "$(test -f "$XDG_CONFIG_HOME/bead/settings.json" && echo kept)" "kept"
+echo "lock at login"
+L=$(dirname "$0")/../services/lock-at-login.sh
+E=$T/etc-root; me=$(id -un)
+at() { rm -f "$T/mark"; BEAD_ETC=$E sh "$L" "$1" "$T/mark" && echo lock || echo no; }
+is "auto, a login screen: no lock" "$(at auto)" "no"
+mkdir -p "$E/etc"; printf '[Autologin]\nUser=%s\nSession=hyprland\n' "$me" >"$E/etc/sddm.conf"
+is "auto, SDDM autologin: lock" "$(at auto)" "lock"
+is "only once per login" "$(BEAD_ETC=$E sh "$L" auto "$T/mark" && echo lock || echo no)" "no"
+printf '[Autologin]\nUser=someone-else\n' >"$E/etc/sddm.conf"
+is "someone else's autologin: no lock" "$(at auto)" "no"
+printf '[General]\nUser=%s\n' "$me" >"$E/etc/sddm.conf"
+is "User= outside [Autologin]: no lock" "$(at auto)" "no"
+rm "$E/etc/sddm.conf"; mkdir -p "$E/etc/greetd"
+printf '[initial_session]\ncommand = "Hyprland"\nuser = "%s"\n' "$me" >"$E/etc/greetd/config.toml"
+is "auto, greetd initial session: lock" "$(at auto)" "lock"
+rm -r "$E/etc/greetd"; mkdir -p "$E/etc/gdm"
+printf '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=%s\n' "$me" >"$E/etc/gdm/custom.conf"
+is "auto, GDM autologin: lock" "$(at auto)" "lock"
+printf '[daemon]\nAutomaticLoginEnable=False\nAutomaticLogin=%s\n' "$me" >"$E/etc/gdm/custom.conf"
+is "GDM autologin turned off: no lock" "$(at auto)" "no"
+rm -r "$E/etc/gdm"; mkdir -p "$E/etc/systemd/system/getty@tty1.service.d"
+printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty -o "-p -f -- \\\\u" --noclear --autologin %s %%I $TERM\n' "$me" >"$E/etc/systemd/system/getty@tty1.service.d/autologin.conf"
+is "auto, getty autologin: lock" "$(at auto)" "lock"
+rm -r "$E/etc/systemd"
+is "on: always lock" "$(at on)" "lock"
+is "off: never" "$(at off)" "no"
+
 [ "$fails" = 0 ] && echo "scripts-test: passed" || { echo "scripts-test: $fails failed"; exit 1; }

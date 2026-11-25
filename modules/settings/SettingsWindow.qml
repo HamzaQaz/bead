@@ -629,6 +629,12 @@ FloatingWindow {
                 Group {
                     title: "When idle"
                     Setting { label: "Lock the screen"; hint: "After this long without input"; words: "idle timeout"; Minutes { value: Settings.lockAfter; onChose: v => Settings.lockAfter = v } }
+                    Setting {
+                        label: "Lock at login"
+                        hint: Settings.lockAtLogin === "auto" ? "When the computer logs in by itself" : Settings.lockAtLogin === "on" ? "Every time you log in" : "Never"
+                        words: "autologin startup boot reboot password"
+                        Choice { options: [{ v: "auto", t: "Auto" }, { v: "on", t: "Always" }, { v: "off", t: "Never" }]; value: Settings.lockAtLogin; onChose: v => Settings.lockAtLogin = v }
+                    }
                     Setting { label: "Turn the screen off"; words: "idle blank dpms display"; Minutes { value: Settings.screenOffAfter; onChose: v => Settings.screenOffAfter = v } }
                     Setting { label: "Suspend"; words: "idle sleep"; Minutes { value: Settings.suspendAfter; onChose: v => Settings.suspendAfter = v } }
                     Setting {

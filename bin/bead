@@ -78,7 +78,7 @@ wallpaper) # bead wallpaper [random [still|live]|still PATH|live ID|current]
 	esac ;;
 special) # bead special [music|communication|todo|sysmon|bitwarden|specialws]
 	exec qs -p "$share" ipc call special toggle "${2:-specialws}" ;;
-lock) # bead lock [preview]: lock the screen (preview: show it for 20 s without locking)
+lock) # bead lock [preview|previewLogin]: lock the screen (preview: show it for 20 s without locking; previewLogin: as it looks at login)
 	exec qs -p "$share" ipc call lock "${2:-lock}" ;;
 island) # bead island [toggle|show|hide]
 	exec qs -p "$share" ipc call island "${2:-toggle}" ;;

@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Pam
+import qs.config
 
 // The lock screen's state: locked or not, the password being typed, and the
 // PAM check (bead's pam.d/passwd: pam_unix with faillock, same as Caelestia).
@@ -16,6 +17,7 @@ Singleton {
 
     property bool locked: false
     property bool preview: false
+    property bool atLogin: false   // this lock is the one at login: the lock screen greets you instead
     readonly property bool shown: locked || preview
     // where each screen's bar clock is (screen name → rect, screen coords),
     // published by the bar as the lock appears: unlocking, the lock clock
@@ -66,7 +68,7 @@ Singleton {
         id: exitTimer
         interval: 470 // the screen's exit takes 440 ms
         onTriggered: {
-            root.locked = false; root.preview = false; root.reset();
+            root.locked = false; root.preview = false; root.atLogin = false; root.reset();
             Quickshell.execDetached(["sh", "-c", 'rm -f "$1"/*.ppm', "sh", root.stillDir]);
         }
     }
@@ -89,12 +91,29 @@ Singleton {
         onError: e => { root.password = ""; root.errorText = "Couldn't check the password"; root.st = "error"; root.shake(); }
     }
 
-    Timer { id: previewEnd; interval: 20000; onTriggered: if (!root.locked) root.preview = false }
+    // ── at login ──
+    // A machine that logs in by itself (SDDM, LightDM, GDM or greetd autologin,
+    // a getty with --autologin) never asked for a password: bead locks as it
+    // first starts in the session, so a reboot lands on the lock screen. Once
+    // per login (a mark in $XDG_RUNTIME_DIR, which goes at logout), so
+    // restarting bead never locks you out. Settings.lockAtLogin: "auto" does
+    // this only with autologin, "on" always, "off" never.
+    readonly property string loginMark: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/bead/logged-in"
+    Process {
+        id: atLogin
+        command: ["sh", Quickshell.shellPath("services/lock-at-login.sh"), Settings.lockAtLogin, root.loginMark]
+        onExited: code => { if (code === 0) { root.atLogin = true; root.lock(); } }
+    }
+    Component.onCompleted: atLogin.running = true
+
+    Timer { id: previewEnd; interval: 20000; onTriggered: if (!root.locked) { root.preview = false; root.atLogin = false; } }
 
     IpcHandler {
         target: "lock"
         function lock(): void { root.lock(); }
         function preview(): void { if (!root.locked) { root.reset(); root.preview = true; previewEnd.restart(); } }
+        // the same, as it looks at login
+        function previewLogin(): void { if (!root.locked) { root.reset(); root.atLogin = true; root.preview = true; previewEnd.restart(); } }
         function isLocked(): bool { return root.locked; }
         // close a preview (never unlocks a real lock)
         function endPreview(): void { if (root.preview && !root.locked) root.leave(); }

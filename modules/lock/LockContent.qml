@@ -21,6 +21,14 @@ Item {
     // Every screen keeps a password field, since keyboard focus lands on
     // whichever monitor is focused.
     readonly property bool main: screen?.name === Settings.home
+    // the lock at login (Lock.atLogin): it greets you, with your picture,
+    // instead of the big clock
+    readonly property bool login: Lock.atLogin
+    readonly property string greeting: {
+        const h = clock.date.getHours();
+        const part = h >= 5 && h < 12 ? "Good morning" : h >= 12 && h < 17 ? "Good afternoon" : "Good evening";
+        return Demo.on ? part : part + ", " + Session.firstName;
+    }
 
     // ── motion: one clock (enter, 0-1 over 1.1 s) staged per element, and
     // one for leaving on success (0-1), so everything moves as a sequence ──
@@ -140,6 +148,7 @@ Item {
             // bar is under the lock, so they meet as the lock clears); with no
             // bar to go to it just fades with the rest
             readonly property rect to: Lock.barClocks[root.screen?.name ?? ""] ?? Qt.rect(0, 0, 0, 0)
+            visible: !root.login
             readonly property bool hands: root.main && to.width > 0 && Lock.st === "success"
             readonly property real fly: hands ? root.ease(root.leave * 1.05) : 0
             readonly property real t: hands ? root.ease((root.enter - 0.08) / 0.67) : root.stage(0.08, 0.75)
@@ -214,6 +223,77 @@ Item {
             }
         }
 
+        // ── at login: you, and a hello ──
+        Column {
+            id: greet
+            visible: root.login
+            readonly property real t: root.stage(0.06, 0.7)
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: parent.height * 0.25 - 24 * (1 - t)
+            opacity: t
+            scale: 0.95 + 0.05 * t
+            spacing: 0
+            ClippingRectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 112; height: 112; radius: 56
+                color: Qt.alpha(Theme.tone("action"), 0.2)
+                border.width: 2
+                border.color: Qt.alpha(Theme.text, 0.18)
+                Text {
+                    anchors.centerIn: parent
+                    visible: bigFace.status !== Image.Ready
+                    font.family: Theme.font
+                    font.pixelSize: 46
+                    font.weight: Font.Bold
+                    color: Theme.tone("action")
+                    text: (Demo.on ? "you" : Session.firstName).charAt(0).toUpperCase()
+                }
+                Image {
+                    id: bigFace
+                    anchors.fill: parent
+                    visible: !Demo.on
+                    source: "file://" + Quickshell.env("HOME") + "/.face"
+                    fillMode: Image.PreserveAspectCrop
+                    sourceSize: Qt.size(224, 224)
+                }
+            }
+            Item { width: 1; height: 26 }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                font.family: Theme.font
+                font.pixelSize: 44
+                font.weight: Font.DemiBold
+                font.letterSpacing: -0.6
+                color: Theme.text
+                text: root.greeting
+            }
+            Item { width: 1; height: 8 }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                font.family: Theme.font
+                font.pixelSize: 18
+                font.weight: Font.Medium
+                font.features: { "tnum": 1 }
+                color: Qt.alpha(Theme.text, 0.72)
+                text: Qt.formatTime(clock.date, "hh:mm") + "  ·  " + Qt.formatDate(clock.date, "dddd, d MMMM")
+            }
+        }
+
+        // ── at login: the wordmark, low and quiet ──
+        Text {
+            visible: root.login
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: parent.height - 64 - height
+            opacity: 0.55 * root.stage(0.4, 1)
+            font.family: Theme.font
+            font.pixelSize: 22
+            font.weight: Font.Bold
+            font.letterSpacing: -0.4
+            textFormat: Text.StyledText
+            color: Theme.text
+            text: "bead<font color=\"" + Theme.tone("action") + "\">.</font>"
+        }
+
         // ── password ──
         Column {
             readonly property real t: root.stage(0.22, 0.88)
@@ -260,8 +340,9 @@ Item {
                 }
                 Connections { target: Lock; function onShake() { shake.restart(); } }
 
-                // you
+                // you (at login the big picture above is you)
                 ClippingRectangle {
+                    visible: !root.login
                     x: 10
                     anchors.verticalCenter: parent.verticalCenter
                     width: 36; height: 36; radius: 18
@@ -382,7 +463,7 @@ Item {
             anchors.rightMargin: 40
             y: 36 - 14 * (1 - opacity)
             opacity: root.stage(0.38, 1)
-            visible: Notifs.entries.length > 0
+            visible: Notifs.entries.length > 0 && !root.login
             width: notifRow.implicitWidth + 28
             height: notifRow.implicitHeight + 16
             radius: 18
