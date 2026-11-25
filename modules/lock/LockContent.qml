@@ -55,7 +55,7 @@ Item {
         command: ["sh", "-c", "cat /sys/class/leds/*::capslock/brightness 2>/dev/null | grep -qv '^0$' && echo on || echo off"]
         stdout: StdioCollector { onStreamFinished: root.caps = text.trim() === "on" }
     }
-    readonly property MprisPlayer player: Mpris.players.values.find(p => p.isPlaying) ?? Mpris.players.values[0] ?? null
+    readonly property var player: Demo.on ? Demo.player : Mpris.players.values.find(p => p.isPlaying) ?? Mpris.players.values[0] ?? null
 
     // ── background: your windows fade away to the wallpaper (Caelestia's
     // still of it), lightly blurred; they fade back in as you unlock. No
@@ -273,7 +273,7 @@ Item {
                         font.pixelSize: 16
                         font.weight: Font.Bold
                         color: Theme.tone("action")
-                        text: Session.user.charAt(0).toUpperCase()
+                        text: (Demo.on ? "you" : Session.user).charAt(0).toUpperCase()
                     }
                     Image {
                         id: face

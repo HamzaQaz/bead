@@ -15,7 +15,7 @@ Item {
     id: root
 
     required property var clock            // SystemClock
-    required property MprisPlayer player
+    required property var player
     required property ShellScreen screen   // for its brightness
     property int tab: 0                    // shown tab (owner keeps it)
     signal pick(MprisPlayer p)

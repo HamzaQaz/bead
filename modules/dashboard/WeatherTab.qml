@@ -7,6 +7,7 @@ import qs.components
 import qs.config
 import qs.services
 import "sky.js" as Sky
+import "../../services/demo.js" as DemoData
 
 // Weather.
 //  left:  where, a big animated icon, the temperature and conditions, today's
@@ -63,7 +64,7 @@ Item {
                 x: 20; y: 16
                 spacing: 6
                 Icon { name: "location_on"; size: 15; fill: 1; color: Theme.subtext; anchors.verticalCenter: parent.verticalCenter }
-                Label { text: Weather.city || "Here"; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: (Demo.on ? DemoData.city : Weather.city) || "Here"; anchors.verticalCenter: parent.verticalCenter }
             }
 
             Row {

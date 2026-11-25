@@ -15,7 +15,9 @@ Item {
     id: root
 
     property string filter: "all"   // all | still | live
-    readonly property list<var> shown: filter === "still" ? Wallpaper.stills : filter === "live" ? Wallpaper.lives : [...Wallpaper.lives, ...Wallpaper.stills]
+    // demo mode: bead's own six, none of yours
+    readonly property list<var> shown: Demo.on ? (filter === "live" ? [] : Wallpaper.stills.filter(w => w.bead))
+        : filter === "still" ? Wallpaper.stills : filter === "live" ? Wallpaper.lives : [...Wallpaper.lives, ...Wallpaper.stills]
     readonly property var cur: [...Wallpaper.lives, ...Wallpaper.stills].find(w => Wallpaper.isCurrent(w)) ?? null
 
     component Chip: Rectangle {
@@ -51,8 +53,8 @@ Item {
         id: head
         spacing: 6
         Chip { label: "All"; on: root.filter === "all"; onHit: root.filter = "all" }
-        Chip { label: "Live · " + Wallpaper.lives.length; glyph: "animation"; on: root.filter === "live"; onHit: root.filter = "live" }
-        Chip { label: "Still · " + Wallpaper.stills.length; glyph: "image"; on: root.filter === "still"; onHit: root.filter = "still" }
+        Chip { label: "Live · " + (Demo.on ? 0 : Wallpaper.lives.length); glyph: "animation"; on: root.filter === "live"; onHit: root.filter = "live" }
+        Chip { label: "Still · " + (Demo.on ? Wallpaper.stills.filter(w => w.bead).length : Wallpaper.stills.length); glyph: "image"; on: root.filter === "still"; onHit: root.filter = "still" }
     }
     Row {
         anchors.right: parent.right

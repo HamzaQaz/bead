@@ -4,6 +4,7 @@ import QtQuick
 import qs.components
 import qs.config
 import qs.services
+import "../../services/demo.js" as DemoData
 
 // The power button's panel: who and how long up, then lock, suspend, log out,
 // reboot, shut down. The last three ask for a second click (it lights red and
@@ -46,7 +47,7 @@ PanelColumn {
                 font.pixelSize: 15
                 font.weight: Font.Bold
                 color: Theme.tone("action")
-                text: Session.user.charAt(0).toUpperCase()
+                text: (Demo.on ? DemoData.user : Session.user).charAt(0).toUpperCase()
             }
         }
         Column {
@@ -56,7 +57,7 @@ PanelColumn {
                 font.pixelSize: 14
                 font.weight: Font.Bold
                 color: Theme.text
-                text: Session.user + (Session.host ? "@" + Session.host : "")
+                text: Demo.on ? DemoData.user + "@" + DemoData.host : Session.user + (Session.host ? "@" + Session.host : "")
             }
             Label { font.pixelSize: 11; text: Session.uptimeText }
         }

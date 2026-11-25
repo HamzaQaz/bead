@@ -6,6 +6,8 @@ import Quickshell.Io
 import qs.components
 import qs.config
 import "bluetooth.js" as Bt
+import qs.services
+import "../../services/demo.js" as DemoData
 
 // Bluetooth: on/off, scanning, devices (connected, then paired, then nearby
 // ones with a name). Click connects / disconnects; a new device pairs, is
@@ -20,6 +22,12 @@ PanelColumn {
 
     readonly property BluetoothAdapter bt: Bluetooth.defaultAdapter
     readonly property var devices: {
+        if (Demo.on) return DemoData.bluetooth.map((d, i) => ({
+            name: d.name, deviceName: d.name, icon: d.icon, address: "demo-" + i,
+            connected: !!d.connected, paired: !!(d.paired || d.connected), trusted: true, pairing: false,
+            state: BluetoothDeviceState.Disconnected, batteryAvailable: d.battery !== undefined, battery: (d.battery ?? 0) / 100,
+            connect() {}, disconnect() {}
+        }));
         const all = (root.bt?.devices?.values ?? []).filter(d => d.paired || d.deviceName);
         const rank = d => (d.connected ? 2 : 0) + (d.paired ? 1 : 0);
         return all.map((d, i) => ({ d, i }))
@@ -114,11 +122,11 @@ PanelColumn {
     }
 
     Repeater {
-        model: root.bt?.enabled ? root.devices : []
+        model: root.bt?.enabled || Demo.on ? root.devices : []
         PanelRow {
             id: row
-            required property BluetoothDevice modelData
-            readonly property BluetoothDevice d: modelData
+            required property var modelData   // a BluetoothDevice, or demo mode's made-up one
+            readonly property var d: modelData
             icon: root.glyph(d.icon)
             title: d.name
             lit: d.connected
@@ -133,10 +141,11 @@ PanelColumn {
                 : d.paired ? "Paired" : "Tap to pair"
             // freshly paired: trust it and connect
             Connections {
-                target: row.d
+                target: typeof row.d?.pairedChanged === "function" ? row.d : null   // a real device, not a demo one
                 function onPairedChanged() { if (row.d.paired) { row.d.trusted = true; row.d.connect(); } }
             }
             onClicked: {
+                if (Demo.on) return;
                 if (d.connected) d.disconnect();
                 else if (d.paired) { d.trusted = true; d.connect(); }
                 else if (row.pairingNow) { pairer.running = false; root.pairingAddr = ""; }

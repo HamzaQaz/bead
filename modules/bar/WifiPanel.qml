@@ -5,6 +5,8 @@ import Quickshell.Networking
 import "../../components/emptystates.js" as Empty
 import qs.components
 import qs.config
+import qs.services
+import "../../services/demo.js" as DemoData
 
 // Wi-Fi: on/off, the networks in range (connected, then known, then by
 // signal). Click to connect or disconnect; a secured network you haven't
@@ -17,6 +19,12 @@ PanelColumn {
 
     readonly property var dev: Networking.devices.values.find(d => d.type === DeviceType.Wifi) ?? null
     readonly property var nets: {
+        // demo mode (services/demo.js): made-up networks that do nothing when clicked
+        if (Demo.on) return DemoData.wifi.map(w => ({
+            name: w.ssid, signalStrength: w.strength / 100, connected: !!w.connected, known: !!w.connected,
+            security: w.secure ? -1 : WifiSecurityType.Open, stateChanging: false, state: ConnectionState.Disconnected,
+            connect() {}, disconnect() {}, connectWithPsk() {}
+        }));
         const all = (root.dev?.networks?.values ?? []).filter(n => n.name);
         const rank = n => (n.connected ? 2 : 0) + (n.known ? 1 : 0);
         return all.map((n, i) => ({ n, i }))
@@ -47,14 +55,14 @@ PanelColumn {
 
     Label {
         x: 4
-        visible: !Networking.wifiEnabled || root.nets.length === 0
+        visible: !Demo.on && (!Networking.wifiEnabled || root.nets.length === 0)
         topPadding: 6
         bottomPadding: 6
         text: Empty.wifi({ enabled: Networking.wifiEnabled, adapter: !!root.dev, nets: root.nets.length, looking: root.looking })
     }
 
     Repeater {
-        model: Networking.wifiEnabled ? root.nets : []
+        model: Networking.wifiEnabled || Demo.on ? root.nets : []
         Column {
             id: item
             required property var modelData
@@ -65,7 +73,7 @@ PanelColumn {
             spacing: 4
 
             Connections {
-                target: item.n
+                target: typeof item.n?.connectionFailed === "function" ? item.n : null   // a real network, not a demo one
                 function onConnectionFailed(reason) {
                     if (reason === ConnectionFailReason.NoSecrets) root.asking = item.n.name;
                     else root.failed = item.n.name;

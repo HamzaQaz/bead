@@ -6,6 +6,7 @@ import qs.components
 import qs.config
 import qs.services
 import "../../services/pkgs.js" as Pkgs
+import "../../services/demo.js" as DemoData
 
 // Apps: what's installed, by when you last opened it (from the launcher),
 // size or name; open one, or uninstall it (bead's installer: a second click
@@ -15,13 +16,15 @@ Item {
     id: root
 
     property string sortBy: "used"
-    readonly property var apps: Pkgs.sortApps(Apps.all.map(e => Packages.appInfo(e)), sortBy)
+    // demo mode: a few well-known apps, not everything you have
+    readonly property var apps: Pkgs.sortApps((Demo.on ? Apps.all.filter(e => DemoData.apps.includes(e.name)) : Apps.all).map(e => Packages.appInfo(e)), sortBy)
     property real now: Date.now()
     onVisibleChanged: if (visible) { now = Date.now(); Packages.refreshInstalled(); }
 
     property string armed: ""   // the app whose Uninstall was pressed once
     Timer { id: disarm; interval: 4000; onTriggered: root.armed = "" }
     function uninstall(a: var): void {
+        if (Demo.on) return;
         if (armed !== a.e.id) { armed = a.e.id; disarm.restart(); return; }
         armed = "";
         Packages.ownerOf(a.e.id, o => { o.title = a.name; Packages.remove(o); });

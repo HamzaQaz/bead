@@ -13,7 +13,7 @@ import "calendar.js" as Cal
 Row {
     id: root
     required property var clock      // SystemClock
-    required property MprisPlayer player
+    required property var player
     spacing: 16
 
     function greeting(): string {
@@ -151,7 +151,7 @@ Row {
         id: media
         width: 226
         height: parent.height
-        readonly property MprisPlayer p: root.player
+        readonly property var p: root.player
         clip: true
         CoverBackdrop { anchors.fill: parent; radius: media.radius; source: media.p?.trackArtUrl ?? ""; blur: 0.6; veil: 0.45 }
         Column {

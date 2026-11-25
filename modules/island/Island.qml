@@ -820,7 +820,8 @@ Scope {
     GlobalShortcut { appid: "bead"; name: "mediaPrev"; description: "Previous track"; onPressed: if (root.player?.canGoPrevious) root.player.previous() }
     GlobalShortcut { appid: "bead"; name: "mediaStop"; description: "Stop playback"; onPressed: if (root.player?.canControl) root.player.stop() }
 
-    readonly property MprisPlayer player: (picked && Mpris.players.values.includes(picked) ? picked : null)
+    // demo mode: a made-up track (services/Demo.qml), not yours
+    readonly property var player: Demo.on ? Demo.player : (picked && Mpris.players.values.includes(picked) ? picked : null)
         ?? Mpris.players.values.find(p => p.isPlaying) ?? Mpris.players.values[0] ?? null
     readonly property bool playing: player?.isPlaying ?? false
     // the cover's colour for the island's halo, or null (artglow.js)

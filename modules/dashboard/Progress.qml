@@ -8,7 +8,7 @@ import qs.config
 // you'd land on in a bubble over it. The right label counts down.
 Column {
     id: root
-    property MprisPlayer player
+    property var player   // an MprisPlayer, or demo mode's made-up one
     property real barHeight: 4
     spacing: 4
     readonly property real len: player?.length ?? 0

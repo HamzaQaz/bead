@@ -6,6 +6,7 @@ import qs.components
 import qs.config
 import qs.services
 import "../../services/displays.js" as D
+import "../../services/demo.js" as DemoData
 
 // Displays: the monitors drawn where they sit, to scale. Drag one to move it
 // (it snaps against the others); pick one for its refresh rate, scale and
@@ -128,7 +129,7 @@ Item {
                     elide: Text.ElideRight
                     font.family: Theme.font; font.pixelSize: 11
                     color: Theme.subtext
-                    text: [root.sel?.make, root.sel?.model].filter(Boolean).join(" ")
+                    text: Demo.on ? DemoData.monitor : [root.sel?.make, root.sel?.model].filter(Boolean).join(" ")
                 }
             }
 

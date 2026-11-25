@@ -108,6 +108,9 @@ Scope {
             let s;
             try { s = JSON.parse(spec); } catch (e) { return "error: bad json"; }
             s.id = String(s.id || Date.now());
+            // recording a demo: no toasts of yours on screen (one waiting on an
+            // answer hears "dismissed" and asks in the terminal instead)
+            if (Demo.on) { root.report(s.id, "result", "dismissed"); return s.id; }
             const interactive = s.type === "confirm" || s.type === "choose" || s.type === "loading" || s.type === "ask";
             if (root.quiet) {
                 // not shown: anything waiting on it hears so at once (a question
@@ -142,6 +145,12 @@ Scope {
         }
     }
 
+    // demo mode's made-up pop-ups (`qs ipc call demo notify N`)
+    Connections {
+        target: Notifs
+        function onDemoPopup(e) { root.add(Object.assign({}, e, { notif: null, sticky: false, timeout: 0 })); }
+    }
+
     NotificationServer {
         id: server
         keepOnReload: true // live reloads keep the D-Bus name
@@ -156,6 +165,7 @@ Scope {
         onNotification: n => {
             n.tracked = true;
             const e = Notifs.record(n);
+            if (Demo.on) return; // recording a demo: yours stay off the screen (and in your history)
             // the history panel shows it live; Do Not Disturb holds all but critical
             if (Notifs.panelOpen) return;
             if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical) return;

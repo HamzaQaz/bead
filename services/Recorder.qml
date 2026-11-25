@@ -12,7 +12,8 @@ Singleton {
     property int pid: 0
     property string name: ""
     property real startedAt: 0      // ms epoch
-    readonly property bool recording: pid > 0
+    // demo mode (tools/clip.sh) records the screen: no indicator in the video
+    readonly property bool recording: pid > 0 && !Demo.on
     property real now: Date.now()
     readonly property string label: {
         const t = Math.max(0, Math.floor((now - startedAt) / 1000));

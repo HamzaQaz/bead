@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
 import "snooze.js" as Snooze
+import "demo.js" as DemoData
 
 // Notification history and Do Not Disturb.
 //
@@ -24,6 +25,25 @@ Singleton {
 
     // a new notification popped up (not held by DND or the open panel)
     signal posted(var entry)
+
+    // ── demo mode (services/Demo.qml): the history is a made-up one; yours is
+    // set aside, untouched and unsaved-over, and comes back when it ends.
+    // Real notifications meanwhile go to yours, without a pop-up ──
+    property list<var> realEntries: []
+    signal demoPopup(var entry)
+    Connections {
+        target: Demo
+        function onOnChanged(): void {
+            if (Demo.on) { root.realEntries = root.entries; root.entries = DemoData.history(Date.now()); }
+            else { root.entries = root.realEntries; root.realEntries = []; }
+        }
+    }
+    function demoNotify(i: int): void {
+        if (!Demo.on) return;
+        const e = DemoData.popup(i, Date.now());
+        entries = [e, ...entries];
+        demoPopup(e);
+    }
 
     // ── the digest: what came in while Do Not Disturb was on. When it ends,
     // `missed` says what arrived (the island offers it), and the history shows
@@ -98,7 +118,8 @@ Singleton {
         live[e.key] = n;
         // the app closed it (read elsewhere, replaced…): drop it
         n.closed.connect(() => { if (root.live[e.key] === n) { delete root.live[e.key]; root.drop(e.key); } });
-        entries = [e, ...entries].slice(0, limit);
+        if (Demo.on) realEntries = [e, ...realEntries].slice(0, limit);
+        else entries = [e, ...entries].slice(0, limit);
         return e;
     }
 
@@ -127,6 +148,7 @@ Singleton {
     }
     function drop(key: real): void {
         entries = entries.filter(e => e.key !== key);
+        realEntries = realEntries.filter(e => e.key !== key);
     }
     // every entry of one app (by name)
     function removeApp(app: string): void {
@@ -136,6 +158,7 @@ Singleton {
         for (const k of keys) remove(k);
     }
     function clear(): void {
+        if (Demo.on) { entries = []; return; } // only the made-up ones
         const all = live;
         live = {};          // so the closed handlers below don't edit entries mid-way
         entries = [];
@@ -144,7 +167,7 @@ Singleton {
 
     // ── persistence ──
     property bool loaded: false
-    onEntriesChanged: if (loaded) saveTimer.restart()
+    onEntriesChanged: if (loaded && !Demo.on) saveTimer.restart()
     Timer {
         id: saveTimer
         interval: 800
@@ -153,7 +176,7 @@ Singleton {
             dndSince: root.dndSince,
             snoozed: root.snoozed,
             // images from image-data hints don't survive a restart
-            entries: root.entries.map(e => Object.assign({}, e, {
+            entries: (Demo.on ? root.realEntries : root.entries).map(e => Object.assign({}, e, {
                 image: /^(\/|file:)/.test(e.image ?? "") ? e.image : "",
                 actions: []
             }))

@@ -6,13 +6,14 @@ import Quickshell
 import Quickshell.Services.Mpris
 import qs.components
 import qs.config
+import qs.services
 
 // Now playing, big: the cover over a blurred copy of itself filling the card, title,
 // artist and album, a seekable progress bar, controls with shuffle/loop, and
 // chips to switch between players when several are running.
 Item {
     id: root
-    property MprisPlayer player
+    property var player   // an MprisPlayer, or demo mode's made-up one
     signal pick(MprisPlayer p)
 
     // a track change: the words slide out to the left, swap, and come in from
@@ -68,7 +69,7 @@ Item {
 
                 Row {
                     spacing: 6
-                    visible: Mpris.players.values.length > 1
+                    visible: !Demo.on && Mpris.players.values.length > 1
                     Repeater {
                         model: Mpris.players.values
                         Rectangle {

@@ -93,7 +93,7 @@ Item {
     property var floatedToPin: ({})   // windows floated only so they could be pinned
     function act(kind: string, t: var): void {
         if (!t) return;
-        const name = t.title || t.wayland?.appId || "window";
+        const name = (Demo.on ? "" : t.title) || t.wayland?.appId || "window";
         const w = `window = "${addr(t)}"`;
         if (kind === "float") { Quickshell.execDetached(["hyprctl", "dispatch", `hl.dsp.window.float({ action = "toggle", ${w} })`]); caption = (t.lastIpcObject?.floating ? "Tiled " : "Floating ") + name; }
         else if (kind === "pin") {
@@ -186,7 +186,7 @@ Item {
         elide: Text.ElideRight
         font.pixelSize: 12
         opacity: root.enter
-        text: root.caption || (root.picked ? (root.picked.title || "Window") + "  ·  f float  ·  x close  ·  p pin" + (root.pick >= 0 ? "  ·  Enter focus" : "")
+        text: root.caption || (root.picked ? ((Demo.on ? root.picked.wayland?.appId : root.picked.title) || "Window") + "  ·  f float  ·  x close  ·  p pin" + (root.pick >= 0 ? "  ·  Enter focus" : "")
             : "←/→ choose  ·  ↓ pick a window  ·  Enter go  ·  drag a window to move it")
     }
 
@@ -310,8 +310,28 @@ Item {
                                     ScreencopyView {
                                         anchors.fill: parent
                                         anchors.margins: 1
-                                        captureSource: root.visible ? thumb.modelData.wayland : null
+                                        // demo mode: none of what's in your windows
+                                        visible: !Demo.on
+                                        captureSource: root.visible && !Demo.on ? thumb.modelData.wayland : null
                                         live: true
+                                    }
+                                    Rectangle { // demo mode: a plain card with the app's icon in the middle
+                                        visible: Demo.on
+                                        anchors.fill: parent
+                                        anchors.margins: 1
+                                        radius: 5
+                                        gradient: Gradient {
+                                            GradientStop { position: 0; color: Qt.alpha(Theme.tone("action"), 0.16) }
+                                            GradientStop { position: 1; color: Qt.alpha(Theme.tone("action"), 0.05) }
+                                        }
+                                        Image {
+                                            anchors.centerIn: parent
+                                            readonly property real sz: Math.min(40, Math.min(parent.width, parent.height) * 0.45)
+                                            width: sz; height: sz
+                                            sourceSize: Qt.size(64, 64)
+                                            asynchronous: true
+                                            source: Demo.on ? Apps.iconFor(thumb.app) : ""
+                                        }
                                     }
                                     Rectangle { // which app
                                         readonly property real sz: Math.max(14, Math.min(22, Math.min(thumb.width, thumb.height) * 0.3))
@@ -441,7 +461,7 @@ Item {
             ScreencopyView {
                 anchors.fill: parent
                 anchors.margins: 2
-                captureSource: ghost.src?.wayland ?? null
+                captureSource: Demo.on ? null : ghost.src?.wayland ?? null
                 live: false
             }
         }

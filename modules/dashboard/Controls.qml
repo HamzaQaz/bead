@@ -12,7 +12,7 @@ import qs.config
 //  - shuffle / loop: a dot under them while they're on
 Row {
     id: root
-    property MprisPlayer player
+    property var player   // an MprisPlayer, or demo mode's made-up one
     property real size: 44
     property bool extras: false
     spacing: 14

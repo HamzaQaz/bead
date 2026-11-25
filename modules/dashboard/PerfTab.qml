@@ -5,6 +5,7 @@ import QtQuick.Shapes
 import qs.components
 import qs.config
 import qs.services
+import "../../services/demo.js" as DemoData
 
 // Performance.
 //  left:   four dials (CPU, GPU, memory, VRAM) with temperatures / amounts
@@ -262,12 +263,12 @@ Row {
             width: parent.width - 32
             spacing: 6
             Label {
-                visible: SysStats.procs.length === 0
+                visible: !Demo.on && SysStats.procs.length === 0
                 font.pixelSize: 11
                 text: "Looking…"
             }
             Repeater {
-                model: SysStats.procs
+                model: Demo.on ? DemoData.procs : SysStats.procs
                 Item {
                     id: pr
                     required property var modelData

@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "pins.js" as Pins
+import "demo.js" as DemoData
 
 // Clipboard history (cliphist, fed by wl-paste --watch). `load()` reads the
 // list; pick() copies an entry back and pastes it into the window you were
@@ -22,7 +23,10 @@ Singleton {
     // ── pins ──
     property var pins: []   // [{ id, text, added }], newest first
     // what the picker shows: pins, then the history without what's pinned
-    readonly property list<var> list: Pins.rows(pins, entries, "", t => root.typeOf(t))
+    // demo mode (services/demo.js): a made-up history instead of yours
+    readonly property list<var> list: Demo.on
+        ? DemoData.clipboard.map((t, i) => ({ id: "demo" + i, line: t, text: t, image: null, type: root.typeOf(t), demo: true }))
+        : Pins.rows(pins, entries, "", t => root.typeOf(t))
     function savePins(next: var): void {
         pins = next;
         pinFile.setText(Pins.serialise(next)); // our own write doesn't come back through the watcher
@@ -118,6 +122,7 @@ Singleton {
     // the whole text of an entry (the list only has a 400-character preview)
     property var full: ({}) // id -> text
     function loadFull(e: var): void {
+        if (e?.demo) { const f = Object.assign({}, full); f[e.id] = e.text; full = f; return; }
         if (!e || e.image || e.pinned || full[e.id] !== undefined) return; // a pin's text is whole already
         const p = Qt.createQmlObject('import Quickshell.Io; Process { stdout: StdioCollector {} }', root);
         p.command = ["sh", "-c", 'printf "%s\\n" "$1" | cliphist decode | head -c 20000', "sh", e.line];
@@ -147,6 +152,7 @@ Singleton {
 
     // copy it back, and paste unless copyOnly
     function pick(e: var, copyOnly: bool): void {
+        if (e.demo) return; // demo mode's made-up entries
         Quickshell.execDetached(["sh", "-c", `
             if [ -n "$3" ]; then printf '%s' "$1" | wl-copy; else printf '%s\\n' "$1" | cliphist decode | wl-copy; fi
             [ "$2" = copy ] && exit 0
@@ -158,6 +164,7 @@ Singleton {
             esac`, "sh", e.pinned ? e.text : e.line, copyOnly ? "copy" : "paste", e.pinned ? "pinned" : ""]);
     }
     function remove(e: var): void {
+        if (e.demo) return; // demo mode's made-up entries
         if (e.pinned) return unpin(e);
         Quickshell.execDetached(["sh", "-c", 'printf "%s\\n" "$1" | cliphist delete', "sh", e.line]);
         entries = entries.filter(x => x.id !== e.id);

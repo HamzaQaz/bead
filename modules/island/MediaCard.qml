@@ -17,7 +17,7 @@ import qs.services
 // (controls, seek bar, scrolling the volume). Clicking the card goes at once.
 Item {
     id: root
-    required property MprisPlayer player
+    required property var player   // an MprisPlayer, or demo mode's made-up one
     property bool active: false
     property bool pointerIn: false // the island is hovered (passed in)
     signal expand()
