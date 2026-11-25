@@ -389,7 +389,7 @@ ShellRoot {
                         width: parent.width
                         font.pixelSize: 14
                         opacity: root.stagger(s0.e, 1)
-                        text: "A desktop shell for Hyprland: a bar, an island that's a launcher and much more, a dashboard, notifications and a lock screen, coloured from your wallpaper."
+                        text: "An opinionated desktop shell for Hyprland: a bar, an island that's a launcher and much more, a dashboard, notifications and a lock screen, coloured from your wallpaper."
                     }
                     Rectangle {
                         width: parent.width

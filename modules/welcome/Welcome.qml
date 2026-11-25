@@ -720,7 +720,7 @@ Scope {
                         Body {
                             opacity: root.ready
                             horizontalAlignment: Text.AlignHCenter
-                            text: "A shell for Hyprland, coloured by your wallpaper.\nA few quick choices and you're set: about a minute."
+                            text: "An opinionated shell for Hyprland, coloured by your wallpaper.\nA few quick choices and you're set: about a minute."
                         }
                     }
                 }

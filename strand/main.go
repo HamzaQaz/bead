@@ -1,4 +1,4 @@
-// strand: the installer for bead (a Quickshell shell for Hyprland).
+// strand: the installer for bead (an opinionated Quickshell shell for Hyprland).
 //
 //	strand            choose parts, review the plan, install
 //	strand --dry-run  walk through it without changing anything

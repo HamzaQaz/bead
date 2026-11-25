@@ -3,7 +3,7 @@
 [![CI](https://github.com/HamzaQaz/bead/actions/workflows/ci.yml/badge.svg)](https://github.com/HamzaQaz/bead/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/tag/HamzaQaz/bead?label=version&sort=semver)](CHANGELOG.md)
 
-A desktop shell for [Hyprland](https://hyprland.org), built with
+An opinionated desktop shell for [Hyprland](https://hyprland.org), built with
 [Quickshell](https://quickshell.org). A bar, an island at the top of the
 screen that grows into a launcher, a dashboard, a lock screen and
 notifications. Everything morphs instead of popping, and it all takes its

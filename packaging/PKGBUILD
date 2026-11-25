@@ -1,12 +1,12 @@
 # Maintainer: Hamza Qazi
-# bead: a desktop shell for Hyprland, built with Quickshell.
+# bead: an opinionated desktop shell for Hyprland, built with Quickshell.
 # After installing, run `bead-setup` once: it writes your keybinds
 # (~/.config/hypr/bead.lua) and sets up the optional parts.
 pkgname=bead-shell-git
 _name=bead
 pkgver=0.5.0
 pkgrel=1
-pkgdesc="A desktop shell for Hyprland, built with Quickshell: soft pills that morph, an island launcher, voice, all coloured by your wallpaper"
+pkgdesc="An opinionated desktop shell for Hyprland, built with Quickshell: soft pills that morph, an island launcher, voice, all coloured by your wallpaper"
 arch=(x86_64 aarch64)
 url="https://github.com/HamzaQaz/bead"
 license=(GPL-3.0-only)

@@ -375,7 +375,7 @@ func (m model) viewWelcome() string {
 	s := m.sys
 	var b strings.Builder
 	b.WriteString(sTitle.Render(logo) + sDim.Render("   strand, the installer") + "\n\n")
-	b.WriteString("A Quickshell shell for Hyprland: a bar, a Dynamic-Island-style\n")
+	b.WriteString("An opinionated Quickshell shell for Hyprland: a bar, a Dynamic-Island-style\n")
 	b.WriteString("launcher, a dashboard, lock screen and notifications, coloured by your wallpaper.\n\n")
 	b.WriteString(check(s.arch, "Arch-based system (pacman)", "pacman not found: strand supports Arch-based systems only") + "\n")
 	if s.arch {

@@ -1,5 +1,5 @@
 //@ pragma UseQApplication
-// bead: a desktop shell for Hyprland built from sileo-style pills. Colours
+// bead: an opinionated desktop shell for Hyprland built from sileo-style pills. Colours
 // come from the wallpaper (Tint, bin/bead-tint).
 import Quickshell
 import qs.modules.background
