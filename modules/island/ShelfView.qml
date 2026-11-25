@@ -61,7 +61,7 @@ Item {
         z: lifted ? 10 : 0
 
         // a loose pile: each a little askew, straightened when you reach for it
-        readonly property real tilt: big ? -4 : [-4, 3, -2, 4, -3, 2, -1][slot % 7]
+        readonly property real tilt: big ? -4 : ([-4, 3, -2, 4, -3, 2, -1][slot % 7] ?? 0)
         rotation: lifted ? 0 : tilt
         scale: drag.active ? 0.92 : hov.hovered ? 1.08 : 1
         Behavior on rotation { SpringAnimation { spring: 5; damping: 0.32; epsilon: 0.05 } }

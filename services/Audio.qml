@@ -34,11 +34,28 @@ Singleton {
     property string before: ""
     property bool settled: false       // what's there at start was already chosen
     Timer { running: true; interval: 4000; onTriggered: { root.lastNames = root.sinkNames; root.settled = true; } }
+    // the headphones just went: wait out a blip before going back (opening a
+    // game or a call can drop and remake their output in a moment)
+    property var blipFrom: null
+    Timer { id: blip; interval: 5000; onTriggered: { const was = root.blipFrom; root.blipFrom = null; root.follow(was, root.sinkNames); } }
     onSinkNamesChanged: {
         if (!settled) return;
-        const was = lastNames;
+        const was = blipFrom ?? lastNames;
         lastNames = sinkNames;
-        const d = AutoSink.decide(was, sinkNames, sink?.name ?? "", switchedTo, before);
+        if (blip.running) {
+            const back = sinkNames.find(n => AutoSink.sameDevice(n, switchedTo) || n === switchedTo);
+            if (!back) return; // still gone: keep waiting
+            blip.stop(); blipFrom = null;
+            switchedTo = back;
+            const to = sinks.find(n => n.name === back);
+            if (to && sink?.name !== back) useSink(to); // quietly back on them
+            return;
+        }
+        if (AutoSink.waits(was, sinkNames, switchedTo)) { blipFrom = was; blip.restart(); return; }
+        follow(was, sinkNames);
+    }
+    function follow(was: var, now: var): void {
+        const d = AutoSink.decide(was, now, sink?.name ?? "", switchedTo, before);
         if (!d) return;
         const to = sinks.find(n => n.name === d.use);
         const onto = /^bluez_output\./.test(d.use);   // onto the headphones, or back from them

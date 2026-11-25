@@ -27,4 +27,24 @@ TestCase {
         compare(A.decide(["alsa_usb_headset", "bluez_output.AA.1"], ["alsa_usb_headset", "bluez_output.AA.2"], "bluez_output.AA.1", "bluez_output.AA.1", "alsa_usb_headset"),
             { use: "bluez_output.AA.2", before: "alsa_usb_headset" });
     }
+    function test_headphones_still_there_under_another_output_are_not_left() {
+        // the old output goes first and the new one is already listed: no going back
+        compare(A.decide(["alsa_usb_headset", "bluez_output.AA.1", "bluez_output.AA.2"], ["alsa_usb_headset", "bluez_output.AA.2"], "bluez_output.AA.1", "bluez_output.AA.1", "alsa_usb_headset"),
+            { use: "bluez_output.AA.2", before: "alsa_usb_headset" });
+    }
+    function test_going_back_waits_out_a_blip() {
+        verify(A.waits(["alsa_usb_headset", "bluez_output.AA.1"], ["alsa_usb_headset"], "bluez_output.AA.1"));
+        verify(!A.waits(["alsa_usb_headset", "alsa_hdmi"], ["alsa_usb_headset"], "bluez_output.AA.1"));
+        verify(!A.waits(["alsa_usb_headset", "bluez_output.AA.1"], ["alsa_usb_headset"], ""));
+    }
+    function test_the_same_headphones_coming_back_are_used_again() {
+        // they dropped (sound went back), then returned within moments: back on them
+        compare(A.decide(["alsa_usb_headset"], ["alsa_usb_headset", "bluez_output.AA.1"], "alsa_usb_headset", "", ""),
+            { use: "bluez_output.AA.1", before: "alsa_usb_headset" });
+    }
+    function test_headphones_are_one_device_whatever_the_profile() {
+        verify(A.sameDevice("bluez_output.E8_8F_16.1", "bluez_output.E8_8F_16.2"));
+        verify(!A.sameDevice("bluez_output.E8_8F_16.1", "bluez_output.AA_BB.1"));
+        verify(!A.sameDevice("alsa_x", "alsa_x"));
+    }
 }
