@@ -2,7 +2,8 @@
 # Claude Code ↔ Glint bridge (bead). Handles these hook events:
 #   PermissionRequest             Allow / Deny; the answer goes straight back to Claude
 #   PreToolUse (AskUserQuestion)  the terminal shows the question at once; a toast
-#                                 offers the same options and types the pick there
+#                                 offers the same options (or your own text) and sends
+#                                 the pick there as keys, without focusing it
 #   PostToolUse (AskUserQuestion) answered in the terminal: withdraw that toast
 #                                 (declined with Esc: the worker sees the answer in
 #                                 the transcript and withdraws it too)
@@ -186,7 +187,7 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 	out=$(mktemp)
 	log "showing question toast ($n)"
 	glint ask "Question" --questions "$(jq -c '.tool_input.questions' <<<"$in")" \
-		-d "$(printf '<b>%s</b>' "$(esc <<<"$session")")" -i "✻" -p top-right -t 280s >"$out" 2>/dev/null &
+		-d "$(printf '<b>%s</b>' "$(esc <<<"$session")")" --open "Open terminal" -i "✻" -p top-right -t 120s >"$out" 2>/dev/null &
 	tp=$!
 	echo "$$ $tp" >"$qmark"
 	while kill -0 "$tp" 2>/dev/null; do
@@ -202,7 +203,7 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 	done
 	wait "$tp"; rc=$?
 	settled && { rm -f "$qmark" "$out"; done_turn 900; exit 0; } # too late to type: it's answered
-	if [ $rc != 0 ]; then # dismissed (or clicked: go there): the terminal still asks
+	if [ $rc != 0 ]; then # dismissed (or Open terminal: go there): the terminal still asks
 		rm -f "$qmark" "$out"
 		done_turn 900
 		[ $rc = 3 ] && go_terminal
@@ -211,39 +212,103 @@ PreToolUse) # AskUserQuestion: never block, so the terminal shows the question t
 	picks=$(cat "$out"); rm -f "$out" "$qmark"
 	jq -e --argjson n "$n" 'type == "array" and length == $n' <<<"$picks" >/dev/null 2>&1 || exit 0
 	done_turn 1500
-	# take the picks to the terminal: focus it, then each question in turn
-	# (arrows: number keys don't select there). One pick: its option, and it
-	# moves on. Several: Enter ticks each, then the row after "Type
-	# something" (Next, or Submit when it's the only question). After the
-	# last of several questions a review screen opens on Submit.
+	# take the picks to the terminal, each question in turn (arrows: number keys
+	# don't select there). One pick: its option, and it moves on. Your own text:
+	# down to "Type something", the text, Enter. Several: Enter ticks each, then
+	# the row after "Type something" (Next, or Submit when it's the only
+	# question). After the last of several questions a review screen opens on
+	# Submit.
+	#
+	# The keys go to that terminal's window with Hyprland's send_shortcut, so it
+	# isn't focused and you stay where you are. If Hyprland won't send them, or
+	# the text has a character with no key on a US layout, it falls back to
+	# focusing the terminal and typing (wtype).
 	w=$(claude_window_pid) || exit 0
-	hyprctl dispatch "hl.dsp.focus({ window = \"pid:$w\" })" >/dev/null # Lua-config Hyprland
-	sleep 0.25
-	# only ever type into that terminal
-	[ "$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty')" = "$w" ] || { log "terminal didn't take focus: not typing"; exit 0; }
-	log "typing $picks into the terminal"
-	down() { for ((k = 0; k < $1; k++)); do wtype -k Down; sleep 0.05; done; }
+	mode=send
+	text_keys() { # TEXT → "MODS KEY" lines (US layout); fails on anything else
+		local c i t=$1 k
+		for ((i = 0; i < ${#t}; i++)); do
+			c=${t:i:1}
+			case $c in
+			[a-z0-9]) k=" $c" ;;
+			[A-Z]) k="SHIFT ${c,,}" ;;
+			' ') k=" space" ;;
+			-) k=" minus" ;; =) k=" equal" ;; '[') k=" bracketleft" ;; ']') k=" bracketright" ;;
+			'\') k=" backslash" ;; ';') k=" semicolon" ;; "'") k=" apostrophe" ;; ,) k=" comma" ;;
+			.) k=" period" ;; /) k=" slash" ;; '`') k=" grave" ;;
+			'!') k="SHIFT 1" ;; @) k="SHIFT 2" ;; '#') k="SHIFT 3" ;; '$') k="SHIFT 4" ;; %) k="SHIFT 5" ;;
+			^) k="SHIFT 6" ;; '&') k="SHIFT 7" ;; '*') k="SHIFT 8" ;; '(') k="SHIFT 9" ;; ')') k="SHIFT 0" ;;
+			_) k="SHIFT minus" ;; +) k="SHIFT equal" ;; '{') k="SHIFT bracketleft" ;; '}') k="SHIFT bracketright" ;;
+			'|') k="SHIFT backslash" ;; :) k="SHIFT semicolon" ;; '"') k="SHIFT apostrophe" ;;
+			'<') k="SHIFT comma" ;; '>') k="SHIFT period" ;; '?') k="SHIFT slash" ;; '~') k="SHIFT grave" ;;
+			*) return 1 ;;
+			esac
+			echo "$k"
+		done
+	}
+	# can every typed answer be sent as keys?
+	layout=$(hyprctl devices -j 2>/dev/null | jq -r '[.keyboards[] | select(.main) | .layout][0] // "us"')
+	[ "${layout%%,*}" = us ] || mode=focus
+	for ((qi = 0; qi < n; qi++)); do
+		t=$(jq -r --argjson i "$qi" '.[$i] | if type == "string" then . else empty end' <<<"$picks")
+		[ -n "$t" ] && ! text_keys "$t" >/dev/null && mode=focus
+	done
+	key() { # MODS KEY: to the terminal
+		if [ $mode = send ]; then
+			[ "$(hyprctl dispatch "hl.dsp.send_shortcut({ mods = \"$1\", key = \"$2\", window = \"pid:$w\" })" 2>&1)" = ok ] || return 1
+		else
+			wtype ${1:+-M ${1,,}} -k "$2" ${1:+-m ${1,,}}
+		fi
+	}
+	type_text() {
+		[ $mode = focus ] && { wtype -- "$1"; return; } # any character, into the focused terminal
+		local m k
+		while read -r m k; do [ -z "$k" ] && { k=$m; m=; }; key "$m" "$k"; sleep 0.02; done < <(text_keys "$1")
+	}
+	down() { for ((k = 0; k < $1; k++)); do key "" Down; sleep 0.05; done; }
+	if [ $mode = send ] && ! key "" Down; then # Hyprland refused: the old way
+		log "send_shortcut failed: falling back to focus + type"
+		mode=focus
+	elif [ $mode = send ]; then
+		key "" Up # undo the probe
+		sleep 0.05
+	fi
+	if [ $mode = focus ]; then
+		hyprctl dispatch "hl.dsp.focus({ window = \"pid:$w\" })" >/dev/null # Lua-config Hyprland
+		sleep 0.25
+		# only ever type into that terminal
+		[ "$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty')" = "$w" ] || { log "terminal didn't take focus: not typing"; exit 0; }
+	fi
+	log "sending $picks to the terminal ($mode)"
 	for ((qi = 0; qi < n; qi++)); do
 		opts=$(jq --argjson i "$qi" '.tool_input.questions[$i].options | length' <<<"$in")
 		cur=0
-		if [ "$(jq --argjson i "$qi" '.tool_input.questions[$i].multiSelect == true' <<<"$in")" = true ]; then
+		t=$(jq -r --argjson i "$qi" '.[$i] | if type == "string" then . else empty end' <<<"$picks")
+		if [ -n "$t" ]; then
+			down "$opts" # "Type something"
+			sleep 0.1; type_text "$t"
+		elif [ "$(jq --argjson i "$qi" '.tool_input.questions[$i].multiSelect == true' <<<"$in")" = true ]; then
 			for i in $(jq -r --argjson i "$qi" '.[$i] | sort | .[]' <<<"$picks"); do
 				down $((i - cur)); cur=$i
-				sleep 0.1; wtype -k Return; sleep 0.15
+				sleep 0.1; key "" Return; sleep 0.15
 			done
 			down $((opts + 1 - cur)) # past "Type something" to Next / Submit
 		else
 			down "$(jq -r --argjson i "$qi" '.[$i][0]' <<<"$picks")"
 		fi
-		sleep 0.1; wtype -k Return; sleep 0.35
+		sleep 0.1; key "" Return; sleep 0.35
 	done
 	if [ "$n" -gt 1 ]; then
-		wtype -k Return # Submit answers
+		key "" Return # Submit answers
 	elif [ "$(jq '.tool_input.questions[0].multiSelect == true' <<<"$in")" = true ]; then
 		# one pick-several question: if a review screen opened, it's on Submit
 		sleep 1.2
-		settled || wtype -k Return
+		settled || key "" Return
 	fi
+	# it took: the answer is in the transcript. If not, show the terminal so
+	# you can see where it stopped
+	for ((k = 0; k < 16; k++)); do settled && break; sleep 0.25; done
+	settled || { log "answer didn't land: showing the terminal"; go_terminal; }
 	;;
 
 Stop)

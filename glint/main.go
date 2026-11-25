@@ -30,9 +30,12 @@ usage:
                                                   exits with COMMAND's status
   glint ask      TITLE --questions JSON           questions in one toast, one after another
                  (JSON: [{"header","question","multiSelect","options":[{"label","description"}]}],
-                 Claude Code's AskUserQuestion shape). Prints the picks as JSON, one list
-                 of option indexes per question: [[1],[0,2]]. Exit 1 if dismissed, 3 if
-                 the body is clicked. Needs bead running.
+                 Claude Code's AskUserQuestion shape). Prints the picks as JSON, one entry
+                 per question: a list of option indexes, or the text typed under "Type
+                 something" (single-pick questions): [[1],"my own answer"]. Exit 1 if
+                 dismissed, 3 if the --open button is clicked. Needs bead running.
+      --open LABEL       ask: a button that gives the question back (exit 3), e.g.
+                         "Open terminal". Clicking the body does nothing.
 
 options:
   -d, --desc TEXT        body text (the toast expands to show it)
@@ -66,7 +69,7 @@ type opts struct {
 	duration                                                              time.Duration
 	durSet, noExpand, wait, grab                                          bool
 	choices, react                                                        []string
-	questions                                                             string
+	questions, open                                                       string
 	reactLabel                                                            string
 	cmd                                                                   []string
 }
@@ -202,6 +205,8 @@ func parse(args []string) (*opts, error) {
 			}
 		case "--questions":
 			o.questions, err = next()
+		case "--open":
+			o.open, err = next()
 		case "--react-label":
 			o.reactLabel, err = next()
 		case "--grab":

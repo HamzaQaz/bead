@@ -42,6 +42,9 @@ func viaBead(o *opts, wait bool, extraEnv []string, onLine ...func(string)) (str
 			spec["questions"] = qs
 		}
 	}
+	if o.open != "" {
+		spec["open"] = o.open
+	}
 	if o.noExpand {
 		spec["autopilot"] = false
 	}

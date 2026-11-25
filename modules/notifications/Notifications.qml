@@ -410,8 +410,24 @@ Scope {
                             return;
                         }
                         const q = pill.question;
-                        pill.answer("answers:" + JSON.stringify(p), "success:" + (pill.questions.length > 1 ? "Answered" : (q.options[chosen[0]]?.label ?? "Answered")));
+                        const said = typeof chosen === "string" ? chosen : (q.options[chosen[0]]?.label ?? "Answered");
+                        pill.answer("answers:" + JSON.stringify(p), "success:" + (pill.questions.length > 1 ? "Answered" : said));
                     }
+                    // your own answer, typed (single-pick questions; "Type something" in the terminal)
+                    property bool typing: false
+                    function startTyping(): void {
+                        pill.typing = true;
+                        root.replyPill = pill;   // the layer takes the keyboard
+                        askFocus.restart();
+                    }
+                    function endTyping(send: bool): void {
+                        const t = askField.text.trim();
+                        pill.typing = false;
+                        if (root.replyPill === pill) root.replyPill = null;
+                        askField.text = "";
+                        if (send && t) pill.next(t);
+                    }
+                    Timer { id: askFocus; interval: 80; onTriggered: askField.forceActiveFocus() }
                     function back(): void {
                         if (pill.step === 0) return;
                         pill.sel = pill.picks[pill.step - 1] ?? [];
@@ -427,6 +443,7 @@ Scope {
                     }
 
                     onClicked: {
+                        if (pill.asking) return; // questions: only the buttons act (Open terminal gives it back)
                         if (notif) Notifs.invoke(modelData.key, "default");
                         dismiss(spec ? "clicked" : "dismissed"); // toast --wait exits 0 on a click
                     }
@@ -444,7 +461,7 @@ Scope {
 
                     // ── inline reply (apps that offer one: messengers) ──
                     property bool replying: false
-                    holding: replying
+                    holding: replying || typing
                     function startReply(): void {
                         replying = true;
                         root.replyPill = pill;
@@ -505,6 +522,7 @@ Scope {
                     // they come from (Next: the right, Back: the left) and fade up
                     property int shownStep: 0
                     onStepChanged: {
+                        if (typing) endTyping(false);
                         askCol.from = step > shownStep ? 1 : -1;
                         shownStep = step;
                         askSlide.restart();
@@ -584,11 +602,72 @@ Scope {
                                 }
                             }
                         }
-                        // Back, and for a multi-select question Next / Send
+                        // your own answer
+                        Rectangle {
+                            visible: pill.asking && !pill.multi
+                            width: parent.width
+                            height: 36
+                            radius: 12
+                            color: Qt.alpha(Theme.text, pill.typing ? 0.08 : typeMa.containsMouse ? 0.08 : 0.04)
+                            border.width: pill.typing ? 1 : 0
+                            border.color: Qt.alpha(Theme.tone("action"), 0.6)
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            Text {
+                                visible: !pill.typing
+                                anchors.left: parent.left; anchors.leftMargin: 12
+                                anchors.verticalCenter: parent.verticalCenter
+                                font.family: Theme.font; font.pixelSize: 13
+                                color: Theme.subtext
+                                text: "Type something…"
+                            }
+                            MouseArea { id: typeMa; visible: !pill.typing; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.IBeamCursor; onClicked: pill.startTyping() }
+                            TextInput {
+                                id: askField
+                                TextMenu {}   // right-click: cut, copy, paste
+                                visible: pill.typing
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 40
+                                verticalAlignment: TextInput.AlignVCenter
+                                clip: true
+                                font.family: Theme.font
+                                font.pixelSize: 13
+                                color: Theme.text
+                                selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
+                                Keys.onReturnPressed: pill.endTyping(true)
+                                Keys.onEnterPressed: pill.endTyping(true)
+                                Keys.onEscapePressed: pill.endTyping(false)
+                            }
+                            Icon {
+                                visible: pill.typing
+                                anchors.right: parent.right; anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "send"; size: 17; fill: 1
+                                color: askField.text.trim() ? Theme.tone("action") : Theme.subtext
+                                MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: pill.endTyping(true) }
+                            }
+                        }
+                        // Back, Open terminal (--open), and for a multi-select question Next / Send
                         Item {
-                            visible: pill.step > 0 || pill.multi
+                            visible: pill.step > 0 || pill.multi || !!pill.spec?.open
                             width: parent.width
                             height: 32
+                            Rectangle {
+                                id: openBtn
+                                visible: !!pill.spec?.open
+                                x: pill.step > 0 ? backLbl.implicitWidth + 36 : 0
+                                width: visible ? openLbl.implicitWidth + 40 : 0
+                                height: 32
+                                radius: 16
+                                color: Qt.alpha(Theme.neutral, openMa.containsMouse ? 0.25 : 0.15)
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 5
+                                    Icon { anchors.verticalCenter: parent.verticalCenter; name: "terminal"; size: 15; color: Theme.text }
+                                    Text { id: openLbl; anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; color: Theme.text; text: pill.spec?.open ?? "" }
+                                }
+                                MouseArea { id: openMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pill.dismiss("clicked") }
+                            }
                             Rectangle {
                                 visible: pill.step > 0
                                 width: backLbl.implicitWidth + 28
@@ -609,7 +688,7 @@ Scope {
                             Rectangle {
                                 visible: pill.multi
                                 anchors.right: parent.right
-                                width: parent.width - (pill.step > 0 ? backLbl.implicitWidth + 36 : 0)
+                                width: parent.width - (pill.step > 0 ? backLbl.implicitWidth + 36 : 0) - (openBtn.visible ? openBtn.width + 8 : 0)
                                 height: 32
                                 radius: 16
                                 opacity: pill.sel.length ? 1 : 0.45
