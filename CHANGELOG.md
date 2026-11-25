@@ -5,6 +5,8 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+## 0.5.1
+
 ### Utilities
 - Focus modes in the Utilities panel: tap Work, Game, Night (or your own) to
   turn one on or off, with a line saying why one is on.

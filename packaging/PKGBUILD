@@ -4,7 +4,7 @@
 # (~/.config/hypr/bead.lua) and sets up the optional parts.
 pkgname=bead-shell-git
 _name=bead
-pkgver=0.5.0
+pkgver=0.5.1
 pkgrel=1
 pkgdesc="An opinionated desktop shell for Hyprland, built with Quickshell: soft pills that morph, an island launcher, voice, all coloured by your wallpaper"
 arch=(x86_64 aarch64)
