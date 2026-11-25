@@ -19,8 +19,8 @@ Item {
         anchors.centerIn: parent
         spacing: 10
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "widgets"; size: 36; color: Theme.subtext }
-        Label { anchors.horizontalCenter: parent.horizontalCenter; text: "No widgets yet"; font.pixelSize: 15; color: Theme.text }
-        Label { anchors.horizontalCenter: parent.horizontalCenter; text: "Keep an eye on a server, a build or a number"; font.pixelSize: 12; color: Theme.subtext }
+        Label { anchors.horizontalCenter: parent.horizontalCenter; text: "No widgets yet"; font.pixelSize: Theme.title; color: Theme.text }
+        Label { anchors.horizontalCenter: parent.horizontalCenter; text: "Keep an eye on a server, a build or a number"; font.pixelSize: Theme.small; color: Theme.subtext }
         Action { anchors.horizontalCenter: parent.horizontalCenter; text: "Make one"; glyph: "add"; accent: true; onHit: SettingsApp.show("widgets") }
     }
 
@@ -35,7 +35,7 @@ Item {
             id: head
             width: parent.width
             height: 40
-            Label { anchors.verticalCenter: parent.verticalCenter; text: "Widgets · " + Widgets.items.length; font.pixelSize: 13; color: Theme.text; width: parent.width - edit.width }
+            Label { anchors.verticalCenter: parent.verticalCenter; text: "Widgets · " + Widgets.items.length; font.pixelSize: Theme.body; color: Theme.text; width: parent.width - edit.width }
             Action { id: edit; anchors.verticalCenter: parent.verticalCenter; text: "Edit"; glyph: "tune"; onHit: SettingsApp.show("widgets") }
         }
 
@@ -75,7 +75,7 @@ Item {
                             width: parent.width - 26 - (pin.visible ? pin.width + 8 : 0)
                             elide: Text.ElideRight
                             text: card.modelData.label
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.small
                             color: Theme.subtext
                         }
                         Icon { id: pin; visible: card.modelData.pinned; anchors.verticalCenter: parent.verticalCenter; name: "keep"; size: 14; color: Theme.subtext }
@@ -85,7 +85,7 @@ Item {
                         maxWidth: parent.width - 32 - (sw.visible ? sw.width + 8 : 0)
                         rise: 10
                         font.family: Theme.font
-                        font.pixelSize: 22
+                        font.pixelSize: Theme.heading
                         font.weight: Font.DemiBold
                         font.features: { "tnum": 1 }
                         color: card.modelData.tone ? card.tone : Theme.text
@@ -104,7 +104,7 @@ Item {
                         x: 16
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: 10
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.tiny
                         color: Qt.alpha(Theme.subtext, 0.8)
                         text: card.modelData.at ? "every " + (card.modelData.every < 60 ? card.modelData.every + " s" : Math.round(card.modelData.every / 60) + " min") : "checking…"
                     }

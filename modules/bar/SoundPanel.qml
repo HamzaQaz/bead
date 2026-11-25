@@ -46,7 +46,7 @@ PanelColumn {
             anchors.verticalCenter: parent.verticalCenter
             width: 34
             horizontalAlignment: Text.AlignRight
-            font.pixelSize: 11
+            font.pixelSize: Theme.caption
             font.features: { "tnum": 1 }
             color: Theme.text
             text: lv.muted ? "off" : Math.round(lv.value * 100) + "%"
@@ -55,10 +55,8 @@ PanelColumn {
     component Section: Label {
         x: 4
         topPadding: 6
-        font.pixelSize: 11
-        font.weight: Font.DemiBold
-        font.capitalization: Font.AllUppercase
-        font.letterSpacing: 0.6
+        font.pixelSize: Theme.caption
+        font.weight: Font.Medium
     }
 
     PanelHeader { icon: "volume_up"; title: "Sound" }
@@ -136,14 +134,14 @@ PanelColumn {
                         width: parent.width - pct.width
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 12
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.small
+                        font.weight: Font.Medium
                         color: Theme.text
                         text: Audio.appName(app.modelData)
                     }
                     Label {
                         id: pct
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.caption
                         font.features: { "tnum": 1 }
                         text: app.modelData.audio?.muted ? "off" : Math.round((app.modelData.audio?.volume ?? 0) * 100) + "%"
                     }

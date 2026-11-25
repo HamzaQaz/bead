@@ -21,7 +21,7 @@ func allParts() []*part {
 			blurb: "The shell: bar, island, launcher, dashboard, lock screen, notifications",
 			pkgs: []string{
 				"quickshell", "hyprland", "qt6-shadertools",
-				"ttf-material-symbols-variable", "noto-fonts", "noto-fonts-emoji",
+				"ttf-material-symbols-variable", "inter-font", "noto-fonts", "noto-fonts-emoji",
 				"python", "jq", "curl", "fd", "libqalculate", "wtype", "wl-clipboard",
 				"grim", "slurp", "ffmpeg", "wf-recorder", "hyprpicker", "cliphist",
 				"libnotify", "pacman-contrib", "ddcutil", "pipewire", "make", "xdg-utils",

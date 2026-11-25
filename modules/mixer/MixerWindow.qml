@@ -22,17 +22,16 @@ FloatingWindow {
     onVisibleChanged: if (!visible) AudioFx.open = false
 
     component Head: Text {
-        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
-        font.letterSpacing: 0.4; font.capitalization: Font.AllUppercase
+        font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
         color: Theme.subtext
     }
     component Line: Text {
-        font.family: Theme.font; font.pixelSize: 13
+        font.family: Theme.font; font.pixelSize: Theme.body
         color: Theme.text
         elide: Text.ElideRight
     }
     component Hint: Text {
-        font.family: Theme.font; font.pixelSize: 11
+        font.family: Theme.font; font.pixelSize: Theme.caption
         color: Theme.subtext
         wrapMode: Text.Wrap
     }
@@ -68,7 +67,7 @@ FloatingWindow {
             width: parent.width - 50 - tail.width - 16
             anchors.verticalCenter: parent.verticalCenter
             spacing: 4
-            Line { width: parent.width; text: st.name; font.weight: st.lit ? Font.DemiBold : Font.Normal }
+            Line { width: parent.width; text: st.name; font.weight: st.lit ? Font.Medium : Font.Normal }
             Row {
                 width: parent.width
                 spacing: 8
@@ -92,7 +91,7 @@ FloatingWindow {
                     width: 44
                     anchors.verticalCenter: parent.verticalCenter
                     horizontalAlignment: Text.AlignRight
-                    font.family: Theme.font; font.pixelSize: 11; font.features: { "tnum": 1 }
+                    font.family: Theme.font; font.pixelSize: Theme.caption; font.features: { "tnum": 1 }
                     color: Theme.subtext
                     text: st.node?.audio?.muted ? "off" : Math.round((st.node?.audio?.volume ?? 0) * 100) + "%"
                 }
@@ -109,7 +108,7 @@ FloatingWindow {
         width: chT.implicitWidth + 22; height: 28; radius: 14
         color: on ? Theme.tone("action") : Qt.alpha(Theme.text, chMa.containsMouse ? 0.1 : 0.06)
         Behavior on color { ColorAnimation { duration: 150 } }
-        Text { id: chT; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; color: ch.on ? Theme.frame : Theme.text; text: ch.text }
+        Text { id: chT; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium; color: ch.on ? Theme.frame : Theme.text; text: ch.text }
         MouseArea { id: chMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: ch.hit() }
     }
     component Pane: Rectangle {
@@ -158,7 +157,7 @@ FloatingWindow {
                 Pane {
                     Item {
                         width: parent.width; height: 30
-                        Line { anchors.verticalCenter: parent.verticalCenter; text: "Play on two at once"; font.weight: Font.DemiBold }
+                        Line { anchors.verticalCenter: parent.verticalCenter; text: "Play on two at once"; font.weight: Font.Medium }
                         Toggle {
                             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                             checked: Settings.audioBoth
@@ -235,7 +234,7 @@ FloatingWindow {
                     }
                     Item {
                         width: parent.width; height: 30
-                        Line { anchors.verticalCenter: parent.verticalCenter; text: "Noise suppression"; font.weight: Font.DemiBold }
+                        Line { anchors.verticalCenter: parent.verticalCenter; text: "Noise suppression"; font.weight: Font.Medium }
                         Toggle {
                             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                             enabled: AudioFx.hasRnnoise
@@ -258,7 +257,7 @@ FloatingWindow {
                             onNudged: d => Settings.micThreshold = Math.max(0, Math.min(95, Settings.micThreshold + d * 5))
                         }
                     }
-                    Line { text: "EQ"; font.weight: Font.DemiBold }
+                    Line { text: "EQ"; font.weight: Font.Medium }
                     Choice {
                         width: parent.width
                         options: [{ v: "off", t: "Off" }, { v: "clear", t: "Clear" }, { v: "warm", t: "Warm" }, { v: "radio", t: "Radio" }]
@@ -282,7 +281,7 @@ FloatingWindow {
                 Pane {
                     Item {
                         width: parent.width; height: 30
-                        Line { anchors.verticalCenter: parent.verticalCenter; text: "Hear yourself"; font.weight: Font.DemiBold }
+                        Line { anchors.verticalCenter: parent.verticalCenter; text: "Hear yourself"; font.weight: Font.Medium }
                         Toggle {
                             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                             checked: Settings.micMonitor

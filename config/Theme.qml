@@ -46,6 +46,15 @@ Singleton {
     function c(key: string, fallback: string): color { return at(key, fallback, lead); }
 
     readonly property string font: Look.v.font
+    // ── type: one scale for everything, two weights (Regular, Medium; DemiBold
+    // only at heading size and up) ──
+    readonly property int tiny: 10      // badges, counters
+    readonly property int caption: 11   // hints, secondary lines
+    readonly property int small: 12     // chips, labels
+    readonly property int body: 13      // the default
+    readonly property int title: 15     // a row's or a card's name
+    readonly property int heading: 22   // a page's title
+    readonly property int display: 28   // a big number, a hero's name
     // Customise → Look & feel: an accent of your own (else the wallpaper's), the frame's colour
     readonly property string accent: Look.v.accent
     function acc(fallbackKey: string, fallback: string): color { return accent ? accent : c(fallbackKey, fallback); }

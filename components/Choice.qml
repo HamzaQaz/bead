@@ -46,7 +46,7 @@ Rectangle {
                 Text {
                     id: optText
                     anchors.centerIn: parent
-                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                    font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                     color: ch.value === opt.modelData.v ? Theme.frame : Theme.text
                     Behavior on color { ColorAnimation { duration: 150 } }
                     text: opt.modelData.t

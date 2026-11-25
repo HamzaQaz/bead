@@ -87,7 +87,7 @@ Scope {
                     id: tag
                     anchors.centerIn: parent
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     color: Theme.text
                     textFormat: Text.StyledText
                     text: root.label.replace(/&/g, "&amp;").replace(/</g, "&lt;") + "  <font color=\"" + Theme.subtext + "\">Esc to stop</font>"

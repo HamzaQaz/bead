@@ -62,8 +62,8 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 font.family: Theme.font
-                font.pixelSize: 12
-                font.weight: Font.DemiBold
+                font.pixelSize: Theme.small
+                font.weight: Font.Medium
                 color: b.main ? Theme.frame : Theme.text
                 text: b.text
             }
@@ -72,14 +72,14 @@ Item {
     }
     component Title: Text {
         font.family: Theme.font
-        font.pixelSize: 15
-        font.weight: Font.Bold
+        font.pixelSize: Theme.title
+        font.weight: Font.Medium
         color: Theme.text
         elide: Text.ElideRight
     }
     component Sub: Text {
         font.family: Theme.font
-        font.pixelSize: 12
+        font.pixelSize: Theme.small
         color: Theme.subtext
         elide: Text.ElideRight
     }
@@ -138,7 +138,7 @@ Item {
                             x: 12
                             y: 15 - height / 2
                             font.family: Theme.font
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.small
                             font.weight: Font.Medium
                             color: Theme.text
                             text: aurRow.modelData
@@ -152,7 +152,7 @@ Item {
                             Text {
                                 id: tag
                                 anchors.centerIn: parent
-                                font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold
+                                font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium
                                 color: aurRow.tone
                                 text: aurRow.level === "danger" ? "Risky" : aurRow.level === "caution" ? "Check it" : "Looks fine"
                             }
@@ -163,7 +163,7 @@ Item {
                             x: 12; y: 28
                             width: parent.width - 24
                             wrapMode: Text.Wrap
-                            font.family: Theme.font; font.pixelSize: 11
+                            font.family: Theme.font; font.pixelSize: Theme.caption
                             color: aurRow.tone
                             text: (aurRow.t?.reasons ?? []).join(" · ")
                         }
@@ -172,7 +172,7 @@ Item {
                             anchors.rightMargin: 12
                             y: 15 - height / 2
                             spacing: 4
-                            Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; color: Theme.tone("action"); text: "Changes" }
+                            Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.tone("action"); text: "Changes" }
                             Icon { anchors.verticalCenter: parent.verticalCenter; name: "open_in_new"; size: 13; color: Theme.tone("action") }
                         }
                         MouseArea { id: arMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Paths.openUrl(Updates.aurLink(aurRow.modelData)) }
@@ -302,7 +302,7 @@ Item {
                         width: logView.width
                         elide: Text.ElideRight
                         font.family: "monospace"
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.tiny
                         color: /^error|ERROR/.test(modelData) ? Theme.tone("error") : Qt.alpha(Theme.text, 0.75)
                         text: modelData
                     }
@@ -381,8 +381,8 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         font.family: Theme.font
-                        font.pixelSize: 26
-                        font.weight: Font.Bold
+                        font.pixelSize: Theme.display
+                        font.weight: Font.DemiBold
                         font.features: { "tnum": 1 }
                         color: Theme.text
                         text: root.pickH + ":" + String(root.pickM).padStart(2, "0")
@@ -392,7 +392,7 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         font.family: Theme.font
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.caption
                         color: Theme.subtext
                         text: R.label(R.next(root.pickH, root.pickM, new Date()), new Date())
                     }

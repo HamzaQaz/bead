@@ -494,7 +494,7 @@ Scope {
                             verticalAlignment: TextInput.AlignVCenter
                             clip: true
                             font.family: Theme.font
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.body
                             color: Theme.text
                             selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                             Keys.onReturnPressed: pill.endReply(true)
@@ -577,7 +577,7 @@ Scope {
                                         width: parent.width
                                         wrapMode: Text.Wrap
                                         font.family: Theme.font
-                                        font.pixelSize: 13
+                                        font.pixelSize: Theme.body
                                         font.weight: Font.Medium
                                         color: Theme.text
                                         text: opt.modelData.label ?? ""
@@ -589,7 +589,7 @@ Scope {
                                         maximumLineCount: 3
                                         elide: Text.ElideRight
                                         font.family: Theme.font
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.small
                                         color: Theme.subtext
                                         text: opt.modelData.description ?? ""
                                     }
@@ -617,7 +617,7 @@ Scope {
                                 visible: !pill.typing
                                 anchors.left: parent.left; anchors.leftMargin: 12
                                 anchors.verticalCenter: parent.verticalCenter
-                                font.family: Theme.font; font.pixelSize: 13
+                                font.family: Theme.font; font.pixelSize: Theme.body
                                 color: Theme.subtext
                                 text: "Type something…"
                             }
@@ -632,7 +632,7 @@ Scope {
                                 verticalAlignment: TextInput.AlignVCenter
                                 clip: true
                                 font.family: Theme.font
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.body
                                 color: Theme.text
                                 selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                                 Keys.onReturnPressed: pill.endTyping(true)
@@ -665,7 +665,7 @@ Scope {
                                     anchors.centerIn: parent
                                     spacing: 5
                                     Icon { anchors.verticalCenter: parent.verticalCenter; name: "terminal"; size: 15; color: Theme.text }
-                                    Text { id: openLbl; anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; color: Theme.text; text: pill.spec?.open ?? "" }
+                                    Text { id: openLbl; anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium; color: Theme.text; text: pill.spec?.open ?? "" }
                                 }
                                 MouseArea { id: openMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pill.dismiss("clicked") }
                             }
@@ -679,7 +679,7 @@ Scope {
                                     id: backLbl
                                     anchors.centerIn: parent
                                     font.family: Theme.font
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.small
                                     font.weight: Font.Medium
                                     color: Theme.text
                                     text: "Back"
@@ -697,7 +697,7 @@ Scope {
                                 Text {
                                     anchors.centerIn: parent
                                     font.family: Theme.font
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.small
                                     font.weight: Font.Medium
                                     color: Theme.tone("action")
                                     text: pill.step + 1 < pill.questions.length ? "Next" : "Send"

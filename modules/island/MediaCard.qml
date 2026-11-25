@@ -72,8 +72,8 @@ Item {
             width: parent.width
             elide: Text.ElideRight
             font.family: Theme.font
-            font.pixelSize: 14
-            font.weight: Font.DemiBold
+            font.pixelSize: Theme.title
+            font.weight: Font.Medium
             color: Theme.text
             text: root.player?.trackTitle ?? ""
         }
@@ -81,7 +81,7 @@ Item {
             width: parent.width
             visible: text !== ""
             elide: Text.ElideRight
-            font.pixelSize: 12
+            font.pixelSize: Theme.small
             text: root.player?.trackArtist ?? ""
         }
     }
@@ -176,7 +176,7 @@ Item {
             Label {
                 visible: lr.lead !== ""
                 anchors.verticalCenter: parent.verticalCenter
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
                 font.features: { "tnum": 1 }
                 text: lr.lead
             }
@@ -204,7 +204,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: 34
             horizontalAlignment: Text.AlignRight
-            font.pixelSize: 11
+            font.pixelSize: Theme.caption
             font.features: { "tnum": 1 }
             text: lr.trail
         }

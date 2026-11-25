@@ -259,8 +259,8 @@ Scope {
                     spacing: 8
                     Text {
                         font.family: Theme.font
-                        font.pixelSize: 15
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.title
+                        font.weight: Font.Medium
                         color: Theme.text
                         text: "Notifications"
                     }
@@ -268,7 +268,7 @@ Scope {
                         anchors.baseline: parent.children[0].baseline
                         visible: Notifs.entries.length > 0
                         font.family: Theme.font
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.small
                         font.features: { "tnum": 1 }
                         color: Theme.subtext
                         text: Notifs.entries.length
@@ -295,7 +295,7 @@ Scope {
                     y: 38
                     visible: Notifs.dnd
                     font.family: Theme.font
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.caption
                     color: Theme.subtext
                     text: "Do not disturb is on"
                 }
@@ -309,7 +309,7 @@ Scope {
                     Glyph { anchors.horizontalCenter: parent.horizontalCenter; size: 22; path: root.bellIcon; tone: Theme.neutral }
                     Text {
                         font.family: Theme.font
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.body
                         color: Theme.subtext
                         text: "All caught up"
                     }
@@ -395,10 +395,8 @@ Scope {
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: 6
                         font.family: Theme.font
-                        font.pixelSize: 11
-                        font.weight: Font.DemiBold
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: 0.8
+                        font.pixelSize: Theme.caption
+                        font.weight: Font.Medium
                         color: Theme.subtext
                         text: item.modelData.title ?? ""
                     }
@@ -439,7 +437,7 @@ Scope {
                             color: Qt.alpha(root.hueOf(item.modelData.first), 0.25)
                             Text {
                                 anchors.centerIn: parent
-                                font.family: Theme.font; font.pixelSize: 10; font.weight: Font.Bold
+                                font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium
                                 color: root.hueOf(item.modelData.first)
                                 text: item.type === "group" ? root.initialOf(item.modelData.first) : ""
                             }
@@ -451,8 +449,8 @@ Scope {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 font.family: Theme.font
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
+                                font.pixelSize: Theme.body
+                                font.weight: Font.Medium
                                 color: Theme.text
                                 text: item.modelData.app ?? ""
                             }
@@ -466,8 +464,8 @@ Scope {
                                     id: countText
                                     anchors.centerIn: parent
                                     font.family: Theme.font
-                                    font.pixelSize: 11
-                                    font.weight: Font.DemiBold
+                                    font.pixelSize: Theme.caption
+                                    font.weight: Font.Medium
                                     font.features: { "tnum": 1 }
                                     color: Theme.tone("action")
                                     text: item.modelData.count ?? ""
@@ -482,7 +480,7 @@ Scope {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 font.family: Theme.font
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 color: Theme.subtext
                                 text: item.modelData.open ? "Show less" : "Show all"
                             }
@@ -573,7 +571,7 @@ Scope {
                             Text {
                                 anchors.centerIn: parent
                                 visible: img.status !== Image.Ready
-                                font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Bold
+                                font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium
                                 color: row.modelData.urgency === NotificationUrgency.Critical ? Theme.tone("error") : root.hueOf(row.modelData)
                                 text: row.visible ? root.initialOf(row.modelData) : ""
                             }
@@ -589,7 +587,7 @@ Scope {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 font.family: Theme.font
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 color: Theme.subtext
                                 text: row.grouped ? root.ago(row.modelData.time) : (row.modelData.appName || "Notification") + "  ·  " + root.ago(row.modelData.time)
                             }
@@ -597,7 +595,7 @@ Scope {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 font.family: Theme.font
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.body
                                 font.weight: Font.Medium
                                 color: Theme.text
                                 text: row.modelData.summary ?? ""
@@ -609,7 +607,7 @@ Scope {
                                 maximumLineCount: 3
                                 elide: Text.ElideRight
                                 font.family: Theme.font
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.small
                                 lineHeight: 17
                                 lineHeightMode: Text.FixedHeight
                                 color: Theme.subtext
@@ -624,7 +622,7 @@ Scope {
                                 Icon { anchors.verticalCenter: parent.verticalCenter; name: "snooze"; size: 13; color: Theme.tone("action") }
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
+                                    font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                                     color: Theme.tone("action")
                                     text: parent.until > 0 ? Snooze.label(parent.until, Date.now()) : ""
                                 }
@@ -651,7 +649,7 @@ Scope {
                                             width: Math.min(implicitWidth, chip.width - 14)
                                             elide: Text.ElideRight
                                             font.family: Theme.font
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.caption
                                             font.weight: Font.Medium
                                             color: Theme.tone("action")
                                             text: chip.modelData.label
@@ -688,7 +686,7 @@ Scope {
                                     verticalAlignment: TextInput.AlignVCenter
                                     clip: true
                                     font.family: Theme.font
-                                    font.pixelSize: 13
+                                    font.pixelSize: Theme.body
                                     color: Theme.text
                                     selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                                     Keys.onReturnPressed: row.sendReply()

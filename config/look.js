@@ -29,7 +29,7 @@ var SCHEMA = [
     n("look", "Colour", "frameOpacity", "Frame opacity", 1, 0.5, 1, 0.05, "%", "Let the desktop show through the frame and island"),
     n("look", "Colour", "subtext", "Secondary text", 0.8, 0.4, 1, 0.05, "%", "How strong dimmer text is"),
     n("look", "Shape", "frameThickness", "Frame thickness", 10, 0, 24, 1, "px", "The border around the screen"),
-    { k: "font", page: "look", group: "Text", type: "font", label: "Font", hint: "bead's text everywhere", def: "Noto Sans" },
+    { k: "font", page: "look", group: "Text", type: "font", label: "Font", hint: "bead's text everywhere", def: "Inter" },
     b("look", "Text", "clock24", "24-hour clock", true, "The bar and the island"),
 
     // ── motion ──

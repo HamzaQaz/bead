@@ -20,9 +20,8 @@ PanelColumn {
     component Label: Text {
         x: 4
         font.family: Theme.font
-        font.pixelSize: 11
-        font.weight: Font.Bold
-        font.letterSpacing: 0.4
+        font.pixelSize: Theme.caption
+        font.weight: Font.Medium
         color: Theme.subtext
     }
     component Empty: Text {
@@ -30,7 +29,7 @@ PanelColumn {
         width: root.width - 8
         wrapMode: Text.Wrap
         font.family: Theme.font
-        font.pixelSize: 12
+        font.pixelSize: Theme.small
         color: Theme.subtext
     }
 

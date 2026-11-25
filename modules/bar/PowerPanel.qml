@@ -44,8 +44,8 @@ PanelColumn {
             Text {
                 anchors.centerIn: parent
                 font.family: Theme.font
-                font.pixelSize: 15
-                font.weight: Font.Bold
+                font.pixelSize: Theme.title
+                font.weight: Font.Medium
                 color: Theme.tone("action")
                 text: (Demo.on ? DemoData.user : Session.user).charAt(0).toUpperCase()
             }
@@ -54,12 +54,12 @@ PanelColumn {
             anchors.verticalCenter: parent.verticalCenter
             Text {
                 font.family: Theme.font
-                font.pixelSize: 14
-                font.weight: Font.Bold
+                font.pixelSize: Theme.title
+                font.weight: Font.Medium
                 color: Theme.text
                 text: Demo.on ? DemoData.user + "@" + DemoData.host : Session.user + (Session.host ? "@" + Session.host : "")
             }
-            Label { font.pixelSize: 11; text: Session.uptimeText }
+            Label { font.pixelSize: Theme.caption; text: Session.uptimeText }
         }
     }
 
@@ -97,8 +97,8 @@ PanelColumn {
                     anchors.top: circle.bottom
                     anchors.topMargin: 6
                     font.family: Theme.font
-                    font.pixelSize: 11
-                    font.weight: act.armed ? Font.Bold : Font.Medium
+                    font.pixelSize: Theme.caption
+                    font.weight: act.armed ? Font.Medium : Font.Medium
                     color: act.armed ? Theme.tone("error") : Theme.subtext
                     text: act.armed ? `Sure? ${root.secs}` : act.modelData.title
                 }

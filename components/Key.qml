@@ -10,5 +10,5 @@ Rectangle {
     color: Qt.alpha(Theme.text, 0.08)
     border.width: 1
     border.color: Qt.alpha(Theme.text, 0.1)
-    Text { id: kt; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; color: Theme.text; text: parent.text }
+    Text { id: kt; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: Theme.text; text: parent.text }
 }

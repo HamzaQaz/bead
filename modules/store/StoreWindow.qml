@@ -47,7 +47,7 @@ FloatingWindow {
     function show(app: var): void { if (!app) return; detail = app; Store.details(app); }
 
     component Txt: Text { font.family: Theme.font; color: Theme.text; elide: Text.ElideRight }
-    component Sub: Txt { font.pixelSize: 12; color: Theme.subtext }
+    component Sub: Txt { font.pixelSize: Theme.small; color: Theme.subtext }
 
     // Install / Open / the install's progress
     component Go: Rectangle {
@@ -83,7 +83,7 @@ FloatingWindow {
         Txt {
             id: gt
             anchors.centerIn: parent
-            font.pixelSize: 12; font.weight: Font.DemiBold
+            font.pixelSize: Theme.small; font.weight: Font.Medium
             font.features: { "tnum": 1 }
             color: g.app.installed || g.mine ? Theme.text : Theme.frame
             text: g.mine ? (Updates.inst.phase === "auth" ? "Password…" : Math.round(Updates.progress * 100) + "%")
@@ -108,7 +108,7 @@ FloatingWindow {
             color: im.visible ? Qt.alpha(Theme.text, 0.05) : Qt.alpha(Theme.tone("action"), 0.14)
             border.width: 1
             border.color: Qt.alpha(Theme.text, 0.06)
-            Txt { anchors.centerIn: parent; visible: !im.visible; font.pixelSize: ai.size * 0.4; font.weight: Font.Bold; color: Theme.tone("action"); text: (ai.app ? Store.title(ai.app) : "?").charAt(0).toUpperCase() }
+            Txt { anchors.centerIn: parent; visible: !im.visible; font.pixelSize: ai.size * 0.4; font.weight: Font.Medium; color: Theme.tone("action"); text: (ai.app ? Store.title(ai.app) : "?").charAt(0).toUpperCase() }
         }
         IconImage { id: im; anchors.centerIn: parent; width: ai.size * 0.72; height: width; source: ai.src; visible: !!ai.src && status === Image.Ready; asynchronous: true }
     }
@@ -174,7 +174,7 @@ FloatingWindow {
     component SplitTitle: Row {
         id: st
         property string text: ""
-        property int pixelSize: 30
+        property int pixelSize: Theme.display
         property int stagger: 26
         Repeater {
             model: st.text.split("")
@@ -183,7 +183,7 @@ FloatingWindow {
                 required property string modelData
                 required property int index
                 text: modelData === " " ? "\u00a0" : modelData
-                font.family: Theme.font; font.pixelSize: st.pixelSize; font.weight: Font.Black; font.letterSpacing: -0.4
+                font.family: Theme.font; font.pixelSize: st.pixelSize; font.weight: Font.DemiBold; font.letterSpacing: -0.4
                 color: Theme.text
                 opacity: 0
                 transform: Translate { id: chUp; y: st.pixelSize * 0.6 }
@@ -255,7 +255,7 @@ FloatingWindow {
                 readonly property bool on: win.srcOf(sr.app).source === chip.modelData.source
                 width: ct.implicitWidth + 14; height: 20; radius: 10
                 color: on ? Qt.alpha(Theme.tone(chip.modelData.source === "aur" ? "warning" : "action"), 0.18) : Qt.alpha(Theme.text, cma.containsMouse ? 0.1 : 0.05)
-                Txt { id: ct; anchors.centerIn: parent; font.pixelSize: 10; font.weight: Font.DemiBold; color: chip.on ? Theme.text : Theme.subtext; text: win.sourceName[chip.modelData.source] + (chip.modelData.installed ? " ✓" : "") }
+                Txt { id: ct; anchors.centerIn: parent; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: chip.on ? Theme.text : Theme.subtext; text: win.sourceName[chip.modelData.source] + (chip.modelData.installed ? " ✓" : "") }
                 MouseArea { id: cma; anchors.fill: parent; hoverEnabled: true; enabled: sr.app.sources.length > 1; cursorShape: Qt.PointingHandCursor; onClicked: win.pick(sr.app, chip.modelData) }
             }
         }
@@ -276,7 +276,7 @@ FloatingWindow {
             x: 12; y: 8; width: parent.width - 24; spacing: 6
             Text {
                 width: parent.width; wrapMode: Text.Wrap
-                font.family: Theme.font; font.pixelSize: 12; color: Theme.text
+                font.family: Theme.font; font.pixelSize: Theme.small; color: Theme.text
                 text: "Built on your computer from a recipe anyone can upload to the AUR."
                     + (an.t === "checking" ? " Checking it…"
                        : an.level === "ok" ? " bead's check found nothing worrying."
@@ -289,15 +289,15 @@ FloatingWindow {
                 Text {
                     required property string modelData
                     width: anCol.width; wrapMode: Text.Wrap
-                    font.family: Theme.font; font.pixelSize: 12
+                    font.family: Theme.font; font.pixelSize: Theme.small
                     color: an.level === "danger" ? Theme.tone("error") : Theme.text
                     text: "• " + modelData
                 }
             }
             Row {
                 spacing: 12
-                Txt { font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.tone("action"); text: "Build file ↗"; MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Store.buildFile(win.srcOf(an.app).name) } }
-                Txt { font.pixelSize: 12; color: Theme.subtext; text: "Cancel"; MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: win.confirmAur = "" } }
+                Txt { font.pixelSize: Theme.small; font.weight: Font.Medium; color: Theme.tone("action"); text: "Build file ↗"; MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Store.buildFile(win.srcOf(an.app).name) } }
+                Txt { font.pixelSize: Theme.small; color: Theme.subtext; text: "Cancel"; MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: win.confirmAur = "" } }
             }
         }
     }
@@ -307,8 +307,8 @@ FloatingWindow {
         id: head
         x: 26; y: 20
         spacing: 2
-        Txt { font.pixelSize: 26; font.weight: Font.Black; font.letterSpacing: -0.5; text: "App Store" }
-        Sub { font.pixelSize: 13; text: "The repos, Flathub and the AUR in one place: one result per app, the repos first." }
+        Txt { font.pixelSize: Theme.display; font.weight: Font.DemiBold; font.letterSpacing: -0.5; text: "App Store" }
+        Sub { font.pixelSize: Theme.body; text: "The repos, Flathub and the AUR in one place: one result per app, the repos first." }
     }
     Rectangle {
         id: bar
@@ -324,7 +324,7 @@ FloatingWindow {
             id: field
             x: 46; width: parent.width - 46 - 46
             anchors.verticalCenter: parent.verticalCenter
-            font.family: Theme.font; font.pixelSize: 15
+            font.family: Theme.font; font.pixelSize: Theme.title
             color: Theme.text
             selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
             clip: true
@@ -336,7 +336,7 @@ FloatingWindow {
             Txt {
                 visible: !field.text
                 anchors.verticalCenter: parent.verticalCenter
-                font.pixelSize: 15; color: Theme.subtext
+                font.pixelSize: Theme.title; color: Theme.subtext
                 text: "Search apps, or what you need: \"screen recorder\", \"notes\"…"
             }
         }
@@ -503,14 +503,14 @@ FloatingWindow {
                         x: 28; anchors.verticalCenter: parent.verticalCenter
                         width: parent.width - 300
                         spacing: 6
-                        Txt { font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1.2; color: Theme.tone("action"); text: "FEATURED" }
-                        SplitTitle { pixelSize: 30; text: hero.app ? Store.title(hero.app) : "" }
-                        Text { width: parent.width; wrapMode: Text.Wrap; maximumLineCount: 2; font.family: Theme.font; font.pixelSize: 14; color: Theme.subtext; text: hero.app ? Store.reason(hero.app) : "" }
+                        Txt { font.pixelSize: Theme.caption; font.weight: Font.DemiBold; color: Theme.tone("action"); text: "FEATURED" }
+                        SplitTitle { pixelSize: Theme.display; text: hero.app ? Store.title(hero.app) : "" }
+                        Text { width: parent.width; wrapMode: Text.Wrap; maximumLineCount: 2; font.family: Theme.font; font.pixelSize: Theme.title; color: Theme.subtext; text: hero.app ? Store.reason(hero.app) : "" }
                         Item { width: 1; height: 6 }
                         Row {
                             spacing: 10
                             Go { app: hero.app ?? ({ sources: [], installed: false, key: "" }) }
-                            Sub { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11; text: hero.app ? "From " + { repo: "the repos", flathub: "Flathub", aur: "the AUR" }[win.srcOf(hero.app).source] : "" }
+                            Sub { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.caption; text: hero.app ? "From " + { repo: "the repos", flathub: "Flathub", aur: "the AUR" }[win.srcOf(hero.app).source] : "" }
                         }
                     }
                     }
@@ -555,7 +555,7 @@ FloatingWindow {
                 Row {
                     spacing: 8
                     Icon { anchors.verticalCenter: parent.verticalCenter; name: "workspace_premium"; size: 18; fill: 1; color: Theme.tone("warning") }
-                    Txt { font.pixelSize: 15; font.weight: Font.Bold; text: "Editor's choice" }
+                    Txt { font.pixelSize: Theme.title; font.weight: Font.Medium; text: "Editor's choice" }
                 }
                 Flow {
                     width: parent.width
@@ -601,13 +601,13 @@ FloatingWindow {
                                 spacing: 4
                                 Row {
                                     width: parent.width
-                                    Txt { width: parent.width - edGo.width; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 16; font.weight: Font.Bold; text: Store.title(ed.modelData.app) }
+                                    Txt { width: parent.width - edGo.width; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.title; font.weight: Font.Medium; text: Store.title(ed.modelData.app) }
                                     Go { id: edGo; app: ed.modelData.app }
                                 }
                                 Text {
                                     width: parent.width
                                     wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight
-                                    font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.15; color: Theme.subtext
+                                    font.family: Theme.font; font.pixelSize: Theme.small; lineHeight: 1.15; color: Theme.subtext
                                     text: ed.modelData.note
                                 }
                             }
@@ -633,7 +633,7 @@ FloatingWindow {
                             anchors.centerIn: parent
                             spacing: 6
                             Icon { anchors.verticalCenter: parent.verticalCenter; name: jump.modelData.icon; size: 16; color: Theme.tone("action") }
-                            Txt { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; font.weight: Font.DemiBold; text: jump.modelData.title }
+                            Txt { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.small; font.weight: Font.Medium; text: jump.modelData.title }
                         }
                         MouseArea {
                             id: jma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -654,7 +654,7 @@ FloatingWindow {
                     Row {
                         spacing: 8
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: cat.modelData.icon; size: 18; color: Theme.tone("action") }
-                        Txt { font.pixelSize: 15; font.weight: Font.Bold; text: cat.modelData.title }
+                        Txt { font.pixelSize: Theme.title; font.weight: Font.Medium; text: cat.modelData.title }
                     }
                     Flow {
                         width: parent.width
@@ -700,11 +700,11 @@ FloatingWindow {
                                     }
                                     Column {
                                         width: parent.width; spacing: 4
-                                        Txt { width: parent.width; font.pixelSize: 15; font.weight: Font.DemiBold; text: Store.title(card.modelData) }
+                                        Txt { width: parent.width; font.pixelSize: Theme.title; font.weight: Font.Medium; text: Store.title(card.modelData) }
                                         Text {
                                             width: parent.width
                                             wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
-                                            font.family: Theme.font; font.pixelSize: 12; lineHeight: 1.15; color: Theme.subtext
+                                            font.family: Theme.font; font.pixelSize: Theme.small; lineHeight: 1.15; color: Theme.subtext
                                             text: Store.reason(card.modelData)
                                         }
                                     }
@@ -713,14 +713,14 @@ FloatingWindow {
                                         Rectangle {
                                             width: srcT.implicitWidth + 14; height: 20; radius: 10
                                             color: Qt.alpha(Theme.text, 0.06)
-                                            Txt { id: srcT; anchors.centerIn: parent; font.pixelSize: 10; font.weight: Font.DemiBold; color: Theme.subtext; text: win.sourceName[win.srcOf(card.modelData).source] }
+                                            Txt { id: srcT; anchors.centerIn: parent; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: Theme.subtext; text: win.sourceName[win.srcOf(card.modelData).source] }
                                         }
                                         Rectangle {
                                             visible: card.modelData.installed
                                             width: insT.implicitWidth + 28; height: 20; radius: 10
                                             color: Qt.alpha(Theme.tone("success"), 0.14)
                                             Icon { x: 7; anchors.verticalCenter: parent.verticalCenter; name: "check"; size: 12; color: Theme.tone("success") }
-                                            Txt { id: insT; x: 21; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 10; font.weight: Font.DemiBold; color: Theme.tone("success"); text: "Installed" }
+                                            Txt { id: insT; x: 21; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: Theme.tone("success"); text: "Installed" }
                                         }
                                     }
                                     AurNote { app: card.modelData }
@@ -805,7 +805,7 @@ FloatingWindow {
                                         spacing: 4
                                         Row {
                                             spacing: 8
-                                            Txt { font.pixelSize: 14; font.weight: Font.DemiBold; text: row.modelData ? Store.title(row.modelData) : "" }
+                                            Txt { font.pixelSize: Theme.title; font.weight: Font.Medium; text: row.modelData ? Store.title(row.modelData) : "" }
                                             Sources { app: row.modelData ?? ({ sources: [] }); anchors.verticalCenter: parent.verticalCenter }
                                         }
                                         Sub { width: parent.width; text: row.modelData ? (Store.reason(row.modelData) || row.modelData.best.name) : "" }
@@ -897,15 +897,15 @@ FloatingWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         width: sc.width - 96 - 18 - 30
                         spacing: 6
-                        SplitTitle { pixelSize: 26; stagger: 18; text: win.detail && sheet.app ? Store.title(sheet.app) : "" }
-                        Sub { width: parent.width; font.pixelSize: 13; visible: text !== ""; text: sheet.ready ? sheet.d.developer : "" }
+                        SplitTitle { pixelSize: Theme.display; stagger: 18; text: win.detail && sheet.app ? Store.title(sheet.app) : "" }
+                        Sub { width: parent.width; font.pixelSize: Theme.body; visible: text !== ""; text: sheet.ready ? sheet.d.developer : "" }
                         Sources { app: sheet.app ?? ({ sources: [] }) }
                     }
                 }
                 Row {
                     spacing: 10
                     Go { app: sheet.app ?? ({ sources: [], installed: false, key: "" }) }
-                    Sub { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; text: sheet.app ? "From " + { repo: "the repos", flathub: "Flathub", aur: "the AUR" }[win.srcOf(sheet.app).source] : "" }
+                    Sub { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.small; text: sheet.app ? "From " + { repo: "the repos", flathub: "Flathub", aur: "the AUR" }[win.srcOf(sheet.app).source] : "" }
                 }
                 AurNote { app: sheet.app ?? ({ key: "", sources: [], best: {} }) }
                 // Editor's choice: only for bead's maintainer (Store.maintainer)
@@ -926,8 +926,8 @@ FloatingWindow {
                         Row {
                             spacing: 8
                             Icon { anchors.verticalCenter: parent.verticalCenter; name: "workspace_premium"; size: 18; fill: 1; color: Theme.tone("warning") }
-                            Txt { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 13; font.weight: Font.Bold; text: edBox.note ? "In Editor's choice" : "Editor's choice" }
-                            Sub { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11; text: "· only you see this" }
+                            Txt { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.body; font.weight: Font.Medium; text: edBox.note ? "In Editor's choice" : "Editor's choice" }
+                            Sub { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.caption; text: "· only you see this" }
                         }
                         Sub {
                             visible: !edBox.pick
@@ -946,7 +946,7 @@ FloatingWindow {
                                 id: noteIn
                                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 44
                                 verticalAlignment: TextInput.AlignVCenter
-                                font.family: Theme.font; font.pixelSize: 13
+                                font.family: Theme.font; font.pixelSize: Theme.body
                                 color: Theme.text; clip: true
                                 maximumLength: 109
                                 selectionColor: Qt.alpha(Theme.tone("warning"), 0.4)
@@ -955,7 +955,7 @@ FloatingWindow {
                                 Keys.onReturnPressed: Store.setEditor(sheet.app, text, true)
                                 Keys.onEscapePressed: win.detail = null
                             }
-                            Sub { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 10; text: 109 - noteIn.text.length }
+                            Sub { anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.tiny; text: 109 - noteIn.text.length }
                         }
                         Row {
                             visible: !!edBox.pick
@@ -1008,7 +1008,7 @@ FloatingWindow {
                 Txt {
                     visible: sheet.d === "failed"
                     width: sc.width; wrapMode: Text.Wrap
-                    font.pixelSize: 13; color: Theme.subtext
+                    font.pixelSize: Theme.body; color: Theme.subtext
                     text: "Couldn't load the details. " + (sheet.app ? Store.reason(sheet.app) : "")
                 }
                 // what it is
@@ -1016,7 +1016,7 @@ FloatingWindow {
                     visible: sheet.ready
                     width: sc.width
                     wrapMode: Text.Wrap
-                    font.family: Theme.font; font.pixelSize: 14; lineHeight: 1.3
+                    font.family: Theme.font; font.pixelSize: Theme.body; lineHeight: 1.3
                     color: Theme.text
                     text: sheet.ready ? sheet.d.description : ""
                 }
@@ -1043,7 +1043,7 @@ FloatingWindow {
                                     anchors.verticalCenter: parent.verticalCenter; size: 16; color: Theme.tone("action")
                                     name: ({ "Website": "public", "Source code": "code", "Report a bug": "bug_report", "Flathub": "storefront", "AUR page": "construction" })[lk.modelData.label] ?? "open_in_new"
                                 }
-                                Txt { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; font.weight: Font.DemiBold; text: lk.modelData.label }
+                                Txt { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.small; font.weight: Font.Medium; text: lk.modelData.label }
                             }
                             MouseArea { id: lma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Store.openLink(lk.modelData.url) }
                         }
@@ -1065,8 +1065,8 @@ FloatingWindow {
                             Column {
                                 x: 14; anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width - 28; spacing: 2
-                                Sub { font.pixelSize: 11; text: ft.modelData.label }
-                                Txt { width: parent.width; font.pixelSize: 13; font.weight: Font.DemiBold; text: ft.modelData.value }
+                                Sub { font.pixelSize: Theme.caption; text: ft.modelData.label }
+                                Txt { width: parent.width; font.pixelSize: Theme.body; font.weight: Font.Medium; text: ft.modelData.value }
                             }
                         }
                     }

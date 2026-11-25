@@ -184,7 +184,7 @@ Item {
         width: parent.width - root.pad * 2
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
-        font.pixelSize: 12
+        font.pixelSize: Theme.small
         opacity: root.enter
         text: root.caption || (root.picked ? ((Demo.on ? root.picked.wayland?.appId : root.picked.title) || "Window") + "  ·  f float  ·  x close  ·  p pin" + (root.pick >= 0 ? "  ·  Enter focus" : "")
             : "←/→ choose  ·  ↓ pick a window  ·  Enter go  ·  drag a window to move it")
@@ -228,8 +228,8 @@ Item {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.body
+                            font.weight: Font.Medium
                             color: card.sel ? Theme.text : Theme.subtext
                             text: card.modelData.name || card.modelData.id
                         }
@@ -241,7 +241,7 @@ Item {
                         }
                         Label {
                             anchors.verticalCenter: parent.verticalCenter
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.caption
                             visible: root.multiMonitor
                             text: card.modelData.monitor?.name ?? ""
                         }

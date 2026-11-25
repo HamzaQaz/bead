@@ -39,7 +39,7 @@ Item {
         Row {
             x: 18; y: 14
             spacing: 10
-            Label { text: "Apps · " + root.apps.length; font.pixelSize: 13; color: Theme.text; anchors.verticalCenter: parent.verticalCenter }
+            Label { text: "Apps · " + root.apps.length; font.pixelSize: Theme.body; color: Theme.text; anchors.verticalCenter: parent.verticalCenter }
         }
         Choice {
             anchors.right: parent.right
@@ -86,7 +86,7 @@ Item {
                         width: parent.width
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.body
                         font.weight: Font.Medium
                         color: Theme.text
                         text: app.modelData.name
@@ -95,7 +95,7 @@ Item {
                         width: parent.width
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.tiny
                         color: Theme.subtext
                         text: [app.modelData.source === "flathub" ? "Flatpak" : app.modelData.pkg, Pkgs.size(app.modelData.size),
                                Pkgs.ago(app.modelData.used, root.now)].filter(Boolean).join(" · ")
@@ -138,7 +138,7 @@ Item {
                 Icon { name: "system_update_alt"; size: 18; fill: 1; color: Updates.restart ? Theme.tone("warning") : Theme.tone("action"); anchors.verticalCenter: parent.verticalCenter }
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     color: Theme.text
                     text: Updates.checking ? "Checking…" : !Updates.checked ? "Not checked yet" : Updates.count === 0 ? "Up to date" : Updates.count + (Updates.count === 1 ? " update" : " updates")
                 }
@@ -147,7 +147,7 @@ Item {
                 width: parent.width
                 wrapMode: Text.Wrap
                 font.family: Theme.font
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
                 color: Updates.restart ? Theme.tone("warning") : Theme.subtext
                 text: !Updates.checked ? "Looks a couple of minutes after start, then every 3 hours." : Updates.count === 0 ? "Looks every 3 hours."
                     : [Updates.repo.length ? Updates.repo.length + " repo" : "", Updates.aur.length ? Updates.aur.length + " AUR" : "", Updates.flatpak.length ? Updates.flatpak.length + " Flatpak" : ""].filter(Boolean).join(" · ")
@@ -159,12 +159,12 @@ Item {
                 Action { visible: Updates.count > 0; accent: true; text: "Update"; glyph: "download"; onHit: Updates.update() }
             }
             Rectangle { width: parent.width; height: 1; color: Qt.alpha(Theme.text, 0.07) }
-            Label { text: "Get more"; font.pixelSize: 13; color: Theme.text }
+            Label { text: "Get more"; font.pixelSize: Theme.body; color: Theme.text }
             Text {
                 width: parent.width
                 wrapMode: Text.Wrap
                 font.family: Theme.font
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
                 color: Theme.subtext
                 text: "The App Store: the repos, Flathub and the AUR in one search, with picks by category."
             }

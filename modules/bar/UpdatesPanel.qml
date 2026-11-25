@@ -48,7 +48,7 @@ PanelColumn {
                     width: parent.width / 2; height: parent.height
                     Text {
                         anchors.centerIn: parent
-                        font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                        font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
                         color: root.showHistory === seg.modelData.h ? Theme.text : Theme.subtext
                         text: seg.modelData.t + (seg.modelData.h && Updates.holds.length ? " · " + Updates.holds.length + " held" : !seg.modelData.h && Updates.count ? " · " + Updates.count : "")
                     }
@@ -63,7 +63,7 @@ PanelColumn {
         visible: !root.showHistory && Updates.restart
         wrapMode: Text.Wrap
         font.family: Theme.font
-        font.pixelSize: 11
+        font.pixelSize: Theme.caption
         color: Theme.tone("warning")
         text: "Restart after updating: " + Updates.items.filter(u => u.restart).map(u => u.name).join(", ")
     }
@@ -91,7 +91,7 @@ PanelColumn {
                     width: parent.width
                     elide: Text.ElideRight
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     font.weight: Font.Medium
                     color: Theme.text
                     text: u.modelData.name
@@ -100,7 +100,7 @@ PanelColumn {
                     width: parent.width
                     elide: Text.ElideMiddle
                     font.family: Theme.font
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.tiny
                     font.features: { "tnum": 1 }
                     color: Theme.subtext
                     text: u.modelData.from ? u.modelData.from + "  →  " + u.modelData.to : u.modelData.to
@@ -117,7 +117,7 @@ PanelColumn {
                     property color tone: Theme.subtext
                     width: tt.implicitWidth + 12; height: 18; radius: 9
                     color: Qt.alpha(tone, 0.14)
-                    Text { id: tt; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 9; font.weight: Font.Medium; color: parent.tone; text: parent.text }
+                    Text { id: tt; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: parent.tone; text: parent.text }
                 }
                 Tag { visible: u.modelData.restart; text: "restart after"; tone: Theme.tone("warning") }
                 Tag { text: u.modelData.source === "repo" ? "repo" : u.modelData.source === "aur" ? "AUR" : "Flatpak" }
@@ -134,7 +134,7 @@ PanelColumn {
         width: st.implicitWidth + 16; height: 22; radius: 11
         color: Qt.alpha(accent ? Theme.tone("action") : Theme.text, sma.containsMouse ? 0.22 : 0.1)
         Behavior on color { ColorAnimation { duration: 120 } }
-        Text { id: st; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.Medium; color: sm.accent ? Theme.tone("action") : Theme.text; text: sm.text }
+        Text { id: st; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: sm.accent ? Theme.tone("action") : Theme.text; text: sm.text }
         MouseArea { id: sma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: sm.hit() }
     }
     // held back: the versions you rolled back from, skipped until a newer one
@@ -142,7 +142,7 @@ PanelColumn {
         visible: root.showHistory && Updates.holds.length > 0
         width: parent.width
         spacing: 4
-        Text { x: 4; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; color: Theme.tone("warning"); text: "Held back: updates skip these versions" }
+        Text { x: 4; font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium; color: Theme.tone("warning"); text: "Held back: updates skip these versions" }
         Repeater {
             model: Updates.holds
             Item {
@@ -153,7 +153,7 @@ PanelColumn {
                     x: 10; anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - 20 - rel.width
                     elide: Text.ElideRight
-                    font.family: Theme.font; font.pixelSize: 12; color: Theme.text
+                    font.family: Theme.font; font.pixelSize: Theme.small; color: Theme.text
                     text: hd.modelData.name + "  <font color=\"" + Theme.subtext + "\">" + hd.modelData.version + "</font>"
                     textFormat: Text.StyledText
                 }
@@ -190,13 +190,13 @@ PanelColumn {
                     x: 10; anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - 20 - cnt.width
                     spacing: 1
-                    Text { width: parent.width; elide: Text.ElideRight; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; text: H.label(e.modelData) }
-                    Text { width: parent.width; font.family: Theme.font; font.pixelSize: 10; color: Theme.subtext; text: H.when(e.modelData.time) }
+                    Text { width: parent.width; elide: Text.ElideRight; font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium; color: Theme.text; text: H.label(e.modelData) }
+                    Text { width: parent.width; font.family: Theme.font; font.pixelSize: Theme.tiny; color: Theme.subtext; text: H.when(e.modelData.time) }
                 }
                 Text {
                     id: cnt
                     anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
-                    font.family: Theme.font; font.pixelSize: 10; color: Theme.subtext
+                    font.family: Theme.font; font.pixelSize: Theme.tiny; color: Theme.subtext
                     text: e.modelData.changes.length + (e.modelData.changes.length === 1 ? " package" : " packages") + (e.isOpen ? "  ▴" : "  ▾")
                 }
                 MouseArea { id: hma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { root.note = ""; root.open = e.isOpen ? -1 : e.index; } }
@@ -211,7 +211,7 @@ PanelColumn {
                 Text {
                     width: parent.width; wrapMode: Text.Wrap
                     topPadding: 2
-                    font.family: Theme.font; font.pixelSize: 10; color: Theme.subtext
+                    font.family: Theme.font; font.pixelSize: Theme.tiny; color: Theme.subtext
                     text: !e.plan ? "" : root.note || [
                         e.plan.files.length ? "Undo puts back " + e.plan.files.length + (e.plan.files.length === 1 ? " package" : " packages") + " from the cache" : "Nothing here can be undone from the cache",
                         e.plan.missing.length ? e.plan.missing.length + " no longer cached" : "",
@@ -236,7 +236,7 @@ PanelColumn {
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - (one.visible ? one.width + 6 : 0)
                             elide: Text.ElideMiddle
-                            font.family: Theme.font; font.pixelSize: 11; font.features: { "tnum": 1 }
+                            font.family: Theme.font; font.pixelSize: Theme.caption; font.features: { "tnum": 1 }
                             color: Theme.text
                             textFormat: Text.StyledText
                             text: ch.modelData.name + "  <font color=\"" + Theme.subtext + "\">" + (ch.modelData.op === "installed" ? "new · " + ch.modelData.to
@@ -248,7 +248,7 @@ PanelColumn {
                 }
                 Text {
                     visible: e.modelData.changes.length > 40
-                    font.family: Theme.font; font.pixelSize: 10; color: Theme.subtext
+                    font.family: Theme.font; font.pixelSize: Theme.tiny; color: Theme.subtext
                     text: "and " + (e.modelData.changes.length - 40) + " more"
                 }
             }
@@ -256,7 +256,7 @@ PanelColumn {
     }
     Text {
         visible: root.showHistory && Updates.history.length === 0
-        x: 4; font.family: Theme.font; font.pixelSize: 12; color: Theme.subtext
+        x: 4; font.family: Theme.font; font.pixelSize: Theme.small; color: Theme.subtext
         text: "No updates in pacman's log yet"
     }
 

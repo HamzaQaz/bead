@@ -204,7 +204,7 @@ Item {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.family: Theme.font
-                font.pixelSize: 20
+                font.pixelSize: Theme.heading
                 font.weight: Font.Medium
                 color: Qt.alpha(Theme.text, 0.85)
                 text: Qt.formatDate(clock.date, "dddd, d MMMM")
@@ -244,7 +244,7 @@ Item {
                     visible: bigFace.status !== Image.Ready
                     font.family: Theme.font
                     font.pixelSize: 46
-                    font.weight: Font.Bold
+                    font.weight: Font.DemiBold
                     color: Theme.tone("action")
                     text: (Demo.on ? "you" : Session.firstName).charAt(0).toUpperCase()
                 }
@@ -271,7 +271,7 @@ Item {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.family: Theme.font
-                font.pixelSize: 18
+                font.pixelSize: Theme.heading
                 font.weight: Font.Medium
                 font.features: { "tnum": 1 }
                 color: Qt.alpha(Theme.text, 0.72)
@@ -286,8 +286,8 @@ Item {
             y: parent.height - 64 - height
             opacity: 0.55 * root.stage(0.4, 1)
             font.family: Theme.font
-            font.pixelSize: 22
-            font.weight: Font.Bold
+            font.pixelSize: Theme.heading
+            font.weight: Font.DemiBold
             font.letterSpacing: -0.4
             textFormat: Text.StyledText
             color: Theme.text
@@ -351,8 +351,8 @@ Item {
                         anchors.centerIn: parent
                         visible: face.status !== Image.Ready
                         font.family: Theme.font
-                        font.pixelSize: 16
-                        font.weight: Font.Bold
+                        font.pixelSize: Theme.title
+                        font.weight: Font.Medium
                         color: Theme.tone("action")
                         text: (Demo.on ? "you" : Session.user).charAt(0).toUpperCase()
                     }
@@ -375,7 +375,7 @@ Item {
                         anchors.centerIn: parent
                         opacity: !Lock.password || Lock.st === "checking" ? 1 : 0
                         Behavior on opacity { NumberAnimation { duration: 120 } }
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.body
                         text: Lock.st === "checking" ? "Checking…"
                             : Lock.preview && !Lock.locked ? "Preview · Enter or Esc to close" : "Enter password"
                     }
@@ -437,7 +437,7 @@ Item {
             Label {
                 anchors.horizontalCenter: parent.horizontalCenter
                 height: 16
-                font.pixelSize: 13
+                font.pixelSize: Theme.body
                 opacity: Lock.st === "error" || root.caps ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 160 } }
                 color: Lock.st === "error" ? Theme.tone("error") : Theme.tone("warning")
@@ -454,8 +454,8 @@ Item {
             Icon { anchors.verticalCenter: parent.verticalCenter; name: Weather.icon(Weather.code, Weather.isDay); size: 26; fill: 1; color: Theme.tone("action") }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
-                Text { font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold; color: Theme.text; text: Math.round(Weather.temp) + "°" }
-                Label { font.pixelSize: 12; text: Weather.describe(Weather.code) }
+                Text { font.family: Theme.font; font.pixelSize: Theme.heading; font.weight: Font.Medium; color: Theme.text; text: Math.round(Weather.temp) + "°" }
+                Label { font.pixelSize: Theme.small; text: Weather.describe(Weather.code) }
             }
         }
         Rectangle {
@@ -477,13 +477,13 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     Text {
                         font.family: Theme.font
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.body
+                        font.weight: Font.Medium
                         color: Theme.text
                         text: Notifs.entries.length + (Notifs.entries.length === 1 ? " notification" : " notifications")
                     }
                     Label { // which apps, never what they said
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.caption
                         text: {
                             const by = {};
                             for (const e of Notifs.entries) { const a = e.appName || "Other"; by[a] = (by[a] ?? 0) + 1; }
@@ -528,8 +528,8 @@ Item {
                     width: parent.width
                     elide: Text.ElideRight
                     font.family: Theme.font
-                    font.pixelSize: 14
-                    font.weight: Font.DemiBold
+                    font.pixelSize: Theme.title
+                    font.weight: Font.Medium
                     color: Theme.text
                     text: root.player?.trackTitle ?? ""
                 }

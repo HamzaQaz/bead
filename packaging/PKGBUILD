@@ -12,7 +12,7 @@ url="https://github.com/HamzaQaz/bead"
 license=(GPL-3.0-only)
 depends=(
 	quickshell hyprland hyprpolkitagent pipewire
-	ttf-material-symbols-variable noto-fonts noto-fonts-emoji
+	ttf-material-symbols-variable inter-font noto-fonts noto-fonts-emoji
 	python jq curl fd libqalculate wtype wl-clipboard cliphist
 	grim slurp ffmpeg wf-recorder hyprpicker libnotify
 	pacman-contrib expac ddcutil bluez-utils xdg-utils imagemagick

@@ -47,8 +47,8 @@ PanelColumn {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.family: Theme.font
-                font.pixelSize: 11
-                font.weight: Font.DemiBold
+                font.pixelSize: Theme.caption
+                font.weight: Font.Medium
                 color: tile.on ? Theme.frame : Theme.subtext
                 text: tile.label
             }
@@ -84,8 +84,8 @@ PanelColumn {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 font.family: Theme.font
-                font.pixelSize: 11
-                font.weight: Font.DemiBold
+                font.pixelSize: Theme.caption
+                font.weight: Font.Medium
                 color: chip.on ? Theme.frame : Theme.subtext
                 text: chip.label
             }
@@ -171,8 +171,8 @@ PanelColumn {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.small
+                            font.weight: Font.Medium
                             color: kb.on ? Theme.frame : Theme.subtext
                             Behavior on color { ColorAnimation { duration: 160 } }
                             text: kb.modelData.t
@@ -271,7 +271,7 @@ PanelColumn {
         width: root.width; height: 16
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+            font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
             color: Theme.subtext
             text: "Focus"
         }
@@ -280,7 +280,7 @@ PanelColumn {
             width: parent.width - 60
             horizontalAlignment: Text.AlignRight
             elide: Text.ElideRight
-            font.family: Theme.font; font.pixelSize: 11
+            font.family: Theme.font; font.pixelSize: Theme.caption
             color: Focus.mode ? Theme.tone("action") : Theme.subtext
             text: !Focus.mode ? "Off"
                 : Focus.reason === "schedule" ? Focus.mode.name + " · on its schedule"

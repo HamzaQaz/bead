@@ -24,7 +24,7 @@ Item {
     component Setting: Row {
         property alias text: lbl.text
         spacing: 10
-        Label { id: lbl; width: 62; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+        Label { id: lbl; width: 62; font.pixelSize: Theme.caption; anchors.verticalCenter: parent.verticalCenter }
     }
 
     // ── the map ──
@@ -33,7 +33,7 @@ Item {
         width: parent.width - side.width - 14
         height: parent.height
 
-        Label { x: 18; y: 14; text: "Displays · drag to arrange"; font.pixelSize: 13; color: Theme.text }
+        Label { x: 18; y: 14; text: "Displays · drag to arrange"; font.pixelSize: Theme.body; color: Theme.text }
 
         Item {
             id: area
@@ -74,13 +74,13 @@ Item {
                         spacing: 2
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                            font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium
                             color: Theme.text
                             text: mon.modelData.name
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            font.family: Theme.font; font.pixelSize: 10
+                            font.family: Theme.font; font.pixelSize: Theme.tiny
                             color: Theme.subtext
                             text: mon.modelData.width + "×" + mon.modelData.height + " · " + Math.round(mon.modelData.refreshRate) + " Hz"
                         }
@@ -123,11 +123,11 @@ Item {
 
             Column {
                 spacing: 2
-                Label { text: root.sel?.name ?? ""; font.pixelSize: 14; color: Theme.text }
+                Label { text: root.sel?.name ?? ""; font.pixelSize: Theme.body; color: Theme.text }
                 Text {
                     width: side.width - 36
                     elide: Text.ElideRight
-                    font.family: Theme.font; font.pixelSize: 11
+                    font.family: Theme.font; font.pixelSize: Theme.caption
                     color: Theme.subtext
                     text: Demo.on ? DemoData.monitor : [root.sel?.make, root.sel?.model].filter(Boolean).join(" ")
                 }
@@ -170,7 +170,7 @@ Item {
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap
-                    font.family: Theme.font; font.pixelSize: 12
+                    font.family: Theme.font; font.pixelSize: Theme.small
                     color: Theme.tone("warning")
                     text: "Keep these settings? Going back in " + Displays.left + " s."
                 }
@@ -184,7 +184,7 @@ Item {
                 visible: !!Displays.error
                 width: parent.width
                 wrapMode: Text.Wrap
-                font.family: Theme.font; font.pixelSize: 11
+                font.family: Theme.font; font.pixelSize: Theme.caption
                 color: Theme.tone("error")
                 text: "Hyprland said: " + Displays.error
             }
@@ -193,7 +193,7 @@ Item {
                 visible: !Displays.trying
                 width: parent.width
                 wrapMode: Text.Wrap
-                font.family: Theme.font; font.pixelSize: 11
+                font.family: Theme.font; font.pixelSize: Theme.caption
                 color: Theme.subtext
                 text: Displays.hooked ? "Kept changes are saved in ~/.config/hypr/bead-monitors.lua and load with Hyprland."
                     : "Kept changes go in ~/.config/hypr/bead-monitors.lua. To load them at start, add one line at the end of your Hyprland config:"

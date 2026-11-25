@@ -13,11 +13,11 @@ Column {
     Item {
         width: parent.width
         height: 14
-        Label { text: gg.label; font.pixelSize: 11 }
+        Label { text: gg.label; font.pixelSize: Theme.caption }
         Label {
             anchors.right: parent.right
             text: gg.value
-            font.pixelSize: 11
+            font.pixelSize: Theme.caption
             font.weight: Font.Medium
             font.features: { "tnum": 1 }
             color: Theme.text

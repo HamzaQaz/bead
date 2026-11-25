@@ -155,7 +155,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideLeft // the newest words stay in view
         font.family: Theme.font
-        font.pixelSize: 14
+        font.pixelSize: Theme.title
         font.weight: Voice.partial ? Font.Medium : Font.Normal
         color: Voice.partial ? Theme.text : Theme.subtext
         textFormat: Text.StyledText
@@ -165,7 +165,7 @@ Item {
     Label {
         anchors.horizontalCenter: parent.horizontalCenter
         y: words.y + words.height + 2
-        font.pixelSize: 11
+        font.pixelSize: Theme.caption
         opacity: root.listening || root.asking ? 0 : 1
         Behavior on opacity { NumberAnimation { duration: 200 } }
         text: root.phase === "transcribing" ? "Catching the last words…" : root.phase === "thinking" ? "Working out what to do…" : ""
@@ -193,7 +193,7 @@ Item {
                     id: chipText
                     anchors.centerIn: parent
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     color: Theme.text
                     text: chip.modelData
                 }

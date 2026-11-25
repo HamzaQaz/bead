@@ -5,7 +5,7 @@ import qs.config
 // ones rise in, and the width eases so whatever's beside it slides instead
 // of jumping. For values that change while you're looking (a clock, a
 // widget's reading, on/off). With motion off, or while hidden, it just swaps.
-//   RollText { text: …; color: …; font.pixelSize: 13 }
+//   RollText { text: …; color: …; font.pixelSize: Theme.body }
 Item {
     id: r
 
@@ -34,7 +34,8 @@ Item {
     // the first text is bound so the size is right from the first frame (a row
     // takes a zero-size item for a new arrival and pops it in); after that the
     // binding is dropped and the roll sets each layer itself
-    Component.onCompleted: { a.text = text; ready = true; }
+    // figures all one width, so a changing number doesn't jiggle
+    Component.onCompleted: { a.font.features = { "tnum": 1 }; a.text = text; ready = true; }
 
     onTextChanged: {
         if (!ready) return;

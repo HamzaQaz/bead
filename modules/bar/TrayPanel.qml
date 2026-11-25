@@ -18,7 +18,7 @@ PanelColumn {
     PanelHeader {
         icon: "apps"
         title: "Tray"
-        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11; text: "pin to keep in the bar" }
+        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.caption; text: "pin to keep in the bar" }
     }
 
     Label {

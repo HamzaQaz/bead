@@ -22,7 +22,7 @@ PanelColumn {
         visible: Messengers.inbox.length === 0
         x: 4; width: root.width - 8
         wrapMode: Text.Wrap
-        font.family: Theme.font; font.pixelSize: 12
+        font.family: Theme.font; font.pixelSize: Theme.small
         color: Theme.subtext
         text: "Nothing unread. " + Messengers.on.map(a => Messengers.names[a]).join(" and ") + " show here when they send a notification (muted chats don't)."
     }
@@ -64,7 +64,7 @@ PanelColumn {
                     anchors.rightMargin: 40
                     verticalAlignment: TextInput.AlignVCenter
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     color: Theme.text
                     selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                     clip: true

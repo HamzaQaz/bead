@@ -67,8 +67,8 @@ Column {
                 id: bubble
                 anchors.centerIn: parent
                 font.family: Theme.font
-                font.pixelSize: 11
-                font.weight: Font.DemiBold
+                font.pixelSize: Theme.caption
+                font.weight: Font.Medium
                 font.features: { "tnum": 1 }
                 color: Theme.frame
                 text: root.fmt(seek.drag * root.len)
@@ -91,7 +91,7 @@ Column {
     Item {
         width: parent.width
         height: 12
-        Label { font.pixelSize: 10; font.features: { "tnum": 1 }; text: root.fmt(root.shown * root.len) }
-        Label { anchors.right: parent.right; font.pixelSize: 10; font.features: { "tnum": 1 }; text: "-" + root.fmt(root.len - root.shown * root.len) }
+        Label { font.pixelSize: Theme.tiny; font.features: { "tnum": 1 }; text: root.fmt(root.shown * root.len) }
+        Label { anchors.right: parent.right; font.pixelSize: Theme.tiny; font.features: { "tnum": 1 }; text: "-" + root.fmt(root.len - root.shown * root.len) }
     }
 }

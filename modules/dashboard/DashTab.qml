@@ -28,7 +28,7 @@ Row {
         spacing: 3
         Label {
             text: root.greeting() + (Demo.on ? "" : ", " + Quickshell.env("USER"))
-            font.pixelSize: 12
+            font.pixelSize: Theme.small
         }
         Item { width: 1; height: 8 }
         RollText {
@@ -42,7 +42,7 @@ Row {
         }
         Text {
             font.family: Theme.font
-            font.pixelSize: 14
+            font.pixelSize: Theme.body
             color: Theme.text
             text: Qt.formatDate(root.clock.date, "dddd, d MMMM")
         }
@@ -90,7 +90,7 @@ Row {
         Text {
             x: 16; y: 12
             font.family: Theme.font
-            font.pixelSize: 13
+            font.pixelSize: Theme.body
             font.weight: Font.Medium
             color: Theme.text
             text: Qt.formatDate(new Date(cal.sel.y, cal.sel.m, 1), "MMMM yyyy")
@@ -104,7 +104,7 @@ Row {
                     required property string modelData
                     width: 30; height: 22
                     horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.tiny
                     text: modelData
                 }
             }
@@ -136,8 +136,8 @@ Row {
                     Text {
                         anchors.centerIn: parent
                         font.family: Theme.font
-                        font.pixelSize: 11
-                        font.weight: day.modelData.today ? Font.DemiBold : Font.Normal
+                        font.pixelSize: Theme.caption
+                        font.weight: day.modelData.today ? Font.Medium : Font.Normal
                         font.features: { "tnum": 1 }
                         color: day.modelData.today ? Theme.frame : day.modelData.inMonth ? Theme.text : Qt.alpha(Theme.text, 0.25)
                         text: day.modelData.n
@@ -173,13 +173,13 @@ Row {
                         width: parent.width
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.body
                         font.weight: Font.Medium
                         color: Theme.text
                         text: media.p?.trackTitle || "Nothing playing"
                     }
                     Label { width: parent.width; elide: Text.ElideRight; text: media.p?.trackArtist ?? "" }
-                    Label { width: parent.width; elide: Text.ElideRight; font.pixelSize: 10; opacity: 0.7; text: media.p?.identity ?? "" }
+                    Label { width: parent.width; elide: Text.ElideRight; font.pixelSize: Theme.tiny; opacity: 0.7; text: media.p?.identity ?? "" }
                 }
             }
             Progress { width: parent.width; player: media.p; visible: (media.p?.length ?? 0) > 0 }
@@ -210,7 +210,7 @@ Row {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 26
                     horizontalAlignment: Text.AlignRight
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.tiny
                     font.features: { "tnum": 1 }
                     text: Math.round(parent.v * 100) + "%"
                 }

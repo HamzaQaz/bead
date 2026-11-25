@@ -40,7 +40,7 @@ Item {
             Icon { visible: chip.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: chip.glyph; size: 16; fill: 1; color: chip.on ? Theme.frame : Theme.text }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
+                font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
                 color: chip.on ? Theme.frame : Theme.text
                 text: chip.label
             }
@@ -63,7 +63,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(implicitWidth, 300)
             elide: Text.ElideRight
-            font.pixelSize: 12
+            font.pixelSize: Theme.small
             text: Wallpaper.busy ? "Switching…" : root.cur ? "Now: " + (root.cur.title ?? root.cur.name) : ""
         }
         Chip { glyph: "shuffle"; label: "Shuffle"; onHit: Wallpaper.random(root.filter) }
@@ -79,7 +79,7 @@ Item {
         y: grid.y + (grid.height - height) / 2
         spacing: 8
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: none.what?.glyph ?? ""; size: 32; color: Theme.subtext }
-        Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; text: none.what?.text ?? "" }
+        Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium; color: Theme.text; text: none.what?.text ?? "" }
         Label { anchors.horizontalCenter: parent.horizontalCenter; text: none.what?.hint ?? "" }
         Item { width: 1; height: 2; visible: openDir.visible }
         Action {
@@ -183,7 +183,7 @@ Item {
                         x: 8; width: parent.width - 16
                         anchors.bottom: parent.bottom; anchors.bottomMargin: 5
                         elide: Text.ElideRight
-                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                         color: "white"
                         text: cell.live ? cell.modelData.title : cell.modelData.name
                     }

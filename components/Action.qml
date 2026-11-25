@@ -24,7 +24,7 @@ Rectangle {
         Text {
             visible: act.text !== ""   // icon-only: just the glyph, square-ish
             anchors.verticalCenter: parent.verticalCenter
-            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+            font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
             color: act.accent ? Theme.frame : Theme.text
             text: act.text
         }

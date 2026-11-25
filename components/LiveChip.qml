@@ -48,8 +48,8 @@ Rectangle {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             font.family: Theme.font
-            font.pixelSize: 13
-            font.weight: Font.DemiBold
+            font.pixelSize: Theme.body
+            font.weight: Font.Medium
             font.features: { "tnum": 1 }
             color: Theme.text
             text: chip.text

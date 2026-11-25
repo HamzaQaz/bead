@@ -101,7 +101,7 @@ Item {
                 wrapMode: Text.Wrap
                 elide: Text.ElideRight
                 maximumLineCount: 4
-                font.family: Theme.font; font.pixelSize: 9
+                font.family: Theme.font; font.pixelSize: Theme.tiny
                 lineHeight: 0.95
                 color: Theme.text
             }
@@ -121,7 +121,7 @@ Item {
                     visible: t.modelData.kind !== "folder" && text !== ""
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: root.extOf(t.modelData.name)
-                    font.family: Theme.font; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 0.6
+                    font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium
                     color: Theme.text
                 }
             }
@@ -223,7 +223,7 @@ Item {
         maxWidth: root.width - root.pad * 2
         rise: 5
         font.family: Theme.font
-        font.pixelSize: 11
+        font.pixelSize: Theme.caption
         color: root.dropping ? Theme.tone("action") : root.hoveredName ? Theme.text : Theme.subtext
         text: root.caption
     }
@@ -242,8 +242,8 @@ Item {
             x: root.pad + 72 + 14; anchors.verticalCenter: parent.verticalCenter
             width: parent.width - x - root.pad
             spacing: 4
-            Label { width: parent.width; elide: Text.ElideMiddle; text: Shelf.moment?.name ?? ""; font.pixelSize: 13; color: Theme.text }
-            Label { text: "Drag it anywhere, or keep it"; font.pixelSize: 11; color: Theme.subtext }
+            Label { width: parent.width; elide: Text.ElideMiddle; text: Shelf.moment?.name ?? ""; font.pixelSize: Theme.body; color: Theme.text }
+            Label { text: "Drag it anywhere, or keep it"; font.pixelSize: Theme.caption; color: Theme.subtext }
             Row {
                 spacing: 8
                 topPadding: 4

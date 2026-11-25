@@ -18,8 +18,8 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             font.family: Theme.font
-            font.pixelSize: 14
-            font.weight: Font.Bold
+            font.pixelSize: Theme.title
+            font.weight: Font.Medium
             color: Theme.text
             text: head.title
         }

@@ -56,8 +56,8 @@ Row {
             Text {
                 anchors.centerIn: parent
                 font.family: Theme.font
-                font.pixelSize: 17
-                font.weight: Font.DemiBold
+                font.pixelSize: Theme.heading
+                font.weight: Font.Medium
                 font.features: { "tnum": 1 }
                 color: Theme.text
                 text: Math.round(dial.shown * 100) + "%"
@@ -68,13 +68,13 @@ Row {
             y: arc.height - 4
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
                 color: Theme.text
                 text: dial.label
             }
             Label {
                 anchors.horizontalCenter: parent.horizontalCenter
-                font.pixelSize: 10
+                font.pixelSize: Theme.tiny
                 font.features: { "tnum": 1 }
                 text: dial.sub
             }
@@ -117,9 +117,9 @@ Row {
                         border.width: key.modelData.hollow ? 1.5 : 0
                         border.color: Qt.alpha(Theme.tone("info"), 0.8)
                     }
-                    Label { text: key.modelData.name; font.pixelSize: 11 }
+                    Label { text: key.modelData.name; font.pixelSize: Theme.caption }
                     Text {
-                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                         font.features: { "tnum": 1 }
                         color: Theme.text
                         text: Math.round(key.modelData.v * 100) + "%"
@@ -130,7 +130,7 @@ Row {
         Label {
             anchors.right: parent.right; anchors.rightMargin: 16
             y: 14
-            font.pixelSize: 10
+            font.pixelSize: Theme.tiny
             text: "last 40 s"
         }
 
@@ -177,7 +177,7 @@ Row {
             Label {
                 anchors.centerIn: parent
                 visible: SysStats.cpuHistory.length < 3
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
                 text: "Collecting…"
             }
             Shape {
@@ -254,7 +254,7 @@ Row {
 
         Text {
             x: 16; y: 14
-            font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium
+            font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium
             color: Theme.text
             text: "Busiest now"
         }
@@ -264,7 +264,7 @@ Row {
             spacing: 6
             Label {
                 visible: !Demo.on && SysStats.procs.length === 0
-                font.pixelSize: 11
+                font.pixelSize: Theme.caption
                 text: "Looking…"
             }
             Repeater {
@@ -294,14 +294,14 @@ Row {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width - 120
                         elide: Text.ElideRight
-                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium
+                        font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                         color: Theme.text
                         text: pr.modelData.name
                     }
                     Label {
                         anchors.right: cpuT.left; anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.tiny
                         font.features: { "tnum": 1 }
                         text: pr.modelData.memMb >= 1024 ? (pr.modelData.memMb / 1024).toFixed(1) + " GB" : Math.round(pr.modelData.memMb) + " MB"
                     }
@@ -311,7 +311,7 @@ Row {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 36
                         horizontalAlignment: Text.AlignRight
-                        font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                        font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                         font.features: { "tnum": 1 }
                         color: Theme.text
                         text: Math.round(pr.modelData.cpu) + "%"
@@ -342,7 +342,7 @@ Row {
                         Icon { name: net.modelData.icon; size: 14; color: Theme.tone("action"); anchors.verticalCenter: parent.verticalCenter }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                            font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
                             font.features: { "tnum": 1 }
                             color: Theme.text
                             text: SysStats.fmtRate(net.modelData.v)

@@ -1518,7 +1518,7 @@ Scope {
                             width: Math.min(implicitWidth, 210)
                             elide: Text.ElideLeft
                             font.family: Theme.font
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.body
                             color: voiceChip.free ? Theme.text : Theme.subtext
                             text: Dictation.partial.split(" ").slice(-7).join(" ")
                         }
@@ -1607,8 +1607,8 @@ Scope {
                             visible: Discord.members.length > 3
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 12
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.small
+                            font.weight: Font.Medium
                             font.features: { "tnum": 1 }
                             color: Discord.members.slice(3).some(m => m.speaking) ? Theme.tone("success") : Theme.subtext
                             Behavior on color { ColorAnimation { duration: 180 } }
@@ -1650,8 +1650,8 @@ Scope {
                                         id: dmNum
                                         anchors.centerIn: parent
                                         font.family: Theme.font
-                                        font.pixelSize: 11
-                                        font.weight: Font.Bold
+                                        font.pixelSize: Theme.caption
+                                        font.weight: Font.Medium
                                         font.features: { "tnum": 1 }
                                         color: "white"
                                         text: Discord.dmCount > 99 ? "99+" : Discord.dmCount
@@ -1690,8 +1690,8 @@ Scope {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.body
+                            font.weight: Font.Medium
                             font.features: { "tnum": 1 }
                             color: Theme.tone("error")
                             text: Recorder.label
@@ -1741,8 +1741,8 @@ Scope {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.body
+                            font.weight: Font.Medium
                             font.features: { "tnum": 1 }
                             color: Theme.text
                             text: Countdown.label
@@ -1788,8 +1788,8 @@ Scope {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 font.family: Theme.font
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
+                                font.pixelSize: Theme.body
+                                font.weight: Font.Medium
                                 font.features: { "tnum": 1 }
                                 color: Theme.text
                                 textFormat: Text.StyledText
@@ -1821,7 +1821,7 @@ Scope {
                         width: Math.min(implicitWidth, 190)
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.body
                         font.weight: Font.Medium
                         color: Theme.text
                         text: root.player?.trackTitle ?? ""
@@ -1860,8 +1860,8 @@ Scope {
                         opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         font.family: Theme.font
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.title
+                        font.weight: Font.Medium
                         font.features: { "tnum": 1 }
                         color: Theme.text
                         text: Qt.formatTime(clock.date, Look.v.clock24 ? "hh:mm" : "h:mm")
@@ -1872,7 +1872,7 @@ Scope {
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 4
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: Weather.icon(Weather.code, Weather.isDay); size: 16; fill: 1; color: Theme.subtext }
-                        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; text: Math.round(Weather.temp) + "°" }
+                        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.small; text: Math.round(Weather.temp) + "°" }
                     }
 
                     // your widgets (Settings → Widgets): the pinned ones, an icon and a value
@@ -1896,7 +1896,7 @@ Scope {
                                 anchors.verticalCenter: parent.verticalCenter
                                 maxWidth: 110
                                 font.family: Theme.font
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.small
                                 font.weight: Font.Medium
                                 font.features: { "tnum": 1 }
                                 color: Theme.text
@@ -1942,14 +1942,14 @@ Scope {
                                 }
                             }
                         }
-                        Label { visible: Shelf.count > 3; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11; color: Theme.subtext; text: "+" + (Shelf.count - 3) }
+                        Label { visible: Shelf.count > 3; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.caption; color: Theme.subtext; text: "+" + (Shelf.count - 3) }
                         TapHandler { onTapped: win.shelfCard = true }
                     }
                     Text {
                         visible: Widgets.chips.more > 0
                         anchors.verticalCenter: parent.verticalCenter
                         font.family: Theme.font
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.small
                         font.weight: Font.Medium
                         color: Theme.subtext
                         text: "+" + Widgets.chips.more
@@ -1973,8 +1973,8 @@ Scope {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.body
+                            font.weight: Font.Medium
                             color: Theme.text
                             text: (root.workspace?.name ?? "").replace(/^special:/, "") || "special"
                         }
@@ -1997,8 +1997,8 @@ Scope {
                                 anchors.centerIn: parent
                                 visible: dot.current
                                 font.family: Theme.font
-                                font.pixelSize: 11
-                                font.weight: Font.Bold
+                                font.pixelSize: Theme.caption
+                                font.weight: Font.Medium
                                 color: Theme.frame
                                 text: dot.modelData
                             }
@@ -2065,8 +2065,8 @@ Scope {
                         width: 32
                         horizontalAlignment: Text.AlignRight
                         font.family: Theme.font
-                        font.pixelSize: 12
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.small
+                        font.weight: Font.Medium
                         font.features: { "tnum": 1 }
                         color: parent.tone
                         text: root.levelKind === "mic" ? (Audio.micMuted ? "off" : "on")
@@ -2108,14 +2108,14 @@ Scope {
                             Label {
                                 width: parent.width
                                 elide: Text.ElideRight
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 text: parent.parent.parent.e?.appName ?? ""
                             }
                             Text {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 font.family: Theme.font
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.body
                                 font.weight: Font.Medium
                                 color: Theme.text
                                 text: parent.parent.parent.e?.summary ?? ""
@@ -2224,14 +2224,14 @@ Scope {
                             width: parent.width
                             elide: Text.ElideRight
                             font.family: Theme.font
-                            font.pixelSize: 16
-                            font.weight: Font.Bold
+                            font.pixelSize: Theme.title
+                            font.weight: Font.Medium
                             color: Theme.text
                             text: callCard.call?.name ?? ""
                         }
                         Text {
                             font.family: Theme.font
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.small
                             color: Theme.subtext
                             text: "Discord call"
                         }
@@ -2295,8 +2295,8 @@ Scope {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         font.family: Theme.font
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
+                        font.pixelSize: Theme.body
+                        font.weight: Font.Medium
                         color: Theme.text
                         text: eventRow.isToast ? root.toastText : eventRow.done ? "Timer done · " + Countdown.fmtTotal(root.doneTotal) : "Recording"
                     }

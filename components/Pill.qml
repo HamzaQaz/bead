@@ -337,7 +337,7 @@ Item {
                 Text {
                     visible: parent.hasGlyph
                     anchors.centerIn: parent
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     color: root.tone(hi.kind)
                     text: root.iconGlyph
                 }
@@ -465,7 +465,7 @@ Item {
                 maximumLineCount: 8
                 elide: Text.ElideRight
                 font.family: Theme.font
-                font.pixelSize: 14
+                font.pixelSize: Theme.body
                 lineHeight: 20
                 lineHeightMode: Text.FixedHeight
                 color: Theme.subtext
@@ -498,7 +498,7 @@ Item {
                             width: Math.min(implicitWidth, btn.width - 16)
                             elide: Text.ElideRight
                             font.family: Theme.font
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.small
                             font.weight: Font.Medium
                             color: btn.tone
                             text: btn.modelData.label

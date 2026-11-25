@@ -86,7 +86,7 @@ Item {
                             Label {
                                 id: chipText
                                 anchors.centerIn: parent
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 font.weight: Font.Medium
                                 color: chip.current ? Theme.text : Theme.subtext
                                 text: chip.modelData.identity
@@ -105,7 +105,7 @@ Item {
                         width: parent.width
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 22
+                        font.pixelSize: Theme.heading
                         font.weight: Font.DemiBold
                         color: Theme.text
                         text: root.title
@@ -114,7 +114,7 @@ Item {
                         width: parent.width
                         elide: Text.ElideRight
                         font.family: Theme.font
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.body
                         color: Theme.text
                         opacity: 0.85
                         text: root.artist
@@ -156,7 +156,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 30
                         horizontalAlignment: Text.AlignRight
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.caption
                         font.features: { "tnum": 1 }
                         text: Math.round((root.player?.volume ?? 0) * 100) + "%"
                     }

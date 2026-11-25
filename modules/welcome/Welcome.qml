@@ -695,7 +695,7 @@ Scope {
                 component Heading: Text {
                     width: parent?.width ?? 0
                     font.family: Theme.font
-                    font.pixelSize: 24
+                    font.pixelSize: Theme.heading
                     font.weight: Font.DemiBold
                     color: Theme.text
                     wrapMode: Text.WordWrap
@@ -703,7 +703,7 @@ Scope {
                 component Body: Text {
                     width: parent?.width ?? 0
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     lineHeight: 1.25
                     color: Theme.subtext
                     wrapMode: Text.WordWrap
@@ -785,7 +785,7 @@ Scope {
                                     anchors.centerIn: parent
                                     spacing: 4
                                     Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "add_photo_alternate"; size: 22; color: Theme.subtext }
-                                    Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext; text: "Add your own" }
+                                    Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.subtext; text: "Add your own" }
                                 }
                                 Rectangle { // a dashed-looking edge for the add tile
                                     visible: thumb.adder
@@ -811,7 +811,7 @@ Scope {
                     Row {
                         anchors.bottom: parent.bottom
                         spacing: 14
-                        Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; color: Theme.subtext; text: "Colour" }
+                        Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.small; color: Theme.subtext; text: "Colour" }
                         Choice {
                             anchors.verticalCenter: parent.verticalCenter
                             options: [{ v: "vibrant", t: "Vibrant" }, { v: "muted", t: "Muted" }, { v: "mono", t: "Mono" }]
@@ -883,8 +883,8 @@ Scope {
                                     Column {
                                         anchors.verticalCenter: parent.verticalCenter
                                         spacing: 2
-                                        Text { font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold; color: Theme.text; text: look.modelData.name }
-                                        Text { font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext; text: look.modelData.hint }
+                                        Text { font.family: Theme.font; font.pixelSize: Theme.title; font.weight: Font.Medium; color: Theme.text; text: look.modelData.name }
+                                        Text { font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.subtext; text: look.modelData.hint }
                                     }
                                 }
                                 MouseArea {
@@ -940,7 +940,7 @@ Scope {
                                 anchors.centerIn: parent
                                 spacing: 10
                                 Icon { anchors.verticalCenter: parent.verticalCenter; name: "music_note"; size: 18; fill: 1; color: Theme.tone("action") }
-                                Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text; text: "The island, at this size" }
+                                Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium; color: Theme.text; text: "The island, at this size" }
                             }
                         }
                     }
@@ -990,7 +990,7 @@ Scope {
                                 Text {
                                     leftPadding: 8
                                     anchors.verticalCenter: parent.verticalCenter
-                                    font.family: Theme.font; font.pixelSize: 13
+                                    font.family: Theme.font; font.pixelSize: Theme.body
                                     color: Theme.text
                                     text: keyRow.modelData.t
                                 }
@@ -1040,14 +1040,14 @@ Scope {
                                 model: done.missing.slice(0, 4)
                                 Text {
                                     required property var modelData
-                                    font.family: Theme.font; font.pixelSize: 12
+                                    font.family: Theme.font; font.pixelSize: Theme.small
                                     color: Theme.subtext
                                     text: "· " + modelData.what + "  →  " + modelData.fix
                                 }
                             }
                             Text {
                                 visible: done.missing.length > 4
-                                font.family: Theme.font; font.pixelSize: 12
+                                font.family: Theme.font; font.pixelSize: Theme.small
                                 color: Theme.subtext
                                 text: "and " + (done.missing.length - 4) + " more (bead doctor lists them all)"
                             }

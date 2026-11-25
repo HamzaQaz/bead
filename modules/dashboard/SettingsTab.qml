@@ -69,7 +69,7 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
-                        font.family: Theme.font; font.pixelSize: 12; font.weight: tile.main ? Font.DemiBold : Font.Medium
+                        font.family: Theme.font; font.pixelSize: Theme.small; font.weight: tile.main ? Font.Medium : Font.Medium
                         color: Theme.text
                         text: tile.modelData.t
                     }

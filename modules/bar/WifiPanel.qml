@@ -133,7 +133,7 @@ PanelColumn {
                     echoMode: TextInput.Password
                     passwordCharacter: "•"
                     font.family: Theme.font
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.body
                     color: Theme.text
                     selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                     clip: true

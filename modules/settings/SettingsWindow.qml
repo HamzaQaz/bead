@@ -131,8 +131,8 @@ FloatingWindow {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - 36 - slot.width - 12
             spacing: 2
-            Text { width: parent.width; wrapMode: Text.WordWrap; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; text: st.label }
-            Label { visible: st.hint !== ""; width: parent.width; wrapMode: Text.WordWrap; font.pixelSize: 11; text: st.hint }
+            Text { width: parent.width; wrapMode: Text.WordWrap; font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium; color: Theme.text; text: st.label }
+            Label { visible: st.hint !== ""; width: parent.width; wrapMode: Text.WordWrap; font.pixelSize: Theme.caption; text: st.hint }
         }
         Item {
             id: slot
@@ -156,8 +156,7 @@ FloatingWindow {
         Text {
             visible: grp.title !== ""
             leftPadding: 4
-            font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold
-            font.letterSpacing: 0.3
+            font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
             color: Theme.subtext
             text: grp.title
         }
@@ -192,8 +191,8 @@ FloatingWindow {
                 x: 16; anchors.verticalCenter: parent.verticalCenter
                 spacing: 12
                 Icon { anchors.verticalCenter: parent.verticalCenter; name: pg.info.g; size: 19; color: Theme.tone("action") }
-                Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold; color: Theme.text; text: pg.info.t }
-                Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11; text: pg.info.d }
+                Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium; color: Theme.text; text: pg.info.t }
+                Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.caption; text: pg.info.d }
             }
             Icon { anchors.right: parent.right; anchors.rightMargin: 14; anchors.verticalCenter: parent.verticalCenter; name: "chevron_right"; size: 18; color: Theme.subtext }
             MouseArea { id: hit; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: win.go(pg.pid) }
@@ -237,7 +236,7 @@ FloatingWindow {
             width: 62
             anchors.verticalCenter: parent.verticalCenter
             horizontalAlignment: Text.AlignHCenter
-            font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+            font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium
             font.features: { "tnum": 1 }
             color: mins.value > 0 ? Theme.text : Theme.subtext
             text: mins.value <= 0 ? "Never" : mins.value < 60 ? mins.value + " min" : (mins.value / 60) + " h"
@@ -254,7 +253,7 @@ FloatingWindow {
         signal moved(real v)
         spacing: 12
         Slider { width: 220; anchors.verticalCenter: parent.verticalCenter; value: lv.value; dim: lv.dim; onMoved: v => lv.moved(v); onNudged: d => lv.moved(Math.max(0, Math.min(1, lv.value + d * 0.05))) }
-        Text { width: 52; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }; color: Theme.subtext; text: lv.shown }
+        Text { width: 52; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; font.family: Theme.font; font.pixelSize: Theme.small; font.features: { "tnum": 1 }; color: Theme.subtext; text: lv.shown }
     }
     // a choice among a list (devices): the one in use has a check
     component Pick: Setting {
@@ -288,12 +287,12 @@ FloatingWindow {
             id: fin
             x: 12; width: parent.width - 24
             anchors.verticalCenter: parent.verticalCenter
-            font.family: Theme.font; font.pixelSize: 12
+            font.family: Theme.font; font.pixelSize: Theme.small
             color: Theme.text
             clip: true
             selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
             onAccepted: fd.accepted()
-            Label { visible: !fin.text; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; text: fd.placeholder }
+            Label { visible: !fin.text; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.small; text: fd.placeholder }
         }
     }
     // a dropdown: the choice now, and a menu (the window's, below) to change it.
@@ -323,7 +322,7 @@ FloatingWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(implicitWidth, 170)
                 elide: Text.ElideRight
-                font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium
                 color: dd.picked.length ? Theme.text : Theme.subtext
                 text: dd.label
             }
@@ -349,7 +348,7 @@ FloatingWindow {
         Row {
             id: cr; anchors.centerIn: parent; spacing: 5
             Icon { visible: cp.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: cp.glyph; size: 15; fill: cp.on ? 1 : 0; color: cp.on ? Theme.frame : Theme.text }
-            Text { visible: cp.text !== ""; anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; color: cp.on ? Theme.frame : Theme.text; text: cp.text }
+            Text { visible: cp.text !== ""; anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium; color: cp.on ? Theme.frame : Theme.text; text: cp.text }
         }
         MouseArea { id: cma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: cp.hit() }
     }
@@ -365,7 +364,7 @@ FloatingWindow {
         Row {
             id: wr; anchors.centerIn: parent; spacing: 6
             Icon { visible: wd.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: wd.glyph; size: 15; color: wd.accent ? Theme.tone("action") : Theme.text }
-            Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; color: wd.accent ? Theme.tone("action") : Theme.text; text: wd.text }
+            Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium; color: wd.accent ? Theme.tone("action") : Theme.text; text: wd.text }
         }
         MouseArea { id: wma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: wd.hit() }
     }
@@ -376,7 +375,7 @@ FloatingWindow {
         return x + (o.unit ? " " + o.unit : "");
     }
     // the fonts worth offering: these, when installed
-    readonly property var fontPicks: ["Noto Sans", "Inter", "Rubik", "Outfit", "Manrope", "Cantarell", "Fira Sans", "Ubuntu", "JetBrains Mono", "DejaVu Sans"].filter(f => Qt.fontFamilies().includes(f)).slice(0, 4)
+    readonly property var fontPicks: ["Inter", "Noto Sans", "Rubik", "Outfit", "Manrope", "Cantarell", "Fira Sans", "Ubuntu", "JetBrains Mono", "DejaVu Sans"].filter(f => Qt.fontFamilies().includes(f)).slice(0, 4)
     // one option: its control by type, and a reset while it differs from the default
     component Opt: Setting {
         id: op
@@ -407,7 +406,7 @@ FloatingWindow {
                     onMoved: f => Look.set(op.o.k, op.o.min + f * (op.o.max - op.o.min))
                     onNudged: d => Look.set(op.o.k, op.val + d * op.o.step)
                 }
-                Text { width: 58; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }; color: Theme.subtext; text: op.o.type === "num" ? win.shownValue(op.o, op.val) : "" }
+                Text { width: 58; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; font.family: Theme.font; font.pixelSize: Theme.small; font.features: { "tnum": 1 }; color: Theme.subtext; text: op.o.type === "num" ? win.shownValue(op.o, op.val) : "" }
             }
             // a colour: the wallpaper's, a swatch, or your own hex
             Row {
@@ -417,7 +416,7 @@ FloatingWindow {
                 Rectangle {
                     width: 46; height: 22; radius: 11
                     color: op.val === "" ? Theme.tone("action") : Qt.alpha(Theme.text, 0.06)
-                    Text { anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; color: op.val === "" ? Theme.frame : Theme.text; text: "Auto" }
+                    Text { anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: op.val === "" ? Theme.frame : Theme.text; text: "Auto" }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Look.set(op.o.k, "") }
                 }
                 Repeater {
@@ -514,14 +513,14 @@ FloatingWindow {
                 id: search
                 x: 40; width: parent.width - 40 - 34
                 anchors.verticalCenter: parent.verticalCenter
-                font.family: Theme.font; font.pixelSize: 13
+                font.family: Theme.font; font.pixelSize: Theme.body
                 color: Theme.text
                 selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                 clip: true
                 text: SettingsApp.query
                 onTextEdited: { SettingsApp.query = text; scroller.contentY = 0; }
                 Keys.onEscapePressed: e => { if (win.searching) SettingsApp.query = ""; else SettingsApp.open = false; }
-                Label { visible: !search.text; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 13; text: "Search settings" }
+                Label { visible: !search.text; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.body; text: "Search settings" }
             }
             Btn {
                 visible: win.searching
@@ -558,8 +557,7 @@ FloatingWindow {
                             topPadding: entry.index === 0 ? 4 : 14
                             bottomPadding: 6
                             leftPadding: 12
-                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
-                            font.letterSpacing: 0.6
+                            font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                             color: Qt.alpha(Theme.text, 0.45)
                             text: entry.modelData.s.toUpperCase()
                         }
@@ -577,8 +575,8 @@ FloatingWindow {
                             }
                             Text {
                                 x: 46; anchors.verticalCenter: parent.verticalCenter
-                                font.family: Theme.font; font.pixelSize: 13
-                                font.weight: entry.on ? Font.DemiBold : Font.Medium
+                                font.family: Theme.font; font.pixelSize: Theme.body
+                                font.weight: entry.on ? Font.Medium : Font.Medium
                                 color: Theme.text
                                 text: entry.modelData.t
                             }
@@ -627,8 +625,8 @@ FloatingWindow {
                 Column {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 2
-                    Text { font.family: Theme.font; font.pixelSize: 24; font.weight: Font.Bold; color: Theme.text; text: win.searching ? "Search" : win.cur.t }
-                    Label { font.pixelSize: 12; text: win.searching ? "Settings matching “" + SettingsApp.query.trim() + "”" : win.cur.d }
+                    Text { font.family: Theme.font; font.pixelSize: Theme.heading; font.weight: Font.DemiBold; color: Theme.text; text: win.searching ? "Search" : win.cur.t }
+                    Label { font.pixelSize: Theme.small; text: win.searching ? "Settings matching “" + SettingsApp.query.trim() + "”" : win.cur.d }
                 }
             }
 
@@ -919,7 +917,7 @@ FloatingWindow {
                                     spacing: 5
                                     readonly property var p: Widgets.preview ?? ({ value: "", tone: "" })
                                     Icon { anchors.verticalCenter: parent.verticalCenter; name: pv.p.icon || nw.tpl.icon; size: 16; fill: 1; color: pv.p.tone ? Theme.tone(pv.p.tone) : Theme.subtext }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; color: Theme.text; text: pv.p.value }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium; color: Theme.text; text: pv.p.value }
                                 }
                             }
                             Word { anchors.verticalCenter: parent.verticalCenter; text: "Try it"; glyph: "play_arrow"; onHit: Widgets.test(nw.tid, nw.draft) }
@@ -1008,7 +1006,7 @@ FloatingWindow {
                 Text {
                     visible: win.lookNote !== "" && !win.searching
                     leftPadding: 4
-                    font.family: Theme.font; font.pixelSize: 12; color: Theme.tone("action")
+                    font.family: Theme.font; font.pixelSize: Theme.small; color: Theme.tone("action")
                     text: win.lookNote
                 }
             }
@@ -1044,7 +1042,7 @@ FloatingWindow {
                         visible: !win.searching
                         spacing: 10
                         Word { text: "Reset this page"; glyph: "restart_alt"; onHit: Look.resetPage(cp.modelData.id) }
-                        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12
+                        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: Theme.small
                             text: { const n = L.changed(Look.v, cp.modelData.id).length; return n ? n + (n === 1 ? " change" : " changes") + " from bead's defaults" : "All at bead's defaults"; } }
                     }
                 }
@@ -1210,7 +1208,7 @@ FloatingWindow {
                                     anchors.centerIn: parent
                                     spacing: 6
                                     Icon { anchors.verticalCenter: parent.verticalCenter; name: "music_note"; size: 14; fill: 1; color: Theme.tone("action") }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; color: Theme.text; text: "The island" }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium; color: Theme.text; text: "The island" }
                                 }
                             }
                             Action { accent: true; text: "Apply · restarts bead"; glyph: "restart_alt"; onHit: win.applySize() }
@@ -1430,7 +1428,7 @@ FloatingWindow {
                     visible: !win.searching
                     width: parent.width
                     wrapMode: Text.WordWrap
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.caption
                     text: "These are bead's own keys, as the installer set them up. Ones you've changed or added in Hyprland's config aren't listed."
                 }
             }
@@ -1476,7 +1474,7 @@ FloatingWindow {
                                     required property string modelData
                                     width: pk.implicitWidth + 18; height: 26; radius: 13
                                     color: Qt.alpha(Theme.text, 0.06)
-                                    Text { id: pk; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 11; color: Theme.text; text: parent.modelData.split(" ")[0] }
+                                    Text { id: pk; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.text; text: parent.modelData.split(" ")[0] }
                                 }
                             }
                         }
@@ -1535,7 +1533,7 @@ FloatingWindow {
                 topPadding: 40
                 spacing: 6
                 Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "search_off"; size: 36; color: Theme.subtext }
-                Label { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: 13; text: "No setting matches that" }
+                Label { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: Theme.body; text: "No setting matches that" }
             }
         }
     }
@@ -1594,8 +1592,8 @@ FloatingWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             width: mi.width - 54 - (mi.modelData.g ? 24 : 0)
                             elide: Text.ElideRight
-                            font.family: mi.modelData.font ?? Theme.font; font.pixelSize: 12
-                            font.weight: mi.ticked ? Font.DemiBold : Font.Normal
+                            font.family: mi.modelData.font ?? Theme.font; font.pixelSize: Theme.small
+                            font.weight: mi.ticked ? Font.Medium : Font.Normal
                             color: Theme.text
                             text: mi.modelData.t
                         }

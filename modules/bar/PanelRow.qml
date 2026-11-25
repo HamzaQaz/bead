@@ -93,8 +93,8 @@ Rectangle {
             width: parent.width
             elide: Text.ElideRight
             font.family: Theme.font
-            font.pixelSize: 13
-            font.weight: Font.DemiBold
+            font.pixelSize: Theme.body
+            font.weight: Font.Medium
             color: row.dim ? Theme.subtext : Theme.text
             text: row.title
         }
@@ -102,7 +102,7 @@ Rectangle {
             width: parent.width
             visible: !!row.sub
             elide: Text.ElideRight
-            font.pixelSize: 11
+            font.pixelSize: Theme.caption
             text: row.sub
         }
     }

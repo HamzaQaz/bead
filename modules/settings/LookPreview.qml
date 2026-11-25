@@ -131,12 +131,12 @@ Rectangle {
             anchors.bottom: parent.bottom; anchors.bottomMargin: 10
             width: tk.implicitWidth + 20; height: 24; radius: 12
             color: Qt.alpha(Theme.frame, 0.85)
-            Text { id: tk; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext; text: "Tucked away: something's fullscreen on that screen" }
+            Text { id: tk; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.subtext; text: "Tucked away: something's fullscreen on that screen" }
         }
         Text {
             visible: root.page === "bar"
             anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
-            font.family: Theme.font; font.pixelSize: 10; color: Theme.subtext
+            font.family: Theme.font; font.pixelSize: Theme.tiny; color: Theme.subtext
             text: "top  →  bottom"
         }
     }
@@ -157,11 +157,11 @@ Rectangle {
                 SequentialAnimation on opacity { running: root.live; loops: Animation.Infinite; NumberAnimation { to: 0.3; duration: 900 } NumberAnimation { to: 1; duration: 900 } }
             }
             Text {
-                font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; color: Theme.subtext
+                font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium; color: Theme.subtext
                 text: "LIVE · " + (root.page === "popups" ? "POP-UPS" : root.page === "bar" ? "THE BAR" : "ISLAND: " + ({ rest: "RESTING", activity: "POP-UP", open: "OPEN", media: "MUSIC", tucked: "TUCKED", launcher: "LAUNCHER", overview: "OVERVIEW", update: "UPDATES", passkey: "PASSWORD", voice: "VOICE" }[IslandShape.state] ?? IslandShape.state.toUpperCase()))
             }
         }
-        Text { visible: root.page !== "bar"; topPadding: 2; font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext; text: "Show it:" }
+        Text { visible: root.page !== "bar"; topPadding: 2; font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.subtext; text: "Show it:" }
         Flow {
             width: parent.width
             spacing: 6
@@ -176,7 +176,7 @@ Rectangle {
                     required property var modelData
                     width: tl.implicitWidth + 20; height: 26; radius: 13
                     color: Qt.alpha(Theme.tone("action"), tma.containsMouse ? 0.28 : 0.16)
-                    Text { id: tl; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; color: Theme.tone("action"); text: tb.modelData[1] }
+                    Text { id: tl; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium; color: Theme.tone("action"); text: tb.modelData[1] }
                     MouseArea { id: tma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Look.tryIt(tb.modelData[0]) }
                 }
             }
@@ -184,7 +184,7 @@ Rectangle {
         Text {
             visible: root.page === "bar"
             width: parent.width; wrapMode: Text.Wrap
-            font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext
+            font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.subtext
             text: "Your bar as it is now, turned on its side. Hidden buttons leave it as you toggle them."
         }
     }

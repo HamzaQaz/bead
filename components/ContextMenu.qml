@@ -104,7 +104,7 @@ PopupWindow {
                 Row {
                     x: 6; anchors.verticalCenter: parent.verticalCenter; spacing: 6
                     Icon { anchors.verticalCenter: parent.verticalCenter; name: "chevron_left"; size: 16; color: Theme.subtext }
-                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.subtext; text: pop.stack.length ? pop.stack[pop.stack.length - 1].title : "" }
+                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium; color: Theme.subtext; text: pop.stack.length ? pop.stack[pop.stack.length - 1].title : "" }
                 }
                 MouseArea { id: backMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pop.back() }
             }
@@ -159,8 +159,8 @@ PopupWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: list.width - 54 - (keysT.visible ? keysT.implicitWidth + 8 : 0) - (row.modelData.sub ? 18 : 0)
                                 elide: Text.ElideRight
-                                font.family: Theme.font; font.pixelSize: 12
-                                font.weight: row.modelData.checked ? Font.DemiBold : Font.Normal
+                                font.family: Theme.font; font.pixelSize: Theme.small
+                                font.weight: row.modelData.checked ? Font.Medium : Font.Normal
                                 color: row.modelData.danger ? Theme.tone("error") : Theme.text
                                 text: row.modelData.t ?? ""
                             }
@@ -169,7 +169,7 @@ PopupWindow {
                             id: keysT
                             visible: !!row.modelData.keys && !row.modelData.sub
                             anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter
-                            font.family: Theme.font; font.pixelSize: 11; color: Theme.subtext
+                            font.family: Theme.font; font.pixelSize: Theme.caption; color: Theme.subtext
                             text: row.modelData.keys ?? ""
                         }
                         Icon {
@@ -199,7 +199,7 @@ PopupWindow {
                 visible: pop.rows.length === 0
                 width: list.width; height: 32
                 verticalAlignment: Text.AlignVCenter; leftPadding: 10
-                font.family: Theme.font; font.pixelSize: 12; color: Theme.subtext
+                font.family: Theme.font; font.pixelSize: Theme.small; color: Theme.subtext
                 text: pop.level.handle ? "Nothing in this menu" : "Nothing to do here"
             }
         }

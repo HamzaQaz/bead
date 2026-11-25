@@ -608,7 +608,7 @@ Scope {
                     width: Math.min(implicitWidth, parent.height)
                     elide: Text.ElideRight
                     font.family: Theme.font
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.small
                     font.weight: Font.Medium
                     color: Theme.subtext
                     text: parent.t?.title ?? ""
@@ -668,7 +668,7 @@ Scope {
                             x: parent.width - width + 1; y: -1
                             width: Math.max(14, n.implicitWidth + 6); height: 14; radius: 7
                             color: Updates.restart ? Theme.tone("warning") : Theme.tone("action")
-                            Text { id: n; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 8; font.weight: Font.Bold; color: Theme.frame; text: Updates.count > 99 ? "99+" : Updates.count }
+                            Text { id: n; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: Theme.frame; text: Updates.count > 99 ? "99+" : Updates.count }
                         }
                     }
                     // Discord: while it's connected, with the unread count; rings with a call
@@ -689,7 +689,7 @@ Scope {
                             color: Theme.tone("action")
                             scale: visible ? 1 : 0
                             Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
-                            Text { id: dn; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 8; font.weight: Font.Bold; color: Theme.frame; text: Discord.dmCount > 99 ? "99+" : Discord.dmCount }
+                            Text { id: dn; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: Theme.frame; text: Discord.dmCount > 99 ? "99+" : Discord.dmCount }
                         }
                     }
                     // WhatsApp / Telegram (when on in Settings): with the unread count
@@ -707,7 +707,7 @@ Scope {
                             color: Theme.tone("action")
                             scale: visible ? 1 : 0
                             Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
-                            Text { id: mn; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 8; font.weight: Font.Bold; color: Theme.frame; text: Messengers.count > 99 ? "99+" : Messengers.count }
+                            Text { id: mn; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: Theme.tiny; font.weight: Font.Medium; color: Theme.frame; text: Messengers.count > 99 ? "99+" : Messengers.count }
                         }
                     }
                     // the tray panel: every app, pin some to the bar
@@ -808,10 +808,10 @@ Scope {
                     component ClockText: RollText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         font.family: Theme.font
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.title
                         font.features: { "tnum": 1 }
                     }
-                    ClockText { font.weight: Font.Bold; color: Theme.text; text: Qt.formatTime(clock.date, Look.v.clock24 ? "hh" : "h") }
+                    ClockText { font.weight: Font.Medium; color: Theme.text; text: Qt.formatTime(clock.date, Look.v.clock24 ? "hh" : "h") }
                     // a sideways colon, fading with the seconds
                     Row {
                         id: tick

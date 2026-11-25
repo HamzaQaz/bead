@@ -105,7 +105,7 @@ Row {
                 }
                 Label {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.caption
                     text: quick.mins >= 60 ? "hours" : quick.mins === 1 ? "minute" : "minutes"
                 }
             }
@@ -162,7 +162,7 @@ Row {
                     anchors.leftMargin: 12; anchors.rightMargin: 12
                     verticalAlignment: TextInput.AlignVCenter
                     font.family: Theme.font
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.small
                     color: Theme.text
                     clip: true
                     maximumLength: 40
@@ -170,7 +170,7 @@ Row {
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: !nameField.text && !nameField.activeFocus
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.small
                         text: "Name (optional)"
                     }
                 }
@@ -193,7 +193,7 @@ Row {
                         Behavior on color { ColorAnimation { duration: 140 } }
                         Text {
                             anchors.centerIn: parent
-                            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+                            font.family: Theme.font; font.pixelSize: Theme.caption; font.weight: Font.Medium
                             color: chip.on ? Theme.frame : Theme.text
                             text: chip.modelData === 60 ? "1h" : chip.modelData + "m"
                         }
@@ -220,7 +220,7 @@ Row {
                         anchors.centerIn: parent
                         spacing: 6
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: "play_arrow"; size: 18; fill: 1; color: Theme.frame }
-                        Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; color: Theme.frame; text: "Start" }
+                        Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: Theme.small; font.weight: Font.Medium; color: Theme.frame; text: "Start" }
                     }
                     MouseArea { id: goMa; anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: quick.start() }
                 }
@@ -235,7 +235,7 @@ Row {
                     MouseArea { id: swMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Countdown.startStopwatch() }
                 }
             }
-            Label { font.pixelSize: 10; text: "Turn the dial or scroll · double-click starts" }
+            Label { font.pixelSize: Theme.tiny; text: "Turn the dial or scroll · double-click starts" }
         }
     }
 
@@ -331,14 +331,14 @@ Row {
                             y: 14
                             Text {
                                 font.family: Theme.font
-                                font.pixelSize: 28
+                                font.pixelSize: Theme.display
                                 font.weight: Font.DemiBold
                                 font.features: { "tnum": 1 }
                                 color: card.it.running ? Theme.text : Theme.subtext
                                 text: Countdown.labelOf(card.it)
                             }
                             Label {
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 text: (card.sw ? "Stopwatch" : card.it.name + (card.it.name !== Countdown.fmtTotal(card.it.total) ? " · " + Countdown.fmtTotal(card.it.total) : ""))
                                     + (card.it.running ? "" : " · paused")
                             }
@@ -390,9 +390,9 @@ Row {
                                 Row {
                                     required property var modelData
                                     spacing: 14
-                                    Label { width: 46; font.pixelSize: 11; text: "Lap " + modelData.n }
-                                    Label { width: 64; font.pixelSize: 11; font.features: { "tnum": 1 }; color: Theme.text; text: "+" + Countdown.clock(modelData.d, false) }
-                                    Label { font.pixelSize: 11; font.features: { "tnum": 1 }; text: Countdown.clock(modelData.t, false) }
+                                    Label { width: 46; font.pixelSize: Theme.caption; text: "Lap " + modelData.n }
+                                    Label { width: 64; font.pixelSize: Theme.caption; font.features: { "tnum": 1 }; color: Theme.text; text: "+" + Countdown.clock(modelData.d, false) }
+                                    Label { font.pixelSize: Theme.caption; font.features: { "tnum": 1 }; text: Countdown.clock(modelData.t, false) }
                                 }
                             }
                         }

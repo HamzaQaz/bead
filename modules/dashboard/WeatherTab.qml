@@ -107,7 +107,7 @@ Item {
                     }
                     Text {
                         font.family: Theme.font
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.body
                         color: Theme.text
                         text: Weather.describe(Weather.code) + "  <font color='" + Theme.subtext + "'>H " + Math.round(Weather.high) + "° · L " + Math.round(Weather.low) + "°</font>"
                         textFormat: Text.StyledText
@@ -145,10 +145,10 @@ Item {
                         Column {
                             x: 34
                             anchors.verticalCenter: parent.verticalCenter
-                            Label { font.pixelSize: 10; text: stat.modelData.l }
+                            Label { font.pixelSize: Theme.tiny; text: stat.modelData.l }
                             Text {
                                 font.family: Theme.font
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.body
                                 font.weight: Font.Medium
                                 font.features: { "tnum": 1 }
                                 color: Theme.text
@@ -264,8 +264,8 @@ Item {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 font.family: Theme.font
-                                font.pixelSize: 11
-                                font.weight: Font.DemiBold
+                                font.pixelSize: Theme.caption
+                                font.weight: Font.Medium
                                 font.features: { "tnum": 1 }
                                 color: Theme.text
                                 text: Math.round(hour.modelData.temp) + "°"
@@ -277,7 +277,7 @@ Item {
                             y: chart.height - chart.padBottom + 8
                             Label {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.tiny
                                 font.features: { "tnum": 1 }
                                 text: hour.index === 0 ? "Now" : Qt.formatTime(hour.modelData.time, "HH:00")
                             }
@@ -285,8 +285,8 @@ Item {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 visible: hour.modelData.rain >= 20
                                 font.family: Theme.font
-                                font.pixelSize: 9
-                                font.weight: Font.DemiBold
+                                font.pixelSize: Theme.tiny
+                                font.weight: Font.Medium
                                 color: "#7fb4ff"
                                 text: hour.modelData.rain + "%"
                             }
@@ -321,7 +321,7 @@ Item {
                             spacing: 4
                             Label {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 font.weight: Font.Medium
                                 text: Qt.formatDate(day.modelData.date, "ddd")
                             }
@@ -351,7 +351,7 @@ Item {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 font.family: Theme.font
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.caption
                                 font.features: { "tnum": 1 }
                                 color: Theme.text
                                 text: Math.round(day.modelData.max) + "°  <font color='" + Theme.subtext + "'>" + Math.round(day.modelData.min) + "°</font>"
@@ -375,7 +375,7 @@ Item {
                 anchors.centerIn: parent
                 spacing: 8
                 Icon { anchors.horizontalCenter: parent.horizontalCenter; name: waiting.what?.glyph ?? ""; size: 32; color: Theme.subtext }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.text; text: waiting.what?.text ?? "" }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; font.family: Theme.font; font.pixelSize: Theme.body; font.weight: Font.Medium; color: Theme.text; text: waiting.what?.text ?? "" }
                 Label { anchors.horizontalCenter: parent.horizontalCenter; visible: text !== ""; text: waiting.what?.hint ?? "" }
                 Item { width: 1; height: 2; visible: retry.visible }
                 Action { id: retry; anchors.horizontalCenter: parent.horizontalCenter; visible: !!waiting.what?.retry; text: "Try again"; glyph: "refresh"; onHit: Weather.retry() }

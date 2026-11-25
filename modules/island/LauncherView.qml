@@ -540,8 +540,8 @@ Item {
                 width: Math.min(implicitWidth, 198)
                 elide: Text.ElideRight
                 font.family: Theme.font
-                font.pixelSize: 13
-                font.weight: Font.DemiBold
+                font.pixelSize: Theme.body
+                font.weight: Font.Medium
                 color: Theme.tone("action")
                 text: modeChip.shownLabel
             }
@@ -554,7 +554,7 @@ Item {
             width: parent.width - x - 16
             anchors.verticalCenter: parent.verticalCenter
             font.family: Theme.font
-            font.pixelSize: 15
+            font.pixelSize: Theme.title
             color: Theme.text
             selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
             clip: true
@@ -604,7 +604,7 @@ Item {
                 spacing: 14
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    font.pixelSize: 15
+                    font.pixelSize: Theme.title
                     text: root.acting ? "Pick one, or type a workspace number" : root.modes[root.mode]?.hint ?? "Search apps"
                 }
                 Row {
@@ -628,7 +628,7 @@ Item {
                         NumberAnimation { target: tip; property: "opacity"; to: 1; duration: 260; easing.type: Easing.OutQuad }
                     }
                     Key { text: tip.cur[0]; anchors.verticalCenter: parent.verticalCenter }
-                    Label { text: tip.cur[1]; font.pixelSize: 13; opacity: 0.6; anchors.verticalCenter: parent.verticalCenter }
+                    Label { text: tip.cur[1]; font.pixelSize: Theme.body; opacity: 0.6; anchors.verticalCenter: parent.verticalCenter }
                 }
             }
         }
@@ -688,7 +688,7 @@ Item {
                 Text { // emoji / symbol
                     anchors.centerIn: parent
                     visible: row.modelData.kind === "emoji"
-                    font.pixelSize: 21
+                    font.pixelSize: Theme.heading
                     color: Theme.text
                     text: row.modelData.m?.c ?? ""
                 }
@@ -761,7 +761,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 6
                 Key { text: "Tab"; anchors.verticalCenter: parent.verticalCenter }
-                Label { text: "more"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                Label { text: "more"; font.pixelSize: Theme.caption; anchors.verticalCenter: parent.verticalCenter }
             }
             Row { // a shortcut's keys, as key caps
                 id: keyCaps
@@ -784,8 +784,8 @@ Item {
                     width: parent.width
                     elide: Text.ElideRight
                     font.family: Theme.font
-                    font.pixelSize: 14
-                    font.weight: row.sel ? Font.DemiBold : Font.Medium
+                    font.pixelSize: Theme.title
+                    font.weight: row.sel ? Font.Medium : Font.Medium
                     color: row.confirm ? Theme.tone("error") : Theme.text
                     text: row.modelData.kind === "app" ? row.modelData.e.name
                         : row.modelData.kind === "win" ? row.modelData.w.title
@@ -802,7 +802,7 @@ Item {
                 Label {
                     width: parent.width
                     elide: Text.ElideRight
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.caption
                     visible: text !== ""
                     text: row.modelData.kind === "app" ? (row.modelData.e.comment || row.modelData.e.genericName || "")
                         : row.modelData.kind === "win" ? "Switch to " + row.modelData.w.name + (row.modelData.w.ws ? "  ·  workspace " + row.modelData.w.ws : "")
@@ -870,7 +870,7 @@ Item {
             spacing: 8
             Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "key"; size: 34; fill: 1; color: Theme.subtext }
             Label { anchors.horizontalCenter: parent.horizontalCenter; text: "Hidden: looks like a key or token" }
-            Label { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: 11; text: "Enter still pastes it  ·  Shift+Del forgets it" }
+            Label { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: Theme.caption; text: "Enter still pastes it  ·  Shift+Del forgets it" }
         }
         // colour
         Column {
@@ -888,7 +888,7 @@ Item {
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 font.family: "monospace"
-                font.pixelSize: 15
+                font.pixelSize: Theme.title
                 color: Theme.text
                 text: preview.e?.text.trim() ?? ""
             }
@@ -914,7 +914,7 @@ Item {
             anchors.leftMargin: 14
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 10
-            font.pixelSize: 11
+            font.pixelSize: Theme.caption
             text: {
                 const e = preview.e;
                 if (!e) return "";
@@ -996,7 +996,7 @@ Item {
                     wrapMode: TextEdit.Wrap
                     textFormat: TextEdit.RichText
                     font.family: Theme.font
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.body
                     color: Theme.text
                     selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
                     text: root.md(Ask.answer)
@@ -1038,7 +1038,7 @@ Item {
                     }
                     Label {
                         anchors.verticalCenter: parent.verticalCenter
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.caption
                         text: "Edit the question and press Enter for a follow-up"
                     }
                 }

@@ -28,6 +28,7 @@ check core hypr-lua "Hyprland uses a Lua config (0.57 or newer)" "Update Hyprlan
 cmd core qs "Quickshell" quickshell
 check core installed "bead is installed" "Run ./install.sh from bead's folder, or install bead-shell-git" "" test -f "$share/shell.qml"
 check core symbols "Material Symbols font" "Install ttf-material-symbols-variable" ttf-material-symbols-variable sh -c 'fc-list | grep -qi "Material Symbols"'
+check core inter "Inter font" "Install inter-font" inter-font sh -c 'fc-list | grep -qi "Inter"'
 check core noto "Noto fonts" "Install noto-fonts" noto-fonts sh -c 'fc-list | grep -qi "Noto Sans"'
 check core emoji "Emoji font" "Install noto-fonts-emoji" noto-fonts-emoji sh -c 'fc-list | grep -qi "Emoji"'
 

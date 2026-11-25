@@ -185,7 +185,7 @@ Item {
         Label {
             anchors.verticalCenter: parent.verticalCenter
             width: 26
-            font.pixelSize: 11
+            font.pixelSize: Theme.caption
             font.weight: Font.Medium
             font.features: { "tnum": 1 }
             color: Theme.text
@@ -276,8 +276,8 @@ Item {
                             id: tbName
                             anchors.verticalCenter: parent.verticalCenter
                             font.family: Theme.font
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
+                            font.pixelSize: Theme.body
+                            font.weight: Font.Medium
                             color: Theme.text
                             text: tb.modelData.name
                             clip: true
@@ -393,7 +393,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: root.height - 17
         font.family: Theme.font
-        font.pixelSize: 10
+        font.pixelSize: Theme.tiny
         color: Qt.alpha(Theme.text, 0.45)
         opacity: root.keys ? 1 : 0
         visible: opacity > 0.01
