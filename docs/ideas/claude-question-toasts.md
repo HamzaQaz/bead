@@ -33,8 +33,10 @@ layout (é, emoji) uses the focus-and-type fallback.
 - [x] The hook end to end (2026-11-25, stub glint answering `[[1],"Hi?"]`,
       a hidden recorder window as the terminal): exactly the expected 21
       bytes, focus never moved, and it saw the answer land.
-- [ ] Claude's own prompt acts on the sent keys (the bytes are identical, so
-      this is likely). Test with a real question in a background terminal.
+- [x] Claude's own prompt acts on the sent keys (2026-11-25, a real
+      two-question AskUserQuestion answered from the toast on another
+      workspace): an option pick and the free text "toast typing" both
+      arrived, with no tile switch.
 - [ ] Number keys still don't select in Claude's prompt. If they do now, use
       them instead of counting Downs.
 
