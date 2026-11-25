@@ -3,6 +3,39 @@
 bead follows [Semantic Versioning](https://semver.org). Each release's
 section is what `bead update` shows as "what's new".
 
+## 0.2.0
+
+### System updates, on the island
+- Updating no longer opens a terminal. The island shows which package is
+  updating, a progress bar and the log; AUR updates are listed first with
+  their changes, one tap to go on. Flatpaks update too.
+- bead now answers admin password prompts itself, in a redesigned password
+  view on the island (your avatar, a ring while it checks, a shake when it's
+  wrong).
+- When an update wants a restart: restart now, tonight at 3:00, or at a time
+  you pick, with a reminder 5 minutes before. Cancel it from the bar.
+
+### Sound
+- A mixer window (Sound → Advanced): every output, input and app; play on two
+  outputs at once (two headphones); mic noise suppression, EQ presets and
+  boost; and hearing yourself.
+
+### Messages
+- Discord: a panel with your calls, an inbox of DMs and mentions (Reply opens
+  the chat), voice channels with people in them, incoming calls on the island
+  with Answer and Decline, and music or project presence. It explains why it
+  can't connect, and suggests Do Not Disturb when it hears nothing for hours.
+- WhatsApp and Telegram (optional, Settings → Notifications): an inbox in the
+  bar from their notifications, with replies where the app allows them.
+
+### Windows and monitors
+- Each monitor has its own workspaces, windows and title in the bar.
+
+### Also
+- bead greets you at login and locks when the machine logs in by itself.
+- Demo mode, a new welcome, and smoother notifications.
+- The media card's cover sits inside the island with a margin.
+
 ## 0.1.0
 
 The first release: a whole desktop shell for Hyprland, built with Quickshell.
