@@ -12,6 +12,7 @@ import qs.services
 PanelColumn {
     id: root
     width: 292
+    signal done()
     spacing: 8
 
     // a labelled level: mute button, slider, percent
@@ -61,6 +62,11 @@ PanelColumn {
     }
 
     PanelHeader { icon: "volume_up"; title: "Sound" }
+    // the full mixer: two outputs at once, mic effects, every app
+    Row {
+        anchors.right: parent.right
+        Action { text: "Advanced"; glyph: "tune"; onHit: { root.done(); AudioFx.open = true; } }
+    }
 
     Level {
         glyph: Audio.levelGlyph(Audio.volume, Audio.muted)

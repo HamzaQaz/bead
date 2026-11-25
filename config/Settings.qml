@@ -12,6 +12,18 @@ Singleton {
 
     // idle, in minutes (0 = never)
     property alias lockAfter: a.lockAfter
+    // the mixer (services/AudioFx.qml)
+    property alias audioBoth: a.audioBoth             // one sound on two outputs
+    property alias audioBothSinks: a.audioBothSinks   // their node names
+    property alias micSource: a.micSource             // the mic the effects record from ("" = the default)
+    property alias micNoise: a.micNoise               // RNNoise noise suppression
+    property alias micThreshold: a.micThreshold       // its voice threshold, 0-99
+    property alias micEq: a.micEq                     // off | clear | warm | radio
+    property alias micGain: a.micGain                 // 1 = unchanged
+    property alias micMonitor: a.micMonitor           // hear yourself
+    // WhatsApp / Telegram inboxes, from their notifications (services/Messengers.qml)
+    property alias whatsapp: a.whatsapp
+    property alias telegram: a.telegram
     property alias discordMusic: a.discordMusic     // Discord presence: the music playing (off by default)
     property alias discordProject: a.discordProject // Discord presence: the project you're in (off by default)
     property alias workspaceGroups: a.workspaceGroups // each monitor owns ten workspaces (services/Windows.qml)
@@ -57,6 +69,16 @@ Singleton {
             property string lockAtLogin: "auto"
             property bool workspaceGroups: true
             property bool discordMusic: false
+            property bool whatsapp: false
+            property bool telegram: false
+            property bool audioBoth: false
+            property list<string> audioBothSinks: []
+            property string micSource: ""
+            property bool micNoise: false
+            property int micThreshold: 50
+            property string micEq: "off"
+            property real micGain: 1
+            property bool micMonitor: false
             property bool discordProject: false
             property real screenOffAfter: 5
             property real suspendAfter: 10

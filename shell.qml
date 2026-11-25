@@ -6,6 +6,7 @@ import qs.modules.background
 import qs.modules.bar
 import qs.modules.island
 import qs.modules.lock
+import qs.modules.mixer
 import qs.modules.notifications
 import qs.modules.settings
 import qs.modules.welcome
@@ -25,6 +26,7 @@ ShellRoot {
     Welcome {}
     // the Settings window, made when it opens (services/SettingsApp.qml)
     LazyLoader { active: SettingsApp.open; SettingsWindow {} }
+    LazyLoader { active: AudioFx.open; MixerWindow {} }
     readonly property string wallKind: Wallpaper.kind  // starts the Wallpaper singleton (restores the choice)
 
     // services that must run without anything showing them
