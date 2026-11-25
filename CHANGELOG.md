@@ -3,6 +3,16 @@
 bead follows [Semantic Versioning](https://semver.org). Each release's
 section is what `bead update` shows as "what's new".
 
+## Unreleased
+
+### Update history and rollback
+- The Updates panel has a History tab: every update pacman made (from its
+  log, bead's or not), with its packages and versions.
+- Undo an update, or roll back one package, from the package cache; it runs
+  on the island like an update.
+- The version you rolled back from is held back: bead's updates skip it
+  until a newer one comes out. Release a hold from the History tab.
+
 ## 0.3.0
 
 ### App Store

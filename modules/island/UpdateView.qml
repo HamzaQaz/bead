@@ -38,6 +38,8 @@ Item {
     // installing one app (the App Store): what it's doing, in words
     readonly property var ij: Updates.job
     readonly property string ijFrom: !ij ? "" : ij.source === "flathub" ? "Flathub" : ij.source === "aur" ? "the AUR" : "the repos"
+    // a rollback (the update history's Undo) is a job too, worded as one
+    readonly property bool rb: ij?.source === "rollback"
 
     component Btn: Rectangle {
         id: b
@@ -235,14 +237,17 @@ Item {
                     spacing: 2
                     Title {
                         width: parent.width
-                        text: root.ij ? ({ auth: "Waiting for your password", download: "Downloading ", build: "Building ", install: "Installing " }[Updates.inst.phase] ?? "Installing ") + (Updates.inst.phase === "auth" ? "" : root.ij.title)
+                        text: root.rb ? (Updates.inst.phase === "auth" ? "Waiting for your password" : "Rolling back " + root.ij.title)
+                            : root.ij ? ({ auth: "Waiting for your password", download: "Downloading ", build: "Building ", install: "Installing " }[Updates.inst.phase] ?? "Installing ") + (Updates.inst.phase === "auth" ? "" : root.ij.title)
                             : !Updates.current ? (Updates.stage === "aur" ? "Building from the AUR…" : Updates.stage === "flatpak" ? "Updating Flatpaks…" : "Getting ready…")
                             : (Updates.doing === "downloading" ? "Downloading " : Updates.doing === "building" ? "Building " : Updates.doing === "installing" ? "Installing " : "Updating ")
                               + (root.app?.name || U.pretty(Updates.current))
                     }
                     Sub {
                         width: parent.width
-                        text: root.ij ? (Updates.inst.phase === "auth" ? "To install " + root.ij.title + " from " + root.ijFrom
+                        text: root.rb ? (Updates.inst.phase === "auth" ? "To roll back " + root.ij.title
+                                : "From the package cache" + (Updates.inst.n > 1 ? " · " + Updates.inst.n + " packages" : "") + " · " + Math.round(Updates.progress * 100) + "%")
+                            : root.ij ? (Updates.inst.phase === "auth" ? "To install " + root.ij.title + " from " + root.ijFrom
                                 : "From " + root.ijFrom + (Updates.inst.n > 1 ? " · " + Updates.inst.n + " packages" : "") + " · " + Math.round(Updates.progress * 100) + "%")
                             : (Updates.stage === "aur" ? "AUR" : Updates.stage === "flatpak" ? "Flatpak" : "Packages")
                             + (Updates.stepN > 0 ? " · " + Updates.stepI + " of " + Updates.stepN : "")
@@ -333,7 +338,8 @@ Item {
                     spacing: 2
                     Title {
                         width: parent.width
-                        text: root.ij ? (parent.parent.parent.ok ? root.ij.title + " is installed" : "Couldn't install " + root.ij.title)
+                        text: root.rb ? (parent.parent.parent.ok ? "Rolled back " + root.ij.title : "Couldn't roll back " + root.ij.title)
+                            : root.ij ? (parent.parent.parent.ok ? root.ij.title + " is installed" : "Couldn't install " + root.ij.title)
                             : !parent.parent.parent.ok ? "The update stopped"
                             : Updates.rebootAt ? "Restart scheduled"
                             : Updates.needsRestart ? "Restart to finish" : "All up to date"
@@ -342,7 +348,8 @@ Item {
                         width: parent.width
                         wrapMode: Text.Wrap
                         maximumLineCount: 3
-                        text: root.ij ? (parent.parent.parent.ok ? "From " + root.ijFrom : Updates.error || "It stopped")
+                        text: root.rb ? (parent.parent.parent.ok ? (root.ij.held ? "Held at the older version: updates skip it until a newer one is out" : "The older versions are back") : Updates.error || "It stopped")
+                            : root.ij ? (parent.parent.parent.ok ? "From " + root.ijFrom : Updates.error || "It stopped")
                             : parent.parent.parent.ok
                             ? (Updates.rebootAt ? Updates.rebootLabel + " · a reminder comes 5 minutes before"
                                : Updates.needsRestart ? "Updated " + (Updates.updated.filter(n => /^(linux|systemd|glibc|nvidia|mesa|amd-ucode|intel-ucode|dbus|wayland|hyprland)/.test(n)).slice(0, 3).join(", ") || "core system packages") + ": they take effect after a restart"
@@ -395,7 +402,7 @@ Item {
             Row {
                 anchors.right: parent.right
                 spacing: 8
-                Btn { visible: root.phase === "done" && !!root.ij; text: "Open"; glyph: "open_in_new"; main: true; onHit: { const j = root.ij; Updates.hide(); Store.openApp(j); } }
+                Btn { visible: root.phase === "done" && !!root.ij && !root.rb; text: "Open"; glyph: "open_in_new"; main: true; onHit: { const j = root.ij; Updates.hide(); Store.openApp(j); } }
                 Btn { visible: root.phase === "failed" && !root.ij; text: "Open in a terminal"; glyph: "terminal"; onHit: Updates.terminal() }
                 Btn { visible: parent.parent.asks && root.picking; text: "Back"; onHit: root.picking = false }
                 Btn { visible: parent.parent.asks && root.picking; text: "Schedule"; glyph: "schedule"; main: true; onHit: { Updates.scheduleReboot(root.pickH, root.pickM); root.picking = false; } }

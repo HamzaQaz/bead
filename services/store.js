@@ -111,7 +111,7 @@ function installStep(st, line) {
     if (/^@@fail/.test(l)) { s.phase = "failed"; return s; }
     if ((m = /^Packages \((\d+)\)/.exec(l))) { s.n = +m[1]; s.phase = "download"; return s; }
     if (/^\s*\S+-x86_64\s+downloading|^\s*\S+-any\s+downloading/.test(l)) { s.dl++; s.phase = "download"; return s; }
-    if (/^(installing|upgrading|reinstalling) \S+\.\.\.$|^\(\s*\d+\/\d+\) installing/.test(l)) { s.i++; s.phase = "install"; return s; }
+    if (/^(installing|upgrading|reinstalling|downgrading) \S+\.\.\.$|^\(\s*\d+\/\d+\) installing/.test(l)) { s.i++; s.phase = "install"; return s; }
     if (/^==> Making package:/.test(l)) { s.phase = "build"; return s; }
     if ((m = /^\s*Installing\b.*?(\d{1,3})%/.exec(l))) { s.pct = Math.min(100, +m[1]); s.phase = "download"; return s; }
     if ((m = /^(?:==> )?(?:error|ERROR|Error):\s*(.*)$/.exec(l))) { s.error = m[1]; return s; }
@@ -122,6 +122,8 @@ function installFraction(st) {
     if (st.phase === "done") return 1;
     if (st.pct >= 0) return st.pct / 100;
     if (!st.n) return 0;
+    // nothing downloaded (all cached, a rollback): installing is the whole bar
+    if (!st.dl && st.phase === "install") return Math.min(1, st.i / st.n);
     return Math.min(1, (Math.min(st.dl, st.n) + Math.min(st.i, st.n)) / (2 * st.n));
 }
 

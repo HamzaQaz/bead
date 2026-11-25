@@ -33,22 +33,44 @@ if [ "${1:-}" = install ]; then
 	exit 0
 fi
 
+# bead-sysupdate rollback <file>...: put back older versions (the update
+# history's Undo, services/Updates.qml): only package files from pacman's cache
+# or an AUR helper's build folder, installed with pacman -U; the stage "rollback"
+if [ "${1:-}" = rollback ]; then
+	shift
+	[ $# -gt 0 ] || { echo "error: nothing to roll back"; fail rollback 2; }
+	for f in "$@"; do
+		case $f in
+		/var/cache/pacman/pkg/*.pkg.tar.* | "$HOME"/.cache/paru/clone/*.pkg.tar.* | "$HOME"/.cache/yay/*.pkg.tar.*) ;;
+		*) echo "error: not a cached package: $f"; fail rollback 2 ;;
+		esac
+		case $f in *.sig | *..*) echo "error: not a package file: $f"; fail rollback 2 ;; esac
+		[ -f "$f" ] || { echo "error: no longer in the cache: $f"; fail rollback 2; }
+	done
+	echo "@@stage rollback"
+	pkexec stdbuf -oL -eL pacman -U --noconfirm --noprogressbar -- "$@" 2>&1 || fail rollback $?
+	echo "@@done"
+	exit 0
+fi
+
 stages=${*:-repo aur flatpak}
+# held versions (rolled back from): BEAD_IGNORE="a,b" keeps them out of this update
+ignore=${BEAD_IGNORE:+--ignore $BEAD_IGNORE}
 
 for s in $stages; do
 	case $s in
 	repo)
 		echo "@@stage repo"
 		# stdbuf: line by line, not in blocks at the end
-		pkexec stdbuf -oL -eL pacman -Syu --noconfirm --noprogressbar 2>&1 || fail repo $?
+		pkexec stdbuf -oL -eL pacman -Syu --noconfirm --noprogressbar $ignore 2>&1 || fail repo $?
 		;;
 	aur)
 		helper=$(command -v paru || command -v yay) || continue
 		echo "@@stage aur"
 		if [ "${helper##*/}" = paru ]; then
-			stdbuf -oL -eL paru -Sua --noconfirm --skipreview --noprogressbar --sudo pkexec --nosudoloop 2>&1 || fail aur $?
+			stdbuf -oL -eL paru -Sua --noconfirm --skipreview --noprogressbar --sudo pkexec --nosudoloop $ignore 2>&1 || fail aur $?
 		else
-			stdbuf -oL -eL yay -Sua --noconfirm --noprogressbar --sudo pkexec --nosudoloop --answerdiff None --answerclean None 2>&1 || fail aur $?
+			stdbuf -oL -eL yay -Sua --noconfirm --noprogressbar --sudo pkexec --nosudoloop --answerdiff None --answerclean None $ignore 2>&1 || fail aur $?
 		fi
 		;;
 	flatpak)

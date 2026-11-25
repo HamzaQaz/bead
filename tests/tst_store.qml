@@ -177,4 +177,20 @@ TestCase {
         const d = S.details({ repo: { url: "https://x.org/" }, flathub: { homepage: "https://x.org", id: "org.x.X" } }, "");
         compare(d.links.map(l => l.label), ["Website", "Flathub"]);
     }
+
+    // a rollback (pacman -U from the cache): nothing to download, downgrades
+    function test_a_rollback_from_the_cache_fills_the_bar_with_its_downgrades() {
+        let st = S.installStart();
+        for (const l of ["loading packages...", "Packages (2) mesa-3:26.2.6-1  zlib-1.3-1", "downgrading mesa...", "downgrading zlib..."]) st = S.installStep(st, l);
+        compare(st.phase, "install");
+        compare(st.i, 2);
+        compare(S.installFraction(st), 1);
+    }
+    function test_downloads_still_count_as_half_when_there_are_some() {
+        let st = S.installStart();
+        for (const l of ["Packages (1) obs-studio-33-1", " obs-studio-33-1-x86_64 downloading...", "installing obs-studio..."]) st = S.installStep(st, l);
+        compare(S.installFraction(st), 1);
+        st = S.installStep(S.installStep(S.installStart(), "Packages (2) a-1-1 b-1-1"), " a-1-1-x86_64 downloading...");
+        compare(S.installFraction(st), 0.25);
+    }
 }

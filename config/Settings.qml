@@ -15,6 +15,8 @@ Singleton {
     // the mixer (services/AudioFx.qml)
     property alias audioBoth: a.audioBoth             // one sound on two outputs
     property alias audioBothSinks: a.audioBothSinks   // their node names
+    // updates: versions held back after a rollback, "name version" (services/Updates.qml)
+    property alias updateHolds: a.updateHolds
     property alias micSource: a.micSource             // the mic the effects record from ("" = the default)
     property alias micNoise: a.micNoise               // RNNoise noise suppression
     property alias micThreshold: a.micThreshold       // its voice threshold, 0-99
@@ -73,6 +75,7 @@ Singleton {
             property bool telegram: false
             property bool audioBoth: false
             property list<string> audioBothSinks: []
+            property list<string> updateHolds: []
             property string micSource: ""
             property bool micNoise: false
             property int micThreshold: 50

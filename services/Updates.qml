@@ -9,6 +9,7 @@ import "sysupdate.js" as U
 import "reboot.js" as R
 import "trust.js" as T
 import "store.js" as S
+import "history.js" as H
 
 // OS updates: checks the repos (checkupdates: a temporary copy of the sync
 // database, no root, nothing changes), the AUR (paru -Qua) and Flathub
@@ -105,6 +106,7 @@ Singleton {
         log = []; error = ""; failedStage = ""; updated = [];
         needsRestart = false;
         runner.command = [Paths.cmd("bead-sysupdate"), ...S.installArgs(j)];
+        runner.environment = {};
         phase = "running"; shown = true;
         runner.running = true;
         return true;
@@ -171,6 +173,7 @@ Singleton {
         needsRestart = restart;
         job = null;
         runner.command = [Paths.cmd("bead-sysupdate"), ...["repo", "aur", "flatpak"].filter(s => (counts[s] || 0) > 0)];
+        runner.environment = { BEAD_IGNORE: holds.map(h => h.name).join(",") };
         phase = "running";
         runner.running = true;
     }
@@ -218,15 +221,67 @@ Singleton {
             if (root.current) root.updated = [...root.updated, root.current].slice(-50);
             root.current = ""; root.doing = "";
             // done: stays up while a restart is wanted (it asks when); else it goes by itself
-            if (code === 0) { root.phase = "done"; root.shown = true; if (!root.needsRestart) doneHide.restart(); if (root.job) root.appInstalled(root.job); }
+            if (code === 0) {
+                root.phase = "done"; root.shown = true; if (!root.needsRestart) doneHide.restart();
+                if (root.job?.source === "rollback") root.setHolds([...root.holds.filter(h => !root.job.holds.some(n => n.name === h.name)), ...root.job.holds]);
+                else if (root.job) root.appInstalled(root.job);
+            }
             else {
                 root.phase = "failed"; root.shown = true;
                 if (!root.error) root.error = code === 126 || code === 127 ? "The password was cancelled" : "Stopped with code " + code;
             }
             root.check();
+            root.refreshHistory();
         }
     }
     Timer { id: doneHide; interval: root.job ? 9000 : 6000; onTriggered: if (root.phase === "done") root.hide() }
+
+    // ── history: what pacman did (its log), and undoing it (history.js) ──
+    // [{ time, command, changes }], newest first; the last 60
+    readonly property var history: H.parse(pacLog.loaded ? pacLog.text() : "").slice(0, 60)
+    FileView { id: pacLog; path: "/var/log/pacman.log"; watchChanges: true; onFileChanged: { reload(); histSoon.restart(); } printErrors: false }
+    // the cache and versions: at start, and once pacman's done writing its log
+    Timer { id: histSoon; interval: 1500; running: true; onTriggered: root.refreshHistory() }
+    property var cacheFiles: []       // pacman's cache and the AUR helper's builds
+    property var installedVer: ({})   // name → version, now
+    function refreshHistory(): void { if (!histProbe.running) histProbe.running = true; }
+    Process {
+        id: histProbe
+        command: ["sh", "-c", 'pacman -Q; echo --cache--; find /var/cache/pacman/pkg "$HOME/.cache/paru/clone" "$HOME/.cache/yay" -maxdepth 2 -name "*.pkg.tar.*" ! -name "*.sig" 2>/dev/null']
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const [q, c] = text.split("--cache--\n");
+                const v = {};
+                for (const l of (q ?? "").split("\n")) { const p = l.split(" "); if (p[1]) v[p[0]] = p[1]; }
+                root.installedVer = v;
+                root.cacheFiles = (c ?? "").split("\n").filter(Boolean);
+            }
+        }
+    }
+    // what undoing an entry (or one package in it) would do: see history.js undo()
+    function undoPlan(t: var, only: string): var { return H.undo(t, cacheFiles, installedVer, only || undefined); }
+    function rollback(t: var, only: string): string {
+        if (running) return "Busy";
+        const p = undoPlan(t, only);
+        if (!p.files.length) return "Nothing in this update can be rolled back from the cache";
+        const title = only || (p.files.length === 1 ? p.files[0].replace(/^.*\//, "").replace(/-[^-]+-[^-]+-[^-]+\.pkg\.tar\.\w+$/, "") : p.files.length + " packages");
+        stage = ""; current = ""; doing = ""; log = []; error = ""; failedStage = ""; updated = []; needsRestart = false;
+        job = { title: title, name: only || "", source: "rollback", icon: "", holds: p.holds, held: p.holds.length > 0 };
+        inst = S.installStart();
+        runner.command = [Paths.cmd("bead-sysupdate"), "rollback", ...p.files];
+        runner.environment = {};
+        phase = "running"; shown = true;
+        runner.running = true;
+        return "Rolling back " + title;
+    }
+    // held versions: [{ name, version }] (Settings keeps them as "name version")
+    readonly property var holds: Array.from(Settings.updateHolds).map(l => { const p = l.split(" "); return { name: p[0], version: p[1] ?? "" }; })
+    function setHolds(list: var): void {
+        const next = list.map(h => h.name + " " + h.version);
+        if (next.join("\n") !== Array.from(Settings.updateHolds).join("\n")) Settings.updateHolds = next;
+    }
+    signal historyAsked(int open)   // the panel shows its History tab
+    function release(name: string): void { setHolds(holds.filter(h => h.name !== name)); check(); }
 
     Timer { interval: 2 * 60 * 1000; running: true; onTriggered: root.check() }
     Timer { interval: 3 * 3600 * 1000; repeat: true; running: true; onTriggered: root.check() }
@@ -244,8 +299,15 @@ Singleton {
         onExited: {
             const i = lines.indexOf("--aur--"), j = lines.indexOf("--flatpak--");
             const clean = l => l.trim() && !l.includes("[ignored]");
-            root.repo = lines.slice(0, i < 0 ? lines.length : i).filter(clean);
-            root.aur = i < 0 ? [] : lines.slice(i + 1, j < 0 ? lines.length : j).filter(clean);
+            // "name old -> new": a held version (rolled back from) is left out; a hold
+            // ends once a newer version than the held one is waiting
+            const ups = l => { const p = l.trim().split(/\s+/); return { name: p[0], to: p[3] ?? "" }; };
+            const repoL = lines.slice(0, i < 0 ? lines.length : i).filter(clean);
+            const aurL = i < 0 ? [] : lines.slice(i + 1, j < 0 ? lines.length : j).filter(clean);
+            root.setHolds(H.keepHolds(root.holds, [...repoL, ...aurL].map(ups)));
+            const skip = H.ignored(root.holds, [...repoL, ...aurL].map(ups));
+            root.repo = repoL.filter(l => !skip.includes(ups(l).name));
+            root.aur = aurL.filter(l => !skip.includes(ups(l).name));
             root.flatpak = j < 0 ? [] : lines.slice(j + 1).filter(clean);
             root.checking = false;
             root.checked = true;
@@ -285,6 +347,14 @@ Singleton {
         // the island's after-update view as if a restart were wanted (nothing runs)
         // the review as if these AUR packages had updates (checked for real; nothing runs)
         function cancel(): void { root.cancel(); }
+        // the history: "time · label · n changes · undo: files / missing", newest first
+        function history(n: int): string {
+            return root.history.slice(0, n > 0 ? n : 10).map(t => { const p = root.undoPlan(t, ""); return t.time + "\t" + H.label(t) + "\t" + t.changes.length + " changes\tundo " + p.files.length + "/" + (p.files.length + p.missing.length + p.changed.length); }).join("\n");
+        }
+        // the bar's Updates panel on its History tab, entry n open (-1: none)
+        function showHistory(n: int): void { root.historyAsked(n); }
+        function holdsList(): string { return root.holds.map(h => h.name + " " + h.version).join("\n"); }
+        function release(name: string): void { root.release(name); }
         function previewReview(names: string): void { root.aurNames = names.split(/[ ,]+/).filter(Boolean); root.phase = "review"; root.shown = true; root.checkTrust(root.aurNames); }
         function previewDone(): void { root.needsRestart = true; root.updated = ["linux", "systemd", "glibc"]; root.phase = "done"; root.shown = true; }
         function status(): string { return root.checking ? "checking" : root.count + " (" + root.repo.length + " repo, " + root.aur.length + " aur, " + root.flatpak.length + " flatpak)"; }
