@@ -10,6 +10,7 @@ import Quickshell.Io
 import qs.components
 import qs.config
 import qs.services
+import "../../services/store.js" as StoreJs
 import "launcher-actions.js" as RowActions
 import "../../services/pkgs.js" as Pkgs
 import "keys.js" as KeySheet
@@ -128,7 +129,7 @@ Item {
         const bits = [src, r.version, r.source === "repo" ? Pkgs.size(r.size) : "", r.source === "aur" ? r.votes + " votes" : "",
             r.outdated ? "out of date" : "", r.installed ? "installed" : ""].filter(Boolean);
         return { kind: "action", a: { id: "pkg:" + r.source + ":" + r.name, pkg: r, glyph: r.installed ? "check_circle" : r.source === "repo" ? "inventory_2" : r.source === "flathub" ? "deployed_code" : "construction",
-            title: (r.title || r.name) + (r.desc ? "  \u00b7  " + r.desc : ""), sub: bits.join(" \u00b7 ") + (r.source === "aur" && !r.installed ? " \u00b7 Enter twice: builds in a terminal" : ""),
+            title: (r.title || r.name) + (r.desc ? "  \u00b7  " + r.desc : ""), sub: bits.join(" \u00b7 ") + (r.source === "aur" && !r.installed ? " \u00b7 Enter twice: builds it from the AUR" : ""),
             confirm: r.source === "aur" && !r.installed } };
     }
     // ── "#": the keys sheet (keys.js; `bead keys`, or type "keys") ──
@@ -344,7 +345,8 @@ Item {
         { id: "pick", title: "Pick a colour", sub: "Copies its hex", glyph: "colorize" },
         // bead and the vault
         { id: "restart", title: "Restart bead", sub: "Behind a still, so nothing flashes", glyph: "restart_alt" },
-        { id: "vault", title: "Open the vault", sub: "Obsidian · brain", glyph: "book_2" }
+        { id: "vault", title: "Open the vault", sub: "Obsidian · brain", glyph: "book_2" },
+        { id: "store", title: "App Store", sub: "Find and install apps", glyph: "storefront" }
     ]
     function runAction(a: var): void {
         if (a.op) {
@@ -358,7 +360,13 @@ Item {
             return;
         }
         if (String(a.id).startsWith("voice:")) { Voice.decided({ action: a.id.slice(6), text: "" }, ""); return; }
-        if (a.pkg) { root.say(a.pkg.source === "aur" ? "construction" : "download", Packages.install(a.pkg), "info"); return; }
+        // installs show on the island's update card, the AUR included (no terminal)
+        if (a.pkg) {
+            if (a.pkg.installed) { Store.openApp({ name: a.pkg.name, source: a.pkg.source }); return; }
+            if (!Updates.installApp({ title: a.pkg.title || a.pkg.name, name: a.pkg.name, source: a.pkg.source, icon: Quickshell.iconPath(a.pkg.name, true) }))
+                root.say("hourglass_top", "Busy: another install or update is running", "info");
+            return;
+        }
         if (a.id === "pkg:none") return;
         switch (a.id) {
         case "dnd": Notifs.dnd = !Notifs.dnd; break;
@@ -368,6 +376,7 @@ Item {
         case "awake": Idle.keepAwake = !Idle.keepAwake; break;
         case "walls": Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "tab", "5"]); break;
         case "settings": SettingsApp.show(""); break;
+        case "store": Store.show(a.q ?? ""); break;
         case "wallshuffle": Wallpaper.random("all"); break;
         case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
         case "wifi": Networking.wifiEnabled = !Networking.wifiEnabled; break;
@@ -406,7 +415,9 @@ Item {
         if (emojiing) return Emoji.search(q.slice(1)).map(e => ({ kind: "emoji", m: e }));
         if (keying) return KeySheet.find(keyList, q.slice(1)).map(k => ({ kind: "key", k: k }));
         if (installing) {
+            const sq = q.slice(1).trim();
             const rows = Packages.results.map(r => root.pkgRow(r));
+            if (sq.length >= 2) rows.unshift({ kind: "action", a: { id: "store", q: sq, title: "Open \u201c" + sq + "\u201d in the App Store", sub: "One result per app, with picks for what you need", glyph: "storefront" } });
             if (!rows.length && q.slice(1).trim().length >= 2)
                 return [{ kind: "action", a: { id: "pkg:none", glyph: Packages.searching ? "hourglass_top" : "search_off",
                     title: Packages.searching ? "Searching the repos, Flathub and the AUR\u2026" : "Nothing called \u201c" + q.slice(1).trim() + "\u201d", sub: "" } }];
@@ -436,6 +447,9 @@ Item {
             return out.concat(scored.map(x => ({ kind: "action", a: x.x })));
         }
         const out = [];
+        // "install obs": the App Store, searched
+        const iq = StoreJs.launcherQuery(q);
+        if (iq) out.push({ kind: "action", a: { id: "store", q: iq, title: "Find \u201c" + iq + "\u201d in the App Store", sub: "Apps from the repos, Flathub and the AUR", glyph: "storefront" } });
         if (KeySheet.asksFor(q)) out.push({ kind: "action", a: { id: "keysmenu", title: "Keyboard shortcuts", sub: "bead's keys, searchable", glyph: "keyboard" } });
         if (mathy && calc.result) out.push({ kind: "calc" });
         // open windows that match, above the apps: Enter switches to one

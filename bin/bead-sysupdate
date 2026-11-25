@@ -1,5 +1,5 @@
 #!/bin/sh
-# bead-sysupdate [repo] [aur] [flatpak]: the system update, run by
+# bead-sysupdate [repo] [aur] [flatpak]: the system update (or one install, below), run by
 # services/Updates.qml and shown in the island (modules/island/UpdateView.qml).
 #
 # No terminal and no questions: pacman and paru run with --noconfirm (their
@@ -11,9 +11,29 @@
 # "@@done" or "@@fail <stage> <code>" at the end. Exits with the failing code.
 set -u
 export LC_ALL=C   # English output, for services/sysupdate.js to read
-stages=${*:-repo aur flatpak}
-
 fail() { echo "@@fail $1 $2"; exit "$2"; }
+
+# bead-sysupdate install repo|flathub|aur <name>: one app, for the App Store
+# (services/Store.qml); the same markers, with the stage "install"
+if [ "${1:-}" = install ]; then
+	src=${2:?source} name=${3:?name}
+	echo "@@stage install"
+	case $src in
+	repo) pkexec stdbuf -oL -eL pacman -S --needed --noconfirm --noprogressbar -- "$name" 2>&1 || fail install $? ;;
+	flatpak|flathub) stdbuf -oL -eL flatpak install -y --noninteractive flathub "$name" 2>&1 || fail install $? ;;
+	aur)
+		if command -v paru >/dev/null; then
+			stdbuf -oL -eL paru -S --needed --noconfirm --skipreview --noprogressbar --sudo pkexec --nosudoloop -- "$name" 2>&1 || fail install $?
+		elif command -v yay >/dev/null; then
+			stdbuf -oL -eL yay -S --needed --noconfirm --noprogressbar --sudo pkexec --nosudoloop --answerdiff None --answerclean None -- "$name" 2>&1 || fail install $?
+		else echo "error: no AUR helper (paru or yay)"; fail install 127; fi ;;
+	*) echo "error: unknown source $src"; fail install 2 ;;
+	esac
+	echo "@@done"
+	exit 0
+fi
+
+stages=${*:-repo aur flatpak}
 
 for s in $stages; do
 	case $s in

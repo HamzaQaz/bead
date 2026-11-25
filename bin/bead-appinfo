@@ -1,0 +1,46 @@
+#!/bin/sh
+# bead-appinfo [repo <name>] [aur <name>] [flathub <id>]: what the App Store's
+# details sheet shows about an app (services/store.js details() reads it), as
+# one JSON object: { repo: {...}, aur: {...}, flathub: {...} }. Read-only:
+# pacman's local database, the AUR's API and Flathub's API.
+set -u
+export LC_ALL=C
+repo="" aur="" flathub=""
+while [ $# -ge 2 ]; do
+	case $1 in repo) repo=$2 ;; aur) aur=$2 ;; flathub) flathub=$2 ;; esac
+	shift 2
+done
+r=""; [ -n "$repo" ] && r=$(expac -S '%v\t%u\t%L\t%m' -- "$repo" 2>/dev/null | head -1)
+a=""; [ -n "$aur" ] && a=$(curl -sf --max-time 10 "https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=$(printf %s "$aur" | sed 's/[^A-Za-z0-9._+-]//g')")
+f=""; [ -n "$flathub" ] && f=$(curl -sf --max-time 10 "https://flathub.org/api/v2/appstream/$(printf %s "$flathub" | sed 's/[^A-Za-z0-9._-]//g')")
+R="$r" A="$a" F="$f" REPO="$repo" AUR="$aur" FLATHUB="$flathub" exec python3 -I -c '
+import json, os
+out = {}
+r = os.environ["R"]
+if os.environ["REPO"] and r:
+    v, u, l, m = (r.split("\t") + ["", "", "", ""])[:4]
+    out["repo"] = {"version": v, "url": u if u != "None" else "", "license": l.replace("  ", ", "), "size": int(m or 0)}
+try:
+    res = json.loads(os.environ["A"] or "{}").get("results") or []
+    if res:
+        p = res[0]
+        out["aur"] = {"name": p.get("Name"), "url": p.get("URL") or "", "votes": p.get("NumVotes", 0), "maintainer": p.get("Maintainer") or "",
+                      "updated": p.get("LastModified", 0), "version": p.get("Version", ""), "license": ", ".join(p.get("License") or [])}
+except Exception:
+    pass
+try:
+    d = json.loads(os.environ["F"] or "{}")
+    if d:
+        u = d.get("urls") or {}
+        shot = ""
+        for s in d.get("screenshots") or []:
+            sizes = sorted(s.get("sizes") or [], key=lambda x: abs(int(x.get("width") or 0) - 752))
+            if sizes: shot = sizes[0]["src"]; break
+        rel = (d.get("releases") or [{}])[0]
+        out["flathub"] = {"id": d.get("id") or os.environ["FLATHUB"], "description": d.get("description") or "", "homepage": u.get("homepage") or "",
+                          "vcs": u.get("vcs_browser") or "", "bugtracker": u.get("bugtracker") or "", "developer": d.get("developer_name") or "",
+                          "license": d.get("project_license") or "", "version": rel.get("version") or "", "icon": d.get("icon") or "", "screenshot": shot}
+except Exception:
+    pass
+print(json.dumps(out))
+'

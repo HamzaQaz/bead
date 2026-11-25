@@ -3,6 +3,22 @@
 bead follows [Semantic Versioning](https://semver.org). Each release's
 section is what `bead update` shows as "what's new".
 
+## Unreleased
+
+### App Store
+- A new App Store window (Apps tab, the launcher's "install obs", or
+  `qs ipc call store open`): search by name or by need ("screen recorder",
+  "notes"), one result per app across the repos, Flathub and the AUR, the
+  repos preferred, each with a line on why it fits.
+- A store front of hand-picked apps by category, a featured banner and
+  Editor's choice.
+- Click an app for its details: description, screenshot, website, source
+  code and bug tracker links, version, license and size.
+- Installs show on the island's update card: waiting for your password,
+  downloading, installing, then Open. AUR packages never open a terminal.
+- AUR packages are checked before building: that they exist, their votes,
+  age and maintainer, and their build files for risky commands.
+
 ## 0.2.0
 
 ### System updates, on the island

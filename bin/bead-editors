@@ -1,0 +1,41 @@
+#!/bin/sh
+# bead-editors check | add <name> <note> | remove <name>: Editor's choice in the
+# App Store (data/apps.json "editors"), for bead's maintainer only.
+#
+# "Maintainer": bead runs from a git checkout of bead (share/source) and your
+# git identity there has authored commits in it. The change is written to that
+# checkout (and the installed copy, to show at once); it reaches other people
+# only when you commit and push it, which only the repository's owners can.
+set -eu
+share=${BEAD_SHARE:-${XDG_DATA_HOME:-$HOME/.local/share}/bead}
+src=$(cat "$share/source" 2>/dev/null || true)
+no() { echo "no: $1"; exit 1; }
+[ -n "$src" ] && [ -d "$src/.git" ] || no "bead isn't running from a git checkout"
+email=$(git -C "$src" config user.email 2>/dev/null || true)
+[ -n "$email" ] || no "no git identity in $src"
+[ -n "$(git -C "$src" log --author="<$email>" -1 --format=%h 2>/dev/null)" ] || no "you haven't authored commits in this bead"
+case ${1:-check} in
+check) echo "yes: $src"; exit 0 ;;
+add|remove) ;;
+*) echo "usage: bead-editors check | add <name> <note> | remove <name>" >&2; exit 2 ;;
+esac
+for f in "$src/data/apps.json" "$share/data/apps.json"; do
+	[ -f "$f" ] || continue
+	python3 -I - "$f" "$@" <<'PY'
+import json, sys
+path, op, name = sys.argv[1], sys.argv[2], sys.argv[3]
+note = sys.argv[4] if len(sys.argv) > 4 else ""
+d = json.load(open(path))
+picks = [a["name"] for c in d["categories"] for a in c["apps"]]
+if name not in picks: sys.exit("not a pick in any category: " + name)
+ed = [e for e in d.get("editors", []) if e["name"] != name]
+if op == "add":
+    if not note.strip() or len(note) >= 110: sys.exit("the note needs 1-109 characters")
+    ed = [{"name": name, "note": note.strip()}] + ed
+    if len(ed) > 6: sys.exit("Editor's choice holds 6 at most: remove one first")
+elif len(ed) < 3: sys.exit("Editor's choice needs at least 3")
+d["editors"] = ed
+with open(path, "w") as fh: json.dump(d, fh, indent=2, ensure_ascii=False); fh.write("\n")
+PY
+done
+echo "ok"

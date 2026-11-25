@@ -166,13 +166,16 @@ Item {
                 font.family: Theme.font
                 font.pixelSize: 11
                 color: Theme.subtext
-                text: "Search the repos, Flathub and the AUR from the launcher: type + then a name."
+                text: "The App Store: the repos, Flathub and the AUR in one search, with picks by category."
             }
             Action {
-                text: "Find apps"
-                glyph: "search"
+                text: "App Store"
+                glyph: "storefront"
                 accent: true
-                onHit: Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "launcher", "search", "+"])
+                onHit: {
+                    Store.show("");
+                    Quickshell.execDetached(["qs", "-p", Quickshell.shellPath(""), "ipc", "call", "dashboard", "close"]);
+                }
             }
         }
     }

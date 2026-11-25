@@ -7,6 +7,8 @@ import Quickshell.Io
 import "pkgs.js" as Pkgs
 import "sysupdate.js" as U
 import "reboot.js" as R
+import "trust.js" as T
+import "store.js" as S
 
 // OS updates: checks the repos (checkupdates: a temporary copy of the sync
 // database, no root, nothing changes), the AUR (paru -Qua) and Flathub
@@ -50,13 +52,63 @@ Singleton {
     readonly property bool running: phase === "running"
     property bool shown: false          // in the island (Hide keeps it running)
     property var counts: ({ repo: 0, aur: 0, flatpak: 0 })
-    property var aurNames: []           // what the review lists
+    property var aurNames: []           // what the review lists (the riskiest first, once checked)
+
+    // ── is each AUR update real and safe-looking? (services/trust.js): the
+    // AUR's facts and its build files, read by bin/bead-pkgcheck during the
+    // review. name → { level: ok|caution|danger, reasons, notes } ──
+    property var trust: ({})
+    readonly property bool trustChecking: trustProbe.running
+    readonly property string trustWorst: aurNames.reduce((w, n) => {
+        const l = trust[n]?.level ?? "ok";
+        return l === "danger" || w === "danger" ? "danger" : l === "caution" || w === "caution" ? "caution" : "ok";
+    }, "ok")
+    function checkTrust(names: var): void {
+        trust = {};
+        if (!names.length) return;
+        trustProbe.command = [Paths.cmd("bead-pkgcheck"), "aur", ...names];
+        trustProbe.running = true;
+    }
+    Process {
+        id: trustProbe
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let list = [];
+                try { list = JSON.parse(text); } catch (e) { return; }
+                const now = Date.now() / 1000, t = {};
+                for (const p of list) {
+                    let found = [];
+                    for (const f in p.files ?? {}) found = found.concat(T.scan(p.files[f]));
+                    t[p.name] = T.verdict(T.aurRisk(p.exists ? p.info : null, now), found);
+                }
+                root.trust = t;
+                const rank = { danger: 0, caution: 1, ok: 2 };
+                root.aurNames = root.aurNames.slice().sort((a, b) => (rank[t[a]?.level] ?? 2) - (rank[t[b]?.level] ?? 2));
+            }
+        }
+    }
     property string stage: ""           // repo | aur | flatpak
     property string current: ""         // the package being worked on
     property string doing: ""           // upgrading | downloading | building…
     property int stepI: 0
     property int stepN: 0
-    readonly property real progress: running ? U.progress(counts, stage, stepI, stepN) : phase === "done" ? 1 : 0
+    readonly property real progress: running ? (job ? S.installFraction(inst) : U.progress(counts, stage, stepI, stepN)) : phase === "done" ? 1 : 0
+
+    // ── one app from the App Store, on the same card (services/Store.qml) ──
+    property var job: null              // { title, name, source, icon }
+    property var inst: S.installStart() // its progress (store.js)
+    signal appInstalled(var job)
+    function installApp(j: var): bool {
+        if (running || phase === "review") { shown = true; return false; }
+        job = j; inst = S.installStart();
+        stage = "install"; current = ""; doing = ""; stepI = 0; stepN = 0;
+        log = []; error = ""; failedStage = ""; updated = [];
+        needsRestart = false;
+        runner.command = [Paths.cmd("bead-sysupdate"), ...S.installArgs(j)];
+        phase = "running"; shown = true;
+        runner.running = true;
+        return true;
+    }
     property list<string> log: []
     property string error: ""
     property string failedStage: ""
@@ -108,18 +160,22 @@ Singleton {
         counts = { repo: repo.length, aur: aur.length, flatpak: flatpak.length };
         aurNames = items.filter(u => u.source === "aur").map(u => u.name);
         shown = true;
-        if (aurNames.length) phase = "review";
+        if (aurNames.length) { phase = "review"; checkTrust(aurNames); }
         else start();
     }
-    function start(): void {
+    // withAur false: the repos and Flatpaks only (the review found an AUR update risky)
+    function start(withAur = true): void {
+        if (!withAur) counts = Object.assign({}, counts, { aur: 0 });
         stage = ""; current = ""; doing = ""; stepI = 0; stepN = 0;
         log = []; error = ""; failedStage = ""; updated = [];
         needsRestart = restart;
+        job = null;
+        runner.command = [Paths.cmd("bead-sysupdate"), ...["repo", "aur", "flatpak"].filter(s => (counts[s] || 0) > 0)];
         phase = "running";
         runner.running = true;
     }
     function cancel(): void { if (phase === "review" || phase === "done" || phase === "failed") { phase = ""; shown = false; } }
-    function hide(): void { shown = false; if (phase === "done" || phase === "failed") phase = ""; }
+    function hide(): void { shown = false; if (phase === "done" || phase === "failed") { phase = ""; job = null; } }
     // the old way: paru (or yay, or pacman) in a terminal, where you answer everything
     function terminal(): void {
         phase = ""; shown = false;
@@ -132,6 +188,12 @@ Singleton {
     function aurLink(name: string): string { return "https://aur.archlinux.org/cgit/aur.git/log/?h=" + encodeURIComponent(name); }
 
     function line(l: string): void {
+        if (job) {
+            inst = S.installStep(inst, l);
+            if (!l.startsWith("@@")) log = [...log, l].slice(-200);
+            if (inst.error) error = inst.error;
+            return;
+        }
         if (l.startsWith("@@done")) return;
         if (l.startsWith("@@fail")) { failedStage = l.split(" ")[1] ?? ""; return; }
         const r = U.parse(l);
@@ -151,13 +213,12 @@ Singleton {
     }
     Process {
         id: runner
-        command: [Paths.cmd("bead-sysupdate"), ...["repo", "aur", "flatpak"].filter(s => (root.counts[s] || 0) > 0)]
         stdout: SplitParser { onRead: l => root.line(l) }
         onExited: code => {
             if (root.current) root.updated = [...root.updated, root.current].slice(-50);
             root.current = ""; root.doing = "";
             // done: stays up while a restart is wanted (it asks when); else it goes by itself
-            if (code === 0) { root.phase = "done"; root.shown = true; if (!root.needsRestart) doneHide.restart(); }
+            if (code === 0) { root.phase = "done"; root.shown = true; if (!root.needsRestart) doneHide.restart(); if (root.job) root.appInstalled(root.job); }
             else {
                 root.phase = "failed"; root.shown = true;
                 if (!root.error) root.error = code === 126 || code === 127 ? "The password was cancelled" : "Stopped with code " + code;
@@ -165,7 +226,7 @@ Singleton {
             root.check();
         }
     }
-    Timer { id: doneHide; interval: 6000; onTriggered: if (root.phase === "done") root.hide() }
+    Timer { id: doneHide; interval: root.job ? 9000 : 6000; onTriggered: if (root.phase === "done") root.hide() }
 
     Timer { interval: 2 * 60 * 1000; running: true; onTriggered: root.check() }
     Timer { interval: 3 * 3600 * 1000; repeat: true; running: true; onTriggered: root.check() }
@@ -222,6 +283,9 @@ Singleton {
         function cancelReboot(): void { root.cancelReboot(); }
         function rebootStatus(): string { return root.rebootAt ? root.rebootLabel : "none"; }
         // the island's after-update view as if a restart were wanted (nothing runs)
+        // the review as if these AUR packages had updates (checked for real; nothing runs)
+        function cancel(): void { root.cancel(); }
+        function previewReview(names: string): void { root.aurNames = names.split(/[ ,]+/).filter(Boolean); root.phase = "review"; root.shown = true; root.checkTrust(root.aurNames); }
         function previewDone(): void { root.needsRestart = true; root.updated = ["linux", "systemd", "glibc"]; root.phase = "done"; root.shown = true; }
         function status(): string { return root.checking ? "checking" : root.count + " (" + root.repo.length + " repo, " + root.aur.length + " aur, " + root.flatpak.length + " flatpak)"; }
         function list(): string { return root.items.map(u => u.source + "\t" + u.name + "\t" + u.from + " -> " + u.to + (u.restart ? "\trestart" : "")).join("\n"); }

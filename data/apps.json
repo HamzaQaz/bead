@@ -1,0 +1,392 @@
+{
+  "_": "bead's App Store picks (services/Store.qml): categories for the store front, and needs (what you might search for) → the apps that answer them. name: the repo/AUR package; flatpak: its Flathub id, used when the repos don't have it; why: one line on what it's for.",
+  "categories": [
+    {
+      "id": "media",
+      "title": "Video & audio",
+      "icon": "movie",
+      "apps": [
+        {
+          "name": "obs-studio",
+          "flatpak": "com.obsproject.Studio",
+          "title": "OBS Studio",
+          "why": "Record or stream your screen and camera"
+        },
+        {
+          "name": "gpu-screen-recorder",
+          "flatpak": "com.dec05eba.gpu_screen_recorder",
+          "title": "GPU Screen Recorder",
+          "why": "Light screen recording and instant replay"
+        },
+        {
+          "name": "kdenlive",
+          "flatpak": "org.kde.kdenlive",
+          "title": "Kdenlive",
+          "why": "Edit videos on a timeline"
+        },
+        {
+          "name": "mpv",
+          "flatpak": "io.mpv.Mpv",
+          "title": "mpv",
+          "why": "A fast, minimal video player"
+        },
+        {
+          "name": "vlc",
+          "flatpak": "org.videolan.VLC",
+          "title": "VLC",
+          "why": "Plays anything you throw at it"
+        },
+        {
+          "name": "audacity",
+          "flatpak": "org.audacityteam.Audacity",
+          "title": "Audacity",
+          "why": "Record and edit audio"
+        },
+        {
+          "name": "easyeffects",
+          "flatpak": "com.github.wwmm.easyeffects",
+          "title": "Easy Effects",
+          "why": "Equalizer and effects for everything you hear"
+        }
+      ]
+    },
+    {
+      "id": "gaming",
+      "title": "Gaming",
+      "icon": "sports_esports",
+      "apps": [
+        {
+          "name": "steam",
+          "flatpak": "com.valvesoftware.Steam",
+          "title": "Steam",
+          "why": "Your Steam library, Proton included"
+        },
+        {
+          "name": "lutris",
+          "flatpak": "net.lutris.Lutris",
+          "title": "Lutris",
+          "why": "Every launcher and emulator in one place"
+        },
+        {
+          "name": "heroic-games-launcher-bin",
+          "flatpak": "com.heroicgameslauncher.hgl",
+          "title": "Heroic",
+          "why": "Epic, GOG and Amazon games"
+        },
+        {
+          "name": "prismlauncher",
+          "flatpak": "org.prismlauncher.PrismLauncher",
+          "title": "Prism Launcher",
+          "why": "Minecraft with mods and many instances"
+        },
+        {
+          "name": "mangohud",
+          "title": "MangoHud",
+          "why": "FPS and temperatures over your games"
+        },
+        {
+          "name": "bottles",
+          "flatpak": "com.usebottles.bottles",
+          "title": "Bottles",
+          "why": "Run Windows apps in tidy containers"
+        }
+      ]
+    },
+    {
+      "id": "chat",
+      "title": "Chat",
+      "icon": "forum",
+      "apps": [
+        {
+          "name": "discord",
+          "flatpak": "com.discordapp.Discord",
+          "title": "Discord",
+          "why": "Voice, video and text with your servers"
+        },
+        {
+          "name": "vesktop",
+          "flatpak": "dev.vencord.Vesktop",
+          "title": "Vesktop",
+          "why": "Discord with screen-share audio on Linux"
+        },
+        {
+          "name": "telegram-desktop",
+          "flatpak": "org.telegram.desktop",
+          "title": "Telegram",
+          "why": "Fast messaging that syncs everywhere"
+        },
+        {
+          "name": "signal-desktop",
+          "flatpak": "org.signal.Signal",
+          "title": "Signal",
+          "why": "Private, end-to-end encrypted messaging"
+        },
+        {
+          "name": "thunderbird",
+          "flatpak": "org.mozilla.Thunderbird",
+          "title": "Thunderbird",
+          "why": "Email, calendars and contacts"
+        }
+      ]
+    },
+    {
+      "id": "code",
+      "title": "Code",
+      "icon": "code",
+      "apps": [
+        {
+          "name": "code",
+          "flatpak": "com.visualstudio.code",
+          "title": "Code - OSS",
+          "why": "The VS Code editor, open source build"
+        },
+        {
+          "name": "zed",
+          "flatpak": "dev.zed.Zed",
+          "title": "Zed",
+          "why": "A very fast editor with AI built in"
+        },
+        {
+          "name": "neovim",
+          "title": "Neovim",
+          "why": "Vim, extended and scriptable"
+        },
+        {
+          "name": "obsidian",
+          "flatpak": "md.obsidian.Obsidian",
+          "title": "Obsidian",
+          "why": "Notes in Markdown, linked together"
+        }
+      ]
+    },
+    {
+      "id": "creative",
+      "title": "Creative",
+      "icon": "palette",
+      "apps": [
+        {
+          "name": "gimp",
+          "flatpak": "org.gimp.GIMP",
+          "title": "GIMP",
+          "why": "Edit photos and images"
+        },
+        {
+          "name": "krita",
+          "flatpak": "org.kde.krita",
+          "title": "Krita",
+          "why": "Digital painting and drawing"
+        },
+        {
+          "name": "inkscape",
+          "flatpak": "org.inkscape.Inkscape",
+          "title": "Inkscape",
+          "why": "Vector graphics and SVGs"
+        },
+        {
+          "name": "blender",
+          "flatpak": "org.blender.Blender",
+          "title": "Blender",
+          "why": "3D modelling, animation and rendering"
+        },
+        {
+          "name": "darktable",
+          "flatpak": "org.darktable.Darktable",
+          "title": "darktable",
+          "why": "Develop RAW photos"
+        }
+      ]
+    },
+    {
+      "id": "utilities",
+      "title": "Utilities",
+      "icon": "handyman",
+      "apps": [
+        {
+          "name": "localsend",
+          "flatpak": "org.localsend.localsend_app",
+          "title": "LocalSend",
+          "why": "Send files to nearby phones and PCs"
+        },
+        {
+          "name": "keepassxc",
+          "flatpak": "org.keepassxc.KeePassXC",
+          "title": "KeePassXC",
+          "why": "A password manager that stays offline"
+        },
+        {
+          "name": "qbittorrent",
+          "flatpak": "org.qbittorrent.qBittorrent",
+          "title": "qBittorrent",
+          "why": "Torrents without the ads"
+        },
+        {
+          "name": "libreoffice-fresh",
+          "flatpak": "org.libreoffice.LibreOffice",
+          "title": "LibreOffice",
+          "why": "Documents, spreadsheets and slides"
+        },
+        {
+          "name": "baobab",
+          "flatpak": "org.gnome.baobab",
+          "title": "Disk Usage",
+          "why": "See what's filling your disk"
+        },
+        {
+          "name": "btop",
+          "title": "btop",
+          "why": "A beautiful system monitor in the terminal"
+        }
+      ]
+    }
+  ],
+  "needs": {
+    "screen recorder": [
+      "obs-studio",
+      "gpu-screen-recorder",
+      "kooha"
+    ],
+    "recorder": [
+      "obs-studio",
+      "gpu-screen-recorder",
+      "kooha",
+      "audacity"
+    ],
+    "record screen": [
+      "obs-studio",
+      "gpu-screen-recorder",
+      "kooha"
+    ],
+    "streaming": [
+      "obs-studio"
+    ],
+    "video editor": [
+      "kdenlive",
+      "shotcut",
+      "blender"
+    ],
+    "video player": [
+      "mpv",
+      "vlc",
+      "celluloid"
+    ],
+    "music": [
+      "spotify-launcher",
+      "strawberry",
+      "audacity"
+    ],
+    "audio editor": [
+      "audacity"
+    ],
+    "equalizer": [
+      "easyeffects"
+    ],
+    "games": [
+      "steam",
+      "lutris",
+      "heroic-games-launcher-bin",
+      "prismlauncher"
+    ],
+    "minecraft": [
+      "prismlauncher"
+    ],
+    "windows apps": [
+      "bottles",
+      "lutris"
+    ],
+    "chat": [
+      "discord",
+      "telegram-desktop",
+      "signal-desktop",
+      "vesktop"
+    ],
+    "email": [
+      "thunderbird"
+    ],
+    "code editor": [
+      "code",
+      "zed",
+      "neovim"
+    ],
+    "editor": [
+      "code",
+      "zed",
+      "neovim",
+      "gnome-text-editor"
+    ],
+    "notes": [
+      "obsidian",
+      "logseq-desktop-bin"
+    ],
+    "photo editor": [
+      "gimp",
+      "darktable",
+      "krita"
+    ],
+    "drawing": [
+      "krita",
+      "inkscape"
+    ],
+    "3d": [
+      "blender"
+    ],
+    "office": [
+      "libreoffice-fresh",
+      "onlyoffice-bin"
+    ],
+    "pdf": [
+      "okular",
+      "evince"
+    ],
+    "password manager": [
+      "keepassxc",
+      "bitwarden"
+    ],
+    "torrent": [
+      "qbittorrent",
+      "transmission-gtk"
+    ],
+    "file sharing": [
+      "localsend"
+    ],
+    "disk usage": [
+      "baobab",
+      "filelight"
+    ],
+    "system monitor": [
+      "btop",
+      "mission-center"
+    ],
+    "browser": [
+      "firefox",
+      "zen-browser-bin",
+      "chromium",
+      "brave-bin"
+    ]
+  },
+  "editors": [
+    {
+      "name": "vesktop",
+      "note": "Discord with screen-share audio on Linux, combined with vencord."
+    },
+    {
+      "name": "discord",
+      "note": "Voice, video and text with your servers"
+    },
+    {
+      "name": "obs-studio",
+      "note": "The standard for recording and streaming. Scenes, sources and filters, all free."
+    },
+    {
+      "name": "zed",
+      "note": "An editor that opens instantly and stays fast, with collaboration and AI built in."
+    },
+    {
+      "name": "krita",
+      "note": "Painting that feels like paper: great brushes, stabilisers and a tablet-first design."
+    },
+    {
+      "name": "localsend",
+      "note": "AirDrop for everything: send files to any phone or PC on your Wi-Fi, no account."
+    }
+  ]
+}

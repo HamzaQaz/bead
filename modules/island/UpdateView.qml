@@ -33,8 +33,11 @@ Item {
         if (!name) return null;
         return DesktopEntries.heuristicLookup(name) ?? DesktopEntries.heuristicLookup(U.pretty(name)) ?? null;
     }
-    readonly property var app: entry(Updates.current)
-    readonly property string appIcon: app?.icon ? Apps.iconPath(app.icon) : ""
+    readonly property var app: Updates.job ? null : entry(Updates.current)
+    readonly property string appIcon: Updates.job ? (Updates.job.icon || "") : app?.icon ? Apps.iconPath(app.icon) : ""
+    // installing one app (the App Store): what it's doing, in words
+    readonly property var ij: Updates.job
+    readonly property string ijFrom: !ij ? "" : ij.source === "flathub" ? "Flathub" : ij.source === "aur" ? "the AUR" : "the repos"
 
     component Btn: Rectangle {
         id: b
@@ -102,7 +105,13 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: body.width - 52
                     Title { width: parent.width; text: "Update " + Updates.count + (Updates.count === 1 ? " package" : " packages") }
-                    Sub { width: parent.width; text: Updates.aurNames.length + " from the AUR are built from their recipes: look at the changes first" }
+                    Sub {
+                        width: parent.width
+                        text: Updates.trustChecking ? "Checking the " + Updates.aurNames.length + " from the AUR…"
+                            : Updates.trustWorst === "danger" ? "One from the AUR looks unsafe: read why before updating"
+                            : Updates.trustWorst === "caution" ? "Some from the AUR are worth a look first"
+                            : Updates.aurNames.length + " from the AUR are built from their recipes: they look fine"
+                    }
                 }
             }
             Column {
@@ -113,24 +122,53 @@ Item {
                     Rectangle {
                         id: aurRow
                         required property string modelData
+                        // bead's check of it (services/trust.js): a tag, and why when it's not fine
+                        readonly property var t: Updates.trust[modelData] ?? null
+                        readonly property string level: t?.level ?? ""
+                        readonly property color tone: level === "danger" ? Theme.tone("error") : level === "caution" ? Theme.tone("warning") : Theme.tone("success")
                         width: body.width
-                        height: 30
+                        height: level && level !== "ok" ? 30 + why.implicitHeight + 6 : 30
                         radius: 10
                         color: Qt.alpha(Theme.text, arMa.containsMouse ? 0.08 : 0.04)
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Text {
+                            id: aurName
                             x: 12
-                            anchors.verticalCenter: parent.verticalCenter
+                            y: 15 - height / 2
                             font.family: Theme.font
                             font.pixelSize: 12
                             font.weight: Font.Medium
                             color: Theme.text
                             text: aurRow.modelData
                         }
+                        Rectangle {
+                            visible: aurRow.level !== ""
+                            x: 12 + aurName.implicitWidth + 8
+                            y: 15 - height / 2
+                            width: tag.implicitWidth + 12; height: 17; radius: 8.5
+                            color: Qt.alpha(aurRow.tone, 0.16)
+                            Text {
+                                id: tag
+                                anchors.centerIn: parent
+                                font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold
+                                color: aurRow.tone
+                                text: aurRow.level === "danger" ? "Risky" : aurRow.level === "caution" ? "Check it" : "Looks fine"
+                            }
+                        }
+                        Text {
+                            id: why
+                            visible: aurRow.level !== "" && aurRow.level !== "ok"
+                            x: 12; y: 28
+                            width: parent.width - 24
+                            wrapMode: Text.Wrap
+                            font.family: Theme.font; font.pixelSize: 11
+                            color: aurRow.tone
+                            text: (aurRow.t?.reasons ?? []).join(" · ")
+                        }
                         Row {
                             anchors.right: parent.right
                             anchors.rightMargin: 12
-                            anchors.verticalCenter: parent.verticalCenter
+                            y: 15 - height / 2
                             spacing: 4
                             Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; color: Theme.tone("action"); text: "Changes" }
                             Icon { anchors.verticalCenter: parent.verticalCenter; name: "open_in_new"; size: 13; color: Theme.tone("action") }
@@ -144,7 +182,9 @@ Item {
                 anchors.right: parent.right
                 spacing: 8
                 Btn { text: "Cancel"; onHit: Updates.cancel() }
-                Btn { text: "Update"; glyph: "download"; main: true; onHit: Updates.start() }
+                // something risky: skipping the AUR is the main choice, updating it all is "anyway"
+                Btn { visible: Updates.trustWorst === "danger" && Updates.count > Updates.aurNames.length; text: "Skip the AUR"; glyph: "download"; main: true; onHit: Updates.start(false) }
+                Btn { text: Updates.trustWorst === "danger" ? "Update anyway" : "Update"; glyph: "download"; main: Updates.trustWorst !== "danger"; onHit: Updates.start() }
             }
         }
 
@@ -195,13 +235,16 @@ Item {
                     spacing: 2
                     Title {
                         width: parent.width
-                        text: !Updates.current ? (Updates.stage === "aur" ? "Building from the AUR…" : Updates.stage === "flatpak" ? "Updating Flatpaks…" : "Getting ready…")
+                        text: root.ij ? ({ auth: "Waiting for your password", download: "Downloading ", build: "Building ", install: "Installing " }[Updates.inst.phase] ?? "Installing ") + (Updates.inst.phase === "auth" ? "" : root.ij.title)
+                            : !Updates.current ? (Updates.stage === "aur" ? "Building from the AUR…" : Updates.stage === "flatpak" ? "Updating Flatpaks…" : "Getting ready…")
                             : (Updates.doing === "downloading" ? "Downloading " : Updates.doing === "building" ? "Building " : Updates.doing === "installing" ? "Installing " : "Updating ")
                               + (root.app?.name || U.pretty(Updates.current))
                     }
                     Sub {
                         width: parent.width
-                        text: (Updates.stage === "aur" ? "AUR" : Updates.stage === "flatpak" ? "Flatpak" : "Packages")
+                        text: root.ij ? (Updates.inst.phase === "auth" ? "To install " + root.ij.title + " from " + root.ijFrom
+                                : "From " + root.ijFrom + (Updates.inst.n > 1 ? " · " + Updates.inst.n + " packages" : "") + " · " + Math.round(Updates.progress * 100) + "%")
+                            : (Updates.stage === "aur" ? "AUR" : Updates.stage === "flatpak" ? "Flatpak" : "Packages")
                             + (Updates.stepN > 0 ? " · " + Updates.stepI + " of " + Updates.stepN : "")
                             + " · " + Math.round(Updates.progress * 100) + "%"
                     }
@@ -290,7 +333,8 @@ Item {
                     spacing: 2
                     Title {
                         width: parent.width
-                        text: !parent.parent.parent.ok ? "The update stopped"
+                        text: root.ij ? (parent.parent.parent.ok ? root.ij.title + " is installed" : "Couldn't install " + root.ij.title)
+                            : !parent.parent.parent.ok ? "The update stopped"
                             : Updates.rebootAt ? "Restart scheduled"
                             : Updates.needsRestart ? "Restart to finish" : "All up to date"
                     }
@@ -298,7 +342,8 @@ Item {
                         width: parent.width
                         wrapMode: Text.Wrap
                         maximumLineCount: 3
-                        text: parent.parent.parent.ok
+                        text: root.ij ? (parent.parent.parent.ok ? "From " + root.ijFrom : Updates.error || "It stopped")
+                            : parent.parent.parent.ok
                             ? (Updates.rebootAt ? Updates.rebootLabel + " · a reminder comes 5 minutes before"
                                : Updates.needsRestart ? "Updated " + (Updates.updated.filter(n => /^(linux|systemd|glibc|nvidia|mesa|amd-ucode|intel-ucode|dbus|wayland|hyprland)/.test(n)).slice(0, 3).join(", ") || "core system packages") + ": they take effect after a restart"
                                : Updates.updated.length + (Updates.updated.length === 1 ? " package updated" : " packages updated"))
@@ -350,12 +395,13 @@ Item {
             Row {
                 anchors.right: parent.right
                 spacing: 8
-                Btn { visible: root.phase === "failed"; text: "Open in a terminal"; glyph: "terminal"; onHit: Updates.terminal() }
+                Btn { visible: root.phase === "done" && !!root.ij; text: "Open"; glyph: "open_in_new"; main: true; onHit: { const j = root.ij; Updates.hide(); Store.openApp(j); } }
+                Btn { visible: root.phase === "failed" && !root.ij; text: "Open in a terminal"; glyph: "terminal"; onHit: Updates.terminal() }
                 Btn { visible: parent.parent.asks && root.picking; text: "Back"; onHit: root.picking = false }
                 Btn { visible: parent.parent.asks && root.picking; text: "Schedule"; glyph: "schedule"; main: true; onHit: { Updates.scheduleReboot(root.pickH, root.pickM); root.picking = false; } }
                 Btn { visible: root.phase === "done" && !!Updates.rebootAt; text: "Cancel restart"; onHit: Updates.cancelReboot() }
                 Btn { visible: root.phase === "done" && !!Updates.rebootAt; text: "Restart now"; glyph: "restart_alt"; onHit: Updates.rebootNow() }
-                Btn { visible: !(parent.parent.asks && root.picking); text: parent.parent.asks ? "Later" : "Close"; main: root.phase === "done" && !parent.parent.asks && !Updates.rebootAt; onHit: Updates.hide() }
+                Btn { visible: !(parent.parent.asks && root.picking); text: parent.parent.asks ? "Later" : "Close"; main: root.phase === "done" && !parent.parent.asks && !Updates.rebootAt && !root.ij; onHit: Updates.hide() }
             }
         }
     }

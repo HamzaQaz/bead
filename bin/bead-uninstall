@@ -77,7 +77,7 @@ case $share in
 	;;
 *)
 	gone "$cfg/systemd/user/bead-resume.service"
-	for b in bead-resume bead-sysupdate bead-discord bead-dictate bead-look bead-tint bead-pearl bead-term bead-activity bead-doctor bead-update glint; do
+	for b in bead-resume bead-sysupdate bead-pkgcheck bead-appinfo bead-editors bead-discord bead-dictate bead-look bead-tint bead-pearl bead-term bead-activity bead-doctor bead-update glint; do
 		gone "$prefix/bin/$b"
 	done
 	gone "$prefix/share/glint" "$share.prev" "$share.broken" "$share"

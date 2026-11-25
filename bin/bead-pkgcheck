@@ -1,0 +1,51 @@
+#!/bin/sh
+# bead-pkgcheck aur|repo|flathub <name>...: the facts bead checks before an
+# install or update (services/trust.js reads them), as one JSON list:
+#   aur:     { source, name, exists, info (the AUR API's), files: { PKGBUILD, <x>.install } }
+#   repo:    { source, name, exists }        (pacman -Si: signed by Arch)
+#   flathub: { source, name, exists, verified }
+# Read-only: nothing is built or installed.
+set -u
+src=${1:?usage: bead-pkgcheck aur|repo|flathub name...}; shift
+exec python3 -I - "$src" "$@" <<'PY'
+import json, re, subprocess, sys, urllib.parse, urllib.request
+src, names = sys.argv[1], sys.argv[2:]
+def get(url, timeout=15):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "bead-pkgcheck"}), timeout=timeout) as r:
+            return r.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+out = []
+if src == "aur":
+    q = "&".join("arg[]=" + urllib.parse.quote(n) for n in names)
+    res = json.loads(get("https://aur.archlinux.org/rpc/v5/info?" + q) or '{"results":[]}').get("results", [])
+    # a split package's build files are under its base
+    by = {r["Name"]: r for r in res}
+    for n in names:
+        info = by.get(n)
+        files = {}
+        if info:
+            base = urllib.parse.quote(info.get("PackageBase") or n)
+            pb = get("https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=" + base)
+            if pb is not None:
+                files["PKGBUILD"] = pb
+                for f in set(re.findall(r"^\s*install=['\"]?([\w.+-]+)", pb, re.M)):
+                    t = get("https://aur.archlinux.org/cgit/aur.git/plain/%s?h=%s" % (urllib.parse.quote(f), base))
+                    if t is not None: files[f] = t
+        out.append({"source": "aur", "name": n, "exists": bool(info), "info": info, "files": files})
+elif src == "repo":
+    for n in names:
+        ok = subprocess.run(["pacman", "-Si", "--", n], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+        out.append({"source": "repo", "name": n, "exists": ok})
+elif src in ("flathub", "flatpak"):
+    for n in names:
+        ok = subprocess.run(["flatpak", "remote-info", "flathub", n], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+        v = get("https://flathub.org/api/v2/verification/%s/status" % urllib.parse.quote(n))
+        try: verified = bool(json.loads(v).get("verified")) if v else None
+        except Exception: verified = None
+        out.append({"source": "flathub", "name": n, "exists": ok, "verified": verified})
+else:
+    sys.exit("unknown source: " + src)
+print(json.dumps(out))
+PY
