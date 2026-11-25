@@ -34,7 +34,7 @@ check core emoji "Emoji font" "Install noto-fonts-emoji" noto-fonts-emoji sh -c 
 # ── services bead talks to ──
 check core pipewire "PipeWire is running (sound)" "Install pipewire and wireplumber, then log in again" pipewire sh -c 'pactl info || wpctl status'
 check core polkit "A polkit agent is running (asks for your password to install)" "Install hyprpolkitagent and start it from your Hyprland config" hyprpolkitagent \
-	sh -c 'pgrep -f "polkit.*agent|hyprpolkitagent|polkit-gnome|polkit-kde|lxpolkit|mate-polkit|soteria"'
+	sh -c 'pgrep -f "polkit.*agent|hyprpolkitagent|polkit-gnome|polkit-kde|lxpolkit|mate-polkit|soteria" || qs -p "$1" ipc call polkit registered 2>/dev/null | grep -qx true' sh "$share"
 check core notifs "No other notification daemon in the way" "Stop mako, dunst or swaync: bead shows notifications itself" "" \
 	sh -c '! pgrep -x "mako|dunst|swaync|fnott"'
 check core terminal "A terminal (for AUR builds and updates)" "Install kitty, or set \$TERMINAL" kitty \

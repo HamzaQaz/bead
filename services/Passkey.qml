@@ -25,6 +25,14 @@ Singleton {
     readonly property bool active: st !== ""
     readonly property bool asking: st === "ask" || st === "checking" || st === "error"
     readonly property bool registering: req?.action === "register"
+    // what the island's prompt says (the same shape as services/Polkit.qml)
+    readonly property string title: registering ? "Create a passkey" : "Sign in with a passkey"
+    readonly property string subtitle: req?.rpId ?? ""
+    readonly property string detail: req?.user ?? ""
+    readonly property string approveText: registering ? "Create" : "Approve"
+    readonly property string icon: "passkey"
+    readonly property string program: ""
+    readonly property string doneText: st === "success" ? (registering ? "Passkey created" : "Signed in") : "Cancelled"
     signal shake()
 
     IpcHandler {
