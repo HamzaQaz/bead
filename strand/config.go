@@ -51,8 +51,15 @@ func claudeHooks() (string, error) {
 		hooks[ev.name] = append(list, entry)
 		added = append(added, ev.name)
 	}
+	linked, err := linkLegacyHook()
+	if err != nil {
+		return "", err
+	}
+	if linked != "" {
+		linked = "; " + linked
+	}
 	if len(added) == 0 {
-		return "Claude Code already has toast hooks: left alone", nil
+		return "Claude Code already has toast hooks: left alone" + linked, nil
 	}
 	m["hooks"] = hooks
 	if err := backup(path); err != nil {
@@ -63,7 +70,34 @@ func claudeHooks() (string, error) {
 	if err := os.WriteFile(path, append(b, '\n'), 0o600); err != nil {
 		return "", err
 	}
-	return "hooked: " + strings.Join(added, ", "), nil
+	return "hooked: " + strings.Join(added, ", ") + linked, nil
+}
+
+// linkLegacyHook: older installs copied the hook to
+// ~/.claude/hooks/claude-toast.sh, and a copy never updates (a new toast,
+// an old hook). Swap glint's own copy for a link to the installed hook, after
+// a backup. Returns what it did, or "" when there was nothing to do.
+func linkLegacyHook() (string, error) {
+	old := filepath.Join(home, ".claude", "hooks", "claude-toast.sh")
+	fi, err := os.Lstat(old)
+	if err != nil || !fi.Mode().IsRegular() {
+		return "", nil // missing, or a link already
+	}
+	b, err := os.ReadFile(old)
+	if err != nil || !strings.Contains(string(b), "Glint bridge") {
+		return "", nil // not glint's: someone's own script
+	}
+	if err := backup(old); err != nil {
+		return "", err
+	}
+	dest := filepath.Join(shareDir, "glint", "claude-hook.sh")
+	if err := os.Remove(old); err != nil {
+		return "", err
+	}
+	if err := os.Symlink(dest, old); err != nil {
+		return "", err
+	}
+	return "the old copy of the hook in ~/.claude/hooks now links to the installed one", nil
 }
 
 func mentions(v any, needles ...string) bool {

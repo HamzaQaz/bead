@@ -53,6 +53,11 @@ install-glint: glint
 	install -Dm644 glint/qml/toast.qml $(DESTDIR)$(PREFIX)/share/glint/toast.qml
 	install -Dm644 glint/qml/goo.frag.qsb $(DESTDIR)$(PREFIX)/share/glint/goo.frag.qsb
 	install -Dm755 glint/claude-hook.sh $(DESTDIR)$(PREFIX)/share/glint/claude-hook.sh
+	@: "an old install's copy of the hook never updates: link it to this one (strand does the same)"
+	@h=$$HOME/.claude/hooks/claude-toast.sh; \
+	if [ -z "$(DESTDIR)" ] && [ -f "$$h" ] && [ ! -L "$$h" ] && grep -q "Glint bridge" "$$h"; then \
+		cp -p "$$h" "$$h.bak-glint-$$(date +%Y%m%d-%H%M%S)" && ln -sfn $(PREFIX)/share/glint/claude-hook.sh "$$h" && \
+		echo "linked ~/.claude/hooks/claude-toast.sh to the installed hook (the old copy is backed up next to it)"; fi
 
 # strand: the installer (./install.sh builds and runs it)
 strand:

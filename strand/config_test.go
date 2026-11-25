@@ -218,3 +218,36 @@ func TestPackaged(t *testing.T) {
 		}
 	}
 }
+
+// An old install copied the hook to ~/.claude/hooks/claude-toast.sh, and that
+// copy never updated. strand swaps it for a link to the installed hook (after
+// a backup); anything else by that name, or a link already, it leaves alone.
+func TestLegacyHookBecomesALink(t *testing.T) {
+	h := fakeHome(t)
+	old := filepath.Join(h, ".claude", "hooks", "claude-toast.sh")
+	os.MkdirAll(filepath.Dir(old), 0o755)
+	os.WriteFile(old, []byte("#!/usr/bin/env bash\n# Claude Code ↔ Glint bridge (bead). old\n"), 0o755)
+	note, err := linkLegacyHook()
+	if err != nil || note == "" {
+		t.Fatalf("legacy copy: note %q, err %v", note, err)
+	}
+	if dest, err := os.Readlink(old); err != nil || dest != filepath.Join(shareDir, "glint", "claude-hook.sh") {
+		t.Errorf("want a link to the installed hook, got %q (%v)", dest, err)
+	}
+	if b, _ := filepath.Glob(old + ".bak-strand-*"); len(b) != 1 {
+		t.Errorf("want one backup of the old copy, got %d", len(b))
+	}
+	// already a link: nothing to do
+	if note, _ := linkLegacyHook(); note != "" {
+		t.Errorf("second run should do nothing: %q", note)
+	}
+	// someone's own script by that name: left alone
+	os.Remove(old)
+	os.WriteFile(old, []byte("#!/bin/sh\necho mine\n"), 0o755)
+	if note, _ := linkLegacyHook(); note != "" {
+		t.Errorf("changed a script that isn't glint's: %q", note)
+	}
+	if b, _ := os.ReadFile(old); string(b) != "#!/bin/sh\necho mine\n" {
+		t.Error("someone's own script was changed")
+	}
+}

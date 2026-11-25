@@ -46,5 +46,9 @@ fi
 echo "bead $have → $newest"
 git -C "$src" -c advice.detachedHead=false checkout --quiet "$tag" || exit 1
 make -C "$src" install || { echo "The install failed; bead is still on $have." >&2; exit 1; }
+# glint (toasts, the Claude Code hook) installed from this checkout: rebuild it too
+if [ "$(command -v glint)" = "${share%/share/bead}/bin/glint" ] && command -v go >/dev/null; then
+	make -C "$src" install-glint >/dev/null || echo "glint didn't rebuild: run make install-glint in $src." >&2
+fi
 "$(dirname "$0")/bead-doctor" >/dev/null || echo "bead doctor found something missing: run bead doctor to see it."
 echo "bead is now $newest. What's new: $share/CHANGELOG.md"
