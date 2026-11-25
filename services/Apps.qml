@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import "demo.js" as DemoData
 
 // Installed apps (.desktop entries), fuzzy search, and how often each was
 // launched from the launcher (saved to $XDG_STATE_HOME/bead/launcher.json) so
@@ -74,8 +75,15 @@ Singleton {
         return sim >= 0.75 ? sim : 0;
     }
 
+    // demo mode: only well-known apps (services/demo.js), not everything you have
+    readonly property var pool: {
+        if (!Demo.on) return all;
+        const some = all.filter(e => DemoData.apps.includes(e.name));
+        return some.length ? some : all;
+    }
     function search(query: string): list<var> {
         const q = query.trim().toLowerCase();
+        const all = pool;
         const used = e => counts[e.id] ?? 0;
         if (!q) {
             // the five you opened last, then the rest by how often

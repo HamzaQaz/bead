@@ -115,8 +115,9 @@ Scope {
             try { s = JSON.parse(spec); } catch (e) { return "error: bad json"; }
             s.id = String(s.id || Date.now());
             // recording a demo: no toasts of yours on screen (one waiting on an
-            // answer hears "dismissed" and asks in the terminal instead)
-            if (Demo.on) { root.report(s.id, "result", "dismissed"); return s.id; }
+            // answer hears "dismissed" and asks in the terminal instead), only
+            // ones made for the recording (glint --demo)
+            if (Demo.on && s.demo !== true) { root.report(s.id, "result", "dismissed"); return s.id; }
             const interactive = s.type === "confirm" || s.type === "choose" || s.type === "loading" || s.type === "ask";
             if (root.quiet) {
                 // not shown: anything waiting on it hears so at once (a question

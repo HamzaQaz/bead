@@ -48,6 +48,9 @@ func viaBead(o *opts, wait bool, extraEnv []string, onLine ...func(string)) (str
 	if o.noExpand {
 		spec["autopilot"] = false
 	}
+	if o.demo {
+		spec["demo"] = true
+	}
 	for _, e := range extraEnv {
 		if v, ok := strings.CutPrefix(e, "TOAST_STATE="); ok {
 			spec["state"] = v

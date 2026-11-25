@@ -33,7 +33,7 @@ Singleton {
     property int dmUnread: 0
     readonly property int dmCount: Demo.on ? 0 : dmUnread // demo mode: none
 
-    readonly property bool inCall: !!channel && !Demo.on
+    readonly property bool inCall: !!channel && (!Demo.on || channel.id === "preview")
     readonly property list<var> speaking: members.filter(m => m.speaking)
 
     // a (re)started helper reports the call you're already in: not a "join"
@@ -127,6 +127,8 @@ Singleton {
                     root.voiceNow = m.channels ?? [];
                     root.scanning = false;
                 } else if (m.type === "voice") {
+                    // a call preview is on screen: the real call waits behind it
+                    if (callEnd.running) { root.realCall = { channel: m.channel, members: m.members ?? [] }; return; }
                     const was = root.channel?.id ?? "";
                     const now = m.channel?.id ?? "";
                     const wasMuted = root.mute;
@@ -145,6 +147,26 @@ Singleton {
         onRunningChanged: if (running) prime.restart()
     }
     Timer { id: restart; interval: 5000; onTriggered: helper.running = true }
+    property var realCall: null
+    // the pretend call: someone else talks every so often, then it ends
+    Timer {
+        id: talkTurn
+        interval: 1300; repeat: true
+        onTriggered: {
+            if (root.channel?.id !== "preview") { stop(); return; }
+            const n = Math.floor(Math.random() * 3);
+            root.members = root.members.map((m, i) => Object.assign({}, m, { speaking: i === n || (i !== 3 && Math.random() < 0.15) }));
+        }
+    }
+    Timer {
+        id: callEnd; interval: 12000
+        onTriggered: if (root.channel?.id === "preview") {
+            talkTurn.stop();
+            root.channel = root.realCall?.channel ?? null;
+            root.members = root.realCall?.members ?? [];
+            root.realCall = null;
+        }
+    }
     Timer { id: ringEnd; interval: 8000; onTriggered: if (root.ring?.channel === "preview") root.ring = null }
     Timer { id: previewEnd; interval: 8000; onTriggered: if (root.dms[0]?.channel === "preview") { root.dms = []; root.dmUnread = 0; } }
 
@@ -173,6 +195,21 @@ Singleton {
         // scan your servers' voice channels; `voiceNow` again to read what it found
         function voiceNow(): string { root.scanVoice(); return root.voiceNow.map(c => c.name + " (" + c.guild + "): " + c.people.map(p => p.name).join(", ")).join("\n"); }
         // a pretend incoming call for 8 s
+        // a pretend call (made-up people, talking in turn) for 12 s: for
+        // screenshots in demo mode. A real call is put back after.
+        function previewCall(): void {
+            if (root.channel?.id !== "preview") root.realCall = { channel: root.channel, members: root.members };
+            root.channel = { id: "preview", name: "design", guild: "Preview" };
+            if (root.ring?.channel === "preview") root.ring = null; // the preview call was picked up
+            root.members = [
+                { id: "p1", name: "Maya", avatar: "https://cdn.discordapp.com/embed/avatars/1.png", speaking: true },
+                { id: "p2", name: "Sam", avatar: "https://cdn.discordapp.com/embed/avatars/2.png", speaking: false },
+                { id: "p3", name: "Jo", avatar: "https://cdn.discordapp.com/embed/avatars/3.png", speaking: false },
+                { id: "me", name: "you", avatar: "https://cdn.discordapp.com/embed/avatars/0.png", speaking: false, me: true }
+            ];
+            talkTurn.restart();
+            callEnd.restart();
+        }
         function previewRing(): void {
             root.ring = { channel: "preview", name: "Preview", avatar: "https://cdn.discordapp.com/embed/avatars/1.png" };
             root.ringing(root.ring);

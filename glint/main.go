@@ -36,6 +36,8 @@ usage:
                  dismissed, 3 if the --open button is clicked. Needs bead running.
       --open LABEL       ask: a button that gives the question back (exit 3), e.g.
                          "Open terminal". Clicking the body does nothing.
+      --demo             a made-up toast for a recording: shown even in bead's
+                         demo mode, which keeps your real ones off the screen
 
 options:
   -d, --desc TEXT        body text (the toast expands to show it)
@@ -67,7 +69,7 @@ type opts struct {
 	kind, title, desc, position, icon, button, no, fill, roundness, scale string
 	succTitle, errTitle, succDesc, errDesc                                string
 	duration                                                              time.Duration
-	durSet, noExpand, wait, grab                                          bool
+	durSet, noExpand, wait, grab, demo                                    bool
 	choices, react                                                        []string
 	questions, open                                                       string
 	reactLabel                                                            string
@@ -211,6 +213,8 @@ func parse(args []string) (*opts, error) {
 			o.reactLabel, err = next()
 		case "--grab":
 			o.grab = true
+		case "--demo":
+			o.demo = true
 		case "--no-expand":
 			o.noExpand = true
 		case "-w", "--wait":
