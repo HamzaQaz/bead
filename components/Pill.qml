@@ -103,10 +103,23 @@ Item {
         if (!hovered && !sticky) expanded = false;
     }
 
-    function retract(): void { enter.to = 0; presence = 0; }
+    // Leaving. A pill in the wall (edge) eases back into it over the same
+    // time the gap behind it closes, from wherever it is; the snappy entry
+    // spring would have it gone in ~100 ms
+    property bool outgoing: false
+    property real outFrom: 1
+    property real out: 0
+    NumberAnimation on out { id: outAnim; running: false; from: 0; to: 1; duration: 440; easing.type: Easing.InOutCubic }
+    // how far in it is: 1 = fully out of the wall
+    readonly property real shown: outgoing ? outFrom * (1 - out) : enter.value
+    onOutChanged: maybeFinish()
+    function retract(): void {
+        if (edge) { outFrom = enter.value; outgoing = true; outAnim.restart(); }
+        enter.to = 0; presence = 0;
+    }
     function maybeFinish(): void {
-        if (leaving && enter.t >= 1 && enter.target === 0 && (!calm || presence <= 0.001))
-            finished(result);
+        if (!leaving || (calm && presence > 0.001)) return;
+        if (outgoing ? out >= 1 : (enter.t >= 1 && enter.target === 0)) finished(result);
     }
     onPresenceChanged: maybeFinish()
 
@@ -210,8 +223,12 @@ Item {
         transformOrigin: Item.Top
 
         // edge mode: how far the shape is pushed back into the wall
-        readonly property real slide: root.edge ? (1 - enter.value) * (root.toastW + root.roundness) + Math.max(-12, swipeX) : 0
-        readonly property real textIn: Math.max(0, Math.min(1, enter.value * 1.6 - 0.6))
+        // it travels only as far as it sticks out of the wall: a full-width
+        // travel would hide a compact (icon-only) pill in the first ~30 ms of
+        // the exit, so it looked like it just vanished
+        readonly property real reach: root.toastW - (bodyHt.value > 0.5 ? 0 : pillX) + root.roundness
+        readonly property real slide: root.edge ? (1 - root.shown) * reach + Math.max(-12, swipeX) : 0
+        readonly property real textIn: Math.max(0, Math.min(1, root.shown * 1.6 - 0.6))
         // under the wall the pill's right side is hidden, so it extends into it
         readonly property real tuck: root.edge ? root.roundness + root.wallW : 0
 
