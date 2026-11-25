@@ -18,6 +18,9 @@ Item {
     onSourceChanged: {
         const back = frontA ? b : a;
         if (String((frontA ? a : b).source) === String(source)) return;
+        // the back one may hold this cover already (going back to the one
+        // before): its status won't change, so bring it forward now
+        if (String(back.source) === String(source) && back.status === Image.Ready) { frontA = !frontA; return; }
         back.source = source;
     }
 
