@@ -3,7 +3,7 @@
 bead follows [Semantic Versioning](https://semver.org). Each release's
 section is what `bead update` shows as "what's new".
 
-## Unreleased
+## 0.3.0
 
 ### App Store
 - A new App Store window (Apps tab, the launcher's "install obs", or
@@ -18,6 +18,11 @@ section is what `bead update` shows as "what's new".
   downloading, installing, then Open. AUR packages never open a terminal.
 - AUR packages are checked before building: that they exist, their votes,
   age and maintainer, and their build files for risky commands.
+
+### Fixes
+- The welcome intro is smoother: the frame's bottom edge fills in from both
+  corners to the middle, and the dark lifts evenly instead of snapping.
+- The welcome card fades out gently when it closes.
 
 ## 0.2.0
 
