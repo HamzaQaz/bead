@@ -5,6 +5,35 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+### Widgets
+- Keep an eye on a server, a build or a number: Settings → Widgets makes one
+  from a template (Server up, Number from a URL, GitHub, Toggle, Command),
+  with a preview before you add it.
+- Pinned widgets sit on the resting island, four at most with "+N" for the
+  rest. Click one for the dashboard's new Widgets tab, or to flip a toggle;
+  right-click checks it again.
+- A command that hangs shows "timed out" after 5 s and is stopped.
+
+### Shelf
+- Drop files, folders or text on the island and they're held there while you
+  switch windows. Drag one into any app (Discord, a browser, a file manager)
+  and it leaves the shelf, with an undo; folders stay.
+- While the shelf holds something, hovering the island shows it instead of the
+  media card, and the resting island shows how much is on it. Clear empties it.
+- Right after a screenshot, a recording, a finished download or a copied image,
+  the island offers it for a few seconds: drag it straight out, or keep it.
+
+### Details
+- Values that change while you look (the clocks, widget readings) roll to the
+  new text instead of snapping, and a reading turning good or bad eases into
+  its colour. Motion off turns this off too.
+
+### Fixes
+- The island no longer cuts off the Discord call faces for a moment when you
+  join a call.
+- The notification history test no longer depends on the time zone, so CI
+  passes again.
+
 ## 0.4.0
 
 ### Claude Code questions

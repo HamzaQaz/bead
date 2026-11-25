@@ -29,6 +29,8 @@ Singleton {
             if [ -n "$g" ]; then grim -g "$g" "$f"; else grim -o "$2" "$f"; fi ;;
         *) grim -o "$2" "$f" ;;
         esac || exit 0
+        # offered on the island (the shelf) first, so the copy below is not offered twice
+        qs -p "$3" ipc call shelf moment "$f" >/dev/null 2>&1
         wl-copy -t image/png < "$f"
         a=$(timeout 1800 notify-send -a Screenshot -i "$f" -A edit=Edit -A open=Open "Screenshot saved" "Copied to the clipboard · ${f##*/}")
         case $a in edit) satty --filename "$f" --output-filename "$f" ;; open) xdg-open "$f" ;; esac'
@@ -62,11 +64,13 @@ Singleton {
             ffmpeg -loglevel error -y -i "$f" -vf "fps=15,scale=\'min(960,iw)\':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" "$out"
             rm -f "$f"
             [ -s "$out" ] || exit 0
+            qs -p "$5" ipc call shelf moment "$out" >/dev/null 2>&1
             printf "file://%s\\n" "$out" | wl-copy -t text/uri-list
             a=$(timeout 1800 notify-send -a Recorder -i "$out" -A open=Open -A folder="Show folder" "GIF saved" "Copied to the clipboard · ${out##*/} · $(du -h "$out" | cut -f1)")
             case $a in open) xdg-open "$out" ;; folder) xdg-open "$dir" ;; esac
             exit 0
         fi
+        qs -p "$5" ipc call shelf moment "$f" >/dev/null 2>&1
         a=$(timeout 1800 notify-send -a Recorder -i video-x-generic -A open=Open -A folder="Show folder" "Recording saved" "${f##*/}")
         case $a in open) xdg-open "$f" ;; folder) xdg-open "$dir" ;; esac'
 
@@ -74,7 +78,7 @@ Singleton {
     function soundDevice(sound: bool): string { return sound && Audio.sink ? Audio.sink.name + ".monitor" : ""; }
 
     function shot(mode: string): void {
-        Quickshell.execDetached(["sh", "-c", shotScript, "sh", mode, monitorName()]);
+        Quickshell.execDetached(["sh", "-c", shotScript, "sh", mode, monitorName(), Paths.share]);
     }
     // sound: record what's playing (defaults to the panel's switch)
     function record(mode, sound, gif): void {

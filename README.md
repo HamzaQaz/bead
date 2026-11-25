@@ -75,6 +75,10 @@ keeps your settings unless you add `--purge`.
   **Bluetooth** pairing from the bar. Sound follows your headphones.
 - **Customise:** about 75 options for the island, pop-ups, bar and motion,
   with a live preview, presets, and looks you can share as a file.
+- **Widgets:** a server, a CI run, a number from a URL, a toggle or any
+  command, made in Settings and pinned to the island or the dashboard.
+- **Shelf:** drop files on the island, drag them out into any app later.
+  Screenshots, recordings and downloads offer themselves there for a moment.
 - **Focus modes:** Work, Game, Night or your own. Each switches a look, Do
   Not Disturb, night light and wallpaper at once, by hand, on a schedule or
   while an app is open.

@@ -8,6 +8,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Wayland
+import Quickshell.Widgets
 import "../../config/sizecheck.js" as SizeCheck
 import "hover.js" as Hover
 import qs.components
@@ -820,7 +821,7 @@ Scope {
         function toggle(): void { root.pinnedOn = root.pinnedOn ? "" : root.home.name; }
         function open(): void { root.pinnedOn = root.home.name; }
         function close(): void { root.pinnedOn = ""; }
-        function tab(n: int): void { root.tab = Math.max(0, Math.min(8, n)); root.pinnedOn = root.home.name; }
+        function tab(n: int): void { root.tab = Math.max(0, Math.min(9, n)); root.pinnedOn = root.home.name; }
         // a key, by name (Down, Return, Escape, 3, ]…), straight into the open
         // dashboard's key handler: no synthetic typing, so nothing can land in
         // another window. Does nothing unless the dashboard is open by key.
@@ -1166,7 +1167,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || (root.covered && !IslandShape.previewing) || !root.settled
-            readonly property string state: Passkey.active || Polkit.active ? "passkey" : Updates.shown && Updates.phase !== "" && root.pinnedOn === "" ? "update" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active && !(Activities.items.length > 0 && !root.fullscreen) ? "tucked" : "rest"
+            readonly property string state: Passkey.active || Polkit.active ? "passkey" : Updates.shown && Updates.phase !== "" && root.pinnedOn === "" ? "update" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : shelfShown ? "shelf" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active && !(Activities.items.length > 0 && !root.fullscreen) ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
                 // launcher…) tucks at the resting width, not as a wide strip
@@ -1219,11 +1220,22 @@ Scope {
             // while something plays, hover first grows the media card; staying on
             // (or clicking it) goes on to the dashboard
             property bool mediaCard: false
+            // the shelf (services/Shelf.qml): hover shows it instead of the media card
+            // while it holds anything; a drag over the island grows into its drop
+            // target; and the moment after a screenshot or download shows here (the
+            // screen you're on)
+            property bool shelfCard: false
+            property bool dropping: false
+            readonly property bool momentHere: !!Shelf.moment && (Hyprland.focusedMonitor?.name ?? "") === modelData.name
+            readonly property bool shelfShown: ((shelfCard || Shelf.showing && (Hyprland.focusedMonitor?.name ?? "") === modelData.name) && Shelf.count > 0) || dropping || momentHere
+            Timer { id: dropLeave; interval: 220; onTriggered: win.dropping = false }
             Timer {
                 id: openTimer
                 interval: Look.v.islandHoverDelay
                 onTriggered: {
-                    if (root.playing && Look.v.islandHoverMedia) win.mediaCard = true; // the card opens the dashboard itself
+                    if (win.dropping) return; // something carried over the island isn't a hover
+                    if (Shelf.count > 0) win.shelfCard = true;
+                    else if (root.playing && Look.v.islandHoverMedia) win.mediaCard = true; // the card opens the dashboard itself
                     else win.expanded = true;
                 }
             }
@@ -1232,9 +1244,10 @@ Scope {
                 interval: Look.v.islandLeaveDelay
                 onTriggered: {
                     win.hovered = false;
-                    if (win.expanded || win.mediaCard) win.closedAt = Date.now();
+                    if (win.expanded || win.mediaCard || win.shelfCard) win.closedAt = Date.now();
                     win.expanded = false;
                     win.mediaCard = false;
+                    win.shelfCard = false;
                     if (!activityTimer.running && win.showsActivity) root.activity = "";
                 }
             }
@@ -1281,6 +1294,29 @@ Scope {
             }
 
             // ── size, springing between the states ──
+            // a file, folder or text dragged over the island: it grows into the
+            // shelf's drop target; let go and it's on the shelf. A shelf item let go
+            // over the island is just put back (see Shelf.droppedBack)
+            function dragIn(d: var): void {
+                dropLeave.stop();
+                if (d.source) return; // one of the shelf's own
+                console.log("shelf: drag over the island", JSON.stringify(d.formats));
+                if (!d.hasUrls && !d.hasText) return;
+                d.accept(Qt.CopyAction);
+                dropping = true;
+                openTimer.stop();
+                expanded = false;
+                mediaCard = false;
+            }
+            function dropIn(d: var): void {
+                dropLeave.stop();
+                dropping = false;
+                if (d.source) { Shelf.droppedBack = true; return; }
+                const own = Shelf.carriedOf(d.formats);
+                if (own) { Shelf.dropBytes(own.name, d.getDataAsArrayBuffer(own.format)); d.accept(Qt.CopyAction); return; }
+                Shelf.drop(d.hasUrls ? d.urls.map(u => u.toString()) : [], d.hasUrls ? "" : d.text);
+                d.accept(Qt.CopyAction);
+            }
             readonly property real restW: Math.max(Look.v.islandRestMinW, restRow.implicitWidth + 36)
             Binding { target: IslandShape; property: "restW"; value: win.restW }   // for the welcome intro
             Binding { target: IslandShape; property: "tucked"; value: win.state === "tucked" }
@@ -1298,13 +1334,13 @@ Scope {
             property string prevState: "rest"
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "update" ? updateView.wantW : win.state === "voice" ? voiceView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "update" ? updateView.wantW : win.state === "voice" ? voiceView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "shelf" ? shelfView.wantW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "passkey" ? passkeyView.wantH : win.state === "update" ? updateView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "update" ? updateView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "shelf" ? shelfView.wantH : win.state === "media" ? mediaView.wantH
                     : win.state === "activity" ? (root.activity === "notif" ? 58 : root.activity === "call" ? 104 : 46) : win.state === "tucked" ? 0 : Look.v.islandRestH
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
@@ -1338,6 +1374,7 @@ Scope {
                 width: win.openW
                 height: win.wallW
                 HoverHandler { id: edgeHover }
+                DropArea { anchors.fill: parent; onEntered: d => win.dragIn(d); onExited: dropLeave.restart(); onDropped: d => win.dropIn(d) }
             }
 
             // the island's box: content is clipped to it, so it is revealed as it grows
@@ -1351,6 +1388,7 @@ Scope {
                 // on the box, not a child: hover-enabled controls inside (sliders,
                 // buttons) would otherwise steal it and the island would close
                 HoverHandler { id: boxHover }
+                DropArea { anchors.fill: parent; onEntered: d => win.dragIn(d); onExited: dropLeave.restart(); onDropped: d => win.dropIn(d) }
                 // hover doesn't open it (Customise → Island): a click on the resting island does
                 TapHandler { enabled: !Look.v.islandHover && (win.state === "rest" || win.state === "media"); onTapped: root.pinnedOn = win.modelData.name }
                 Connections {
@@ -1527,9 +1565,10 @@ Scope {
                             anchors.verticalCenter: parent.verticalCenter
                             readonly property int shown: Math.min(3, Discord.members.length)
                             readonly property real step: 13
+                            // no width animation: the island springs to fit, and a width that
+                            // moves every frame keeps restarting its spring (it lags and clips)
                             width: shown > 0 ? 22 + (shown - 1) * step : 0
                             height: 22
-                            Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                             Repeater {
                                 model: faces.shown
                                 Item {
@@ -1815,7 +1854,8 @@ Scope {
                     }
 
                     // idle: time and weather
-                    Text {
+                    RollText {
+                        easeWidth: false
                         visible: !win.mediaShown && Look.v.islandClock
                         opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
@@ -1833,6 +1873,86 @@ Scope {
                         spacing: 4
                         Icon { anchors.verticalCenter: parent.verticalCenter; name: Weather.icon(Weather.code, Weather.isDay); size: 16; fill: 1; color: Theme.subtext }
                         Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; text: Math.round(Weather.temp) + "°" }
+                    }
+
+                    // your widgets (Settings → Widgets): the pinned ones, an icon and a value
+                    Rectangle {
+                        visible: Widgets.pinned.length > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 1; height: 14
+                        color: Qt.alpha(Theme.text, 0.15)
+                    }
+                    Repeater {
+                        model: ScriptModel { values: Widgets.pinned; objectProp: "id" }
+                        delegate: Row {
+                            id: wchip
+                            required property var modelData
+                            readonly property color tone: modelData.tone ? Theme.tone(modelData.tone) : Theme.text
+                            anchors.verticalCenter: parent?.verticalCenter
+                            spacing: 5
+                            Icon { anchors.verticalCenter: parent.verticalCenter; name: wchip.modelData.icon || "widgets"; size: 16; fill: 1; color: wchip.modelData.tone ? wchip.tone : Theme.subtext }
+                            RollText {
+                                easeWidth: false
+                                anchors.verticalCenter: parent.verticalCenter
+                                maxWidth: 110
+                                font.family: Theme.font
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                                font.features: { "tnum": 1 }
+                                color: Theme.text
+                                text: wchip.modelData.value
+                            }
+                            // click: a toggle flips, the rest open the dashboard's Widgets tab;
+                            // right-click: check again
+                            TapHandler { onTapped: { if (wchip.modelData.template === "toggle") Widgets.activate(wchip.modelData.id); else { root.tab = 8; root.pinnedOn = root.home.name; } } }
+                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: { root.rightTaken = Date.now(); Widgets.refresh(wchip.modelData.id); } }
+                        }
+                    }
+                    // the shelf: a tiny fanned stack of what's on it (hover or click shows it)
+                    Row {
+                        visible: Shelf.count > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 7
+                        Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 1; height: 14; color: Qt.alpha(Theme.text, 0.15) }
+                        Item {
+                            id: mini
+                            anchors.verticalCenter: parent.verticalCenter
+                            readonly property int n: Math.min(3, Shelf.count)
+                            width: 18 + (n - 1) * 9; height: 20
+                            Repeater {
+                                model: mini.n
+                                ClippingRectangle {
+                                    id: m
+                                    required property int index
+                                    readonly property var it: Shelf.items[index] ?? null
+                                    x: index * 9; y: 1
+                                    z: mini.n - index
+                                    width: 18; height: 18; radius: 5
+                                    rotation: [-8, 5, 12][index]
+                                    color: it?.kind === "folder" ? Qt.tint(Theme.frame, Qt.alpha(Theme.tone("action"), 0.35)) : Qt.tint(Theme.frame, Qt.alpha(Theme.text, 0.16))
+                                    border.width: 2; border.color: Theme.frame
+                                    Image {
+                                        anchors.fill: parent
+                                        visible: status === Image.Ready
+                                        source: m.it?.kind === "image" && m.it.path ? "file://" + m.it.path : ""
+                                        sourceSize: Qt.size(40, 40)
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+                                    }
+                                }
+                            }
+                        }
+                        Label { visible: Shelf.count > 3; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11; color: Theme.subtext; text: "+" + (Shelf.count - 3) }
+                        TapHandler { onTapped: win.shelfCard = true }
+                    }
+                    Text {
+                        visible: Widgets.chips.more > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        font.family: Theme.font
+                        font.pixelSize: 12
+                        font.weight: Font.Medium
+                        color: Theme.subtext
+                        text: "+" + Widgets.chips.more
                     }
                 }
 
@@ -2230,6 +2350,24 @@ Scope {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: win.state === "launcher" ? 240 : 110 } }
                     onClose: root.launcherOpen = false
+                }
+
+                // ── the shelf (hover while it holds something, a drag over the island, the moment) ──
+                ShelfView {
+                    id: shelfView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    active: win.state === "shelf"
+                    dropping: win.dropping
+                    showMoment: win.momentHere && !win.dropping && !win.shelfCard && !Shelf.showing
+                    opacity: active ? 1 : 0
+                    visible: opacity > 0.01
+                    SwapFade on opacity {}
+                    onTookOut: it => {
+                        root.toast("undo", it.name + " taken off the shelf \u00b7 tap to put it back", "info", 4000);
+                        root.toastTap = () => Shelf.undo();
+                    }
                 }
 
                 // ── media card (hover while playing) ──
