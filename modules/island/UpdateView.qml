@@ -175,7 +175,7 @@ Item {
                             Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; color: Theme.tone("action"); text: "Changes" }
                             Icon { anchors.verticalCenter: parent.verticalCenter; name: "open_in_new"; size: 13; color: Theme.tone("action") }
                         }
-                        MouseArea { id: arMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Qt.openUrlExternally(Updates.aurLink(aurRow.modelData)) }
+                        MouseArea { id: arMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Paths.openUrl(Updates.aurLink(aurRow.modelData)) }
                     }
                 }
                 Sub { visible: Updates.aurNames.length > 5; x: 12; text: "and " + (Updates.aurNames.length - 5) + " more" }

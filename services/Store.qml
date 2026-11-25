@@ -192,7 +192,7 @@ Singleton {
             }
         }
     }
-    function openLink(url: string): void { Qt.openUrlExternally(url); }
+    function openLink(url: string): void { Paths.openUrl(url); }
 
     // ── Editor's choice, for bead's maintainer only (bin/bead-editors decides) ──
     property bool maintainer: false
@@ -254,7 +254,7 @@ Singleton {
         }
     }
     // an AUR package's build file, to read before building it
-    function buildFile(name: string): void { Qt.openUrlExternally("https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=" + encodeURIComponent(name)); }
+    function buildFile(name: string): void { Paths.openUrl("https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=" + encodeURIComponent(name)); }
 
     IpcHandler {
         target: "store"
