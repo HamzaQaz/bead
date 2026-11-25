@@ -3,7 +3,7 @@ SHARE  := $(PREFIX)/share/bead
 
 .PHONY: build install install-files run glint install-glint strand test friend-test
 
-build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb
+build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb shaders/trace.frag.qsb shaders/rise.frag.qsb shaders/veil.frag.qsb shaders/sketch.frag.qsb
 
 shaders/%.frag.qsb: shaders/%.frag
 	/usr/lib/qt6/bin/qsb --glsl "100es,120,150" --hlsl 50 --msl 12 -o $@ $<
@@ -16,7 +16,7 @@ UNITDIR ?= $(if $(filter $(HOME)/.local,$(PREFIX)),$(HOME)/.config/systemd/user,
 install-files: build
 	install -d $(DESTDIR)$(SHARE)
 	cp -r shell.qml config components modules services pam.d data hold VERSION CHANGELOG.md $(DESTDIR)$(SHARE)/
-	install -Dm644 -t $(DESTDIR)$(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb
+	install -Dm644 -t $(DESTDIR)$(SHARE)/shaders shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders/intro.frag.qsb shaders/ink.frag.qsb shaders/sky.frag.qsb shaders/trace.frag.qsb shaders/rise.frag.qsb shaders/veil.frag.qsb shaders/sketch.frag.qsb
 	for b in $(BINS); do install -Dm755 bin/$$b $(DESTDIR)$(PREFIX)/bin/$$b || exit 1; done
 	install -d $(DESTDIR)$(UNITDIR)
 	sed 's|%h/.local/bin|$(PREFIX)/bin|' systemd/bead-resume.service >$(DESTDIR)$(UNITDIR)/bead-resume.service

@@ -92,7 +92,7 @@ sleep 0.6
 
 # the welcome, once its intro has played
 ipc welcome open
-sleep 6.7
+sleep 12 # the whole intro (the bead wakes, looks around, stretches), then the card
 shot welcome
 ipc welcome close
 sleep 0.5

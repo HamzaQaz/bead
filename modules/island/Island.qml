@@ -1234,6 +1234,8 @@ Scope {
 
             // ── size, springing between the states ──
             readonly property real restW: Math.max(132, restRow.implicitWidth + 36)
+            Binding { target: IslandShape; property: "restW"; value: win.restW }   // for the welcome intro
+            Binding { target: IslandShape; property: "tucked"; value: win.state === "tucked" }
             readonly property real activityW: root.activity === "workspace" ? Math.max(120, wsRow.implicitWidth + 44)
                 : root.activity === "notif" ? 400
                 : root.activity === "timerdone" || root.activity === "recstart" || root.activity === "toast" ? eventRow.implicitWidth + 48

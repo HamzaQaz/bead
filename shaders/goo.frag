@@ -67,6 +67,8 @@ void main() {
 
     // the halo: falls off over ~20px from the pill, kept off the wall strip
     float gd = sdRoundBox(p, pill, radius);
+    // and round the body too, when there is one (the welcome intro's bead)
+    if (body.z > 0.0 && body.w > 0.0) gd = smin(gd, sdRoundBox(p, body, radius), goo);
     float below = wall.z > 0.0 ? smoothstep(wall.w, wall.w + 8.0, p.y) : 1.0;
     float g = glow.a * pow(1.0 - smoothstep(0.0, 22.0, gd), 2.0) * below * (1.0 - a);
     col += vec4(glow.rgb, 1.0) * g;

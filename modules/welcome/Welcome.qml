@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.components
@@ -20,6 +21,7 @@ Scope {
     id: root
 
     property bool open: false
+    property string onScreen: ""
     property int step: 0
     readonly property int steps: 6
     property string size: String(Settings.scale) // applied at the end: it needs a restart
@@ -41,7 +43,21 @@ Scope {
         onExited: code => root.murmur = code === 0
     }
 
-    function show(): void { step = 0; size = String(Settings.scale); hasMurmur.running = true; ready = 0; bloomed = false; open = true; intro.restart(); }
+    // the intro sketches the real bar from a capture of it, so that's taken first,
+    // before this covers the screen (a moment; without one it uses placeholders)
+    function show(): void {
+        onScreen = Hyprland.focusedMonitor?.name ?? "";
+        tucked = IslandShape.tucked;   // as it is now, before this covers it
+        grab.captureSource = null; grab.captureSource = win.screen; grab.captureFrame();
+        grabWait.restart();
+    }
+    property bool tucked: false
+    function begin(): void { grabWait.stop(); step = 0; size = String(Settings.scale); hasMurmur.running = true; ready = 0; bloomed = false; open = true; intro.restart(); }
+    Timer { id: grabWait; interval: 250; onTriggered: root.begin() }
+    Connections {
+        target: grab
+        function onHasContentChanged(): void { if (grab.hasContent && grabWait.running) root.begin(); }
+    }
     function finish(): void {
         open = false;
         Quickshell.execDetached(["sh", "-c", 'mkdir -p "$(dirname "$1")" && : > "$1"', "sh", flag]);
@@ -71,7 +87,8 @@ Scope {
     PanelWindow {
         id: win
         visible: root.open || card.opacity > 0.01
-        screen: Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
+        // the monitor you're on when it opens (else the island's)
+        screen: Quickshell.screens.find(s => s.name === root.onScreen) ?? Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
         anchors { top: true; bottom: true; left: true; right: true }
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
@@ -79,11 +96,17 @@ Scope {
         WlrLayershell.namespace: "bead-welcome"
         WlrLayershell.keyboardFocus: root.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
-        Rectangle { // the room dims
+        ShaderEffect { // the room dims: inside the frame, round the island (shaders/veil.frag)
             anchors.fill: parent
-            color: Qt.alpha(Theme.frame, 0.75)
             opacity: root.open ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+            fragmentShader: Qt.resolvedUrl("../../shaders/veil.frag.qsb")
+            property size size: Qt.size(width, height)
+            property vector4d inner: Qt.vector4d(stage.leftW, stage.wallW, stage.sw - stage.leftW - stage.wallW, stage.sh - 2 * stage.wallW)
+            property real radius: 25 / win.devicePixelRatio
+            property vector4d island: Qt.vector4d(stage.cx - stage.islW / 2, stage.wallW - 17, stage.islW, 51)
+            property real fillet: 17 * 0.75
+            property color color: Qt.alpha(Theme.frame, 0.75)
         }
 
         // ── the intro's stage (docs/ideas/welcome-intro.md): on black, a bead
@@ -104,59 +127,188 @@ Scope {
             property real dark: 0     // the black
             property real trace: 0    // 0 → 1: the frame drawn, top, then sides, then bottom
             property real settle: 0   // 0 → 1: the traced light turns into the frame's colour
-            function leg(a: real, b: real): real { return Math.max(0, Math.min(1, (trace - a) / (b - a))); }
+            // while it glows, the bead is drawn by a shader (shaders/goo.frag): its
+            // halo is worked out per pixel, where a layer effect would reallocate
+            // its texture on every frame the bead changes size (a stutter)
+            readonly property bool goo: morph.glow > 0.01
+            // the rise (0 → 1): one value drives where it is, its size and its
+            // roundness together, so it moves as one shape on one curve
+            property real rise: 0
+            property real wob: 0      // the settle: a little damped wobble once it's there
+            property rect from: Qt.rect(0, 0, 0, 0)  // where the rise starts
+            // the real island's resting width: the bead lands exactly on it
+            // the real island's resting width; it can change under the intro (its
+            // content does), so the pill glides to it rather than jumping
+            property real islW: IslandShape.restW
+            Behavior on islW { NumberAnimation { duration: 360; easing.type: Easing.InOutSine } }
             function mix(a: color, b: color, t: real): color { return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1); }
-            // the frame's own colour, with a hairline of light along its inner edge
-            component Leg: Rectangle {
-                id: leg
-                property string inner: "bottom" // which edge faces the screen
-                color: Theme.frame
-                Rectangle {
-                    color: stage.accent
-                    opacity: 1 - stage.settle
-                    width: leg.inner === "left" || leg.inner === "right" ? 2 : leg.width
-                    height: leg.inner === "top" || leg.inner === "bottom" ? 2 : leg.height
-                    x: leg.inner === "right" ? leg.width - 2 : 0
-                    y: leg.inner === "bottom" ? leg.height - 2 : 0
-                    layer.enabled: true
-                    layer.effect: MultiEffect { shadowEnabled: true; shadowColor: stage.accent; shadowBlur: 0.6; shadowHorizontalOffset: 0; shadowVerticalOffset: 0 }
+            property real lift: 0     // 0 → 1: the dark lifts, a circle spreading from the island
+            property real fade: 0     // 0 → 1: the frame's colour layer gives way to the real frame
+
+            // the dark, the frame (bar included) filling with the island's colour
+            // as it flows out from it, settling and fading into the real frame,
+            // and the dark lifting (shaders/trace.frag): one pass
+            ShaderEffect {
+                id: traced
+                anchors.fill: parent
+                visible: stage.dark > 0.001
+                fragmentShader: Qt.resolvedUrl("../../shaders/trace.frag.qsb")
+                property size size: Qt.size(width, height)
+                property vector4d inner: Qt.vector4d(stage.leftW, stage.wallW, stage.sw - stage.leftW - stage.wallW, stage.sh - 2 * stage.wallW)
+                property real radius: 25 / win.devicePixelRatio // the frame's inner corners (Bar.qml)
+                property real trace: stage.trace
+                property real settle: stage.settle
+                property real dark: stage.dark
+                property real lift: stage.lift
+                property real fade: stage.fade
+                property point origin: Qt.point(stage.cx, stage.wallW + 17)
+                property real span: stage.islW / 2 + 17 * 0.75
+                property color accent: stage.accent
+                property color frame: Theme.frame
+            }
+
+            // the real bar, captured as the intro starts: drawn by shaders/sketch.frag
+            ScreencopyView {
+                id: grab
+                anchors.fill: parent
+                live: false
+                visible: false
+            }
+            ShaderEffect {
+                anchors.fill: parent
+                visible: grab.hasContent && stage.dark > 0.001
+                z: 1 // over the bead's pill, which it takes over once it's landed
+                fragmentShader: Qt.resolvedUrl("../../shaders/sketch.frag.qsb")
+                property var src: ShaderEffectSource { sourceItem: grab; hideSource: true; textureSize: grab.sourceSize }
+                property size size: Qt.size(width, height)
+                property real barW: stage.leftW
+                property real wallW: stage.wallW
+                property real aL: sketch.aL
+                property real trace: stage.trace
+                property real settle: stage.settle
+                property vector4d pill: Qt.vector4d(morph.x, morph.y, morph.width, morph.height)
+                property real radius: morph.radius
+                property real fillet: 17 * 0.75
+                property real island: stage.trace > 0 && !root.tucked ? 1 : 0
+                property color accent: stage.accent
+                property color ink: sketch.ink0
+                property color frame: Theme.frame
+                property color text: Theme.text
+            }
+
+            // the bar, sketched (when there's no capture): placeholders the left comet draws in as it passes,
+            // each giving way to the real bar as the lifting dark reaches it
+            Item {
+                id: sketch
+                anchors.fill: parent
+                opacity: grab.hasContent ? 0 : 1
+                visible: stage.dark > 0.001
+                readonly property real bx: 27 / win.devicePixelRatio   // the bar's middle
+                readonly property real aL: Math.max(stage.cx - stage.leftW - stage.islW / 2 - 17 * 0.75, 1)
+                readonly property real far: Math.hypot(stage.sw, stage.sh) * 1.1
+                // where y is along the left comet's path (shaders/trace.frag: along())
+                function at(y: real): real { return (aL + (y - stage.wallW)) / (2 * aL + stage.sh - 2 * stage.wallW); }
+                // the bar's layout (Bar.qml), measured in screen pixels at 1080 high
+                // (negative y counts from the bottom): [y, height, width, kind, glyph]
+                // shapes are [top, h, w]; glyphs and text are [centre, size]
+                readonly property real k: 1 / win.devicePixelRatio
+                // the time, read again each time the intro starts (the dark comes on)
+                readonly property string hh: stage.dark > 0.5 ? Qt.formatTime(new Date(), "HH") : ""
+                readonly property string mm: stage.dark > 0.5 ? Qt.formatTime(new Date(), "mm") : ""
+                readonly property var parts: [
+                    [37, 24, 0, "logo"],
+                    [65, 248, 37, "group"],
+                    [85, 15, 0, "icon", "crop_square", "text"], [110, 15, 0, "icon", "web_asset", "text"], [142, 15, 0, "icon", "crop_square", "text"], [167, 15, 0, "icon", "build", "text"],
+                    [182, 60, 31, "lit"], [200, 17, 0, "icon", "change_history", "dark"], [225, 17, 0, "icon", "terminal", "dark"],
+                    [257, 6, 6, "dot"], [290, 6, 6, "dot"],
+                    [-410, 155, 37, "group"],
+                    [-389, 18, 0, "icon", "radio_button_checked", "error"], [-353, 18, 0, "icon", "apps"], [-315, 18, 0, "icon", "circle", "success"], [-277, 18, 0, "icon", "signal_wifi_off"],
+                    [-248, 63, 37, "group"], [-230, 17, 0, "hh"], [-215, 3, 3, "dot", -3], [-215, 3, 3, "dot", 3], [-200, 17, 0, "mm"],
+                    [-170, 105, 37, "group"],
+                    [-155, 18, 0, "icon", "volume_up"], [-118, 18, 0, "icon", "wifi"], [-82, 18, 0, "icon", "bluetooth"],
+                    [-35, 20, 0, "icon", "power_settings_new"]
+                ]
+                // ink: a deeper shade of the flowing colour, like the bead's face;
+                // each piece turns into the bar's own colours as it settles
+                readonly property color ink0: Qt.darker(stage.accent, 2.6)
+                readonly property color ink: stage.mix(ink0, stage.mix(Theme.frame, Theme.text, 0.6), stage.settle)
+                // what a piece settles into: the real bar's colour for it
+                function settled(k: string): color {
+                    return k === "text" ? Theme.text : k === "dark" ? Theme.frame
+                        : k === "error" ? Theme.tone("error") : k === "success" ? stage.mix(Theme.frame, Theme.tone("success"), 0.45)
+                        : stage.mix(Theme.frame, Theme.text, 0.75);
+                }
+                Repeater {
+                    model: sketch.parts
+                    Item {
+                        id: piece
+                        required property var modelData
+                        readonly property string kind: modelData[3]
+                        readonly property bool shape: kind === "group" || kind === "lit" || kind === "dot"
+                        readonly property real at: modelData[0] >= 0 ? modelData[0] * sketch.k : stage.sh + modelData[0] * sketch.k
+                        readonly property real cy: shape ? at + height / 2 : at
+                        property real pop: stage.trace >= sketch.at(cy) ? 1 : 0
+                        Behavior on pop { NumberAnimation { duration: 340; easing.type: Easing.OutBack; easing.overshoot: 1.6 } }
+                        width: shape ? modelData[2] * sketch.k : 30 * sketch.k
+                        height: modelData[1] * sketch.k
+                        // a dot's fifth entry nudges it sideways (the clock's two)
+                        x: sketch.bx - width / 2 + (kind === "dot" ? (modelData[4] ?? 0) * sketch.k : 0)
+                        y: shape ? at : at - height / 2
+                        scale: 0.5 + 0.5 * Math.min(pop, 1.15)
+                        opacity: Math.max(0, Math.min(1, pop)) * (1 - stage.fade)
+                        Rectangle {
+                            visible: piece.shape
+                            anchors.fill: parent
+                            radius: Math.min(width, height) / 2
+                            color: piece.kind === "group" ? stage.mix(Qt.darker(stage.accent, 1.14), Qt.lighter(Theme.frame, 1.75), stage.settle)
+                                : piece.kind === "lit" ? stage.mix(Qt.lighter(stage.accent, 1.18), stage.accent, stage.settle)
+                                : sketch.ink
+                        }
+                        Icon {
+                            visible: piece.kind === "icon"
+                            anchors.centerIn: parent
+                            name: piece.modelData[4] ?? ""
+                            size: piece.height
+                            fill: 1
+                            color: stage.mix(sketch.ink0, sketch.settled(piece.modelData[5] ?? ""), stage.settle)
+                        }
+                        Text {
+                            visible: piece.kind === "logo" || piece.kind === "hh" || piece.kind === "mm"
+                            anchors.centerIn: parent
+                            text: piece.kind === "logo" ? "b." : piece.kind === "hh" ? sketch.hh : sketch.mm
+                            font.family: Theme.font
+                            font.pixelSize: piece.height
+                            font.weight: piece.kind === "logo" ? Font.Black : piece.kind === "hh" ? Font.Bold : Font.Normal
+                            color: piece.kind === "logo" ? stage.mix(Qt.darker(stage.accent, 2.6), stage.accent, stage.settle) : sketch.ink
+                        }
+                    }
                 }
             }
 
-            Rectangle { anchors.fill: parent; color: "black"; opacity: stage.dark }
-
-            Item { // the frame, traced
-                id: traced
+            ShaderEffect { // the bead and its halo, while it glows
                 anchors.fill: parent
-                readonly property real t1: stage.leg(0, 0.42)
-                readonly property real t2: stage.leg(0.34, 0.76)
-                readonly property real t3: stage.leg(0.68, 1)
-                Leg { x: stage.cx - width; width: stage.cx * traced.t1; height: stage.wallW; inner: "bottom" }
-                Leg { x: stage.cx; width: (stage.sw - stage.cx) * traced.t1; height: stage.wallW; inner: "bottom" }
-                Leg { width: stage.leftW; height: stage.sh * traced.t2; inner: "right" }
-                Leg { x: stage.sw - stage.wallW; width: stage.wallW; height: stage.sh * traced.t2; inner: "left" }
-                Leg { y: stage.sh - stage.wallW; width: stage.cx * traced.t3; height: stage.wallW; inner: "top" }
-                Leg { x: stage.sw - width; y: stage.sh - stage.wallW; width: (stage.sw - stage.cx) * traced.t3; height: stage.wallW; inner: "top" }
+                visible: stage.goo && morph.width > 0
+                opacity: morph.opacity
+                // joins the frame's top edge like the island does (shaders/rise.frag)
+                fragmentShader: Qt.resolvedUrl("../../shaders/rise.frag.qsb")
+                property size size: Qt.size(width, height)
+                property vector4d pill: Qt.vector4d(morph.x, morph.y, morph.width, morph.height)
+                property real radius: morph.radius
+                property real fillet: 17 * 0.75   // the island's (Island.qml: radius 17, fillets ¾ of it)
+                property real wallH: stage.wallW
+                property color fill: stage.mix(Theme.frame, stage.accent, morph.glow)
+                property color glow: Qt.alpha(stage.accent, 0.6 * morph.glow)
             }
 
             Rectangle { // the bead, the pill, the card
                 id: morph
                 property real glow: 1  // 1 the accent, 0 the island's own colour
                 property real toCard: 0 // 0 → 1: the island's colour → the card's
-                color: stage.mix(stage.mix(Theme.frame, stage.accent, glow), Theme.fill, toCard)
+                color: stage.goo ? "transparent" : stage.mix(stage.mix(Theme.frame, stage.accent, glow), Theme.fill, toCard)
                 border.width: 1
                 border.color: Qt.alpha(Theme.text, 0.07 * toCard)
                 antialiasing: true
-                // a soft halo of its own light while it's the bead
-                layer.enabled: glow > 0.01
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    shadowColor: Qt.alpha(stage.accent, 0.9 * morph.glow)
-                    shadowBlur: 1
-                    shadowHorizontalOffset: 0
-                    shadowVerticalOffset: 0
-                    autoPaddingEnabled: true
-                }
+                // (its halo while it glows: the ShaderEffect above)
 
                 // its face: the bead is alive for a moment. Eyes and a smile in a
                 // darker shade of its own colour; they part as it stretches into the pill
@@ -167,14 +319,15 @@ Scope {
                     property real blink: 0   // 0 open, 1 shut
                     property real happy: 0   // 0 calm, 1 beaming (eyes squint, the smile widens)
                     property real sx: 0      // where it looks when your cursor isn't near (-1 … 1)
+                    property real sy: 0      // and up or down
                     readonly property real u: Math.min(width, height)
                     readonly property real spread: Math.max(0, width - height) // wider than tall: the pill
                     readonly property color ink: Qt.darker(stage.accent, 2.8)
                     // it looks at your cursor, if you move it; else where the intro says
                     readonly property real cx: morph.x + morph.width / 2
                     readonly property real cy: morph.y + morph.height / 2
-                    property real lx: look.hovered ? Math.max(-1, Math.min(1, (look.point.position.x - cx) / 260)) : sx
-                    property real ly: look.hovered ? Math.max(-1, Math.min(1, (look.point.position.y - cy) / 260)) : 0
+                    property real lx: look.hovered && look.moved ? Math.max(-1, Math.min(1, (look.point.position.x - cx) / 260)) : sx
+                    property real ly: look.hovered && look.moved ? Math.max(-1, Math.min(1, (look.point.position.y - cy) / 260)) : sy
                     Behavior on lx { SmoothedAnimation { velocity: 7 } }
                     Behavior on ly { SmoothedAnimation { velocity: 7 } }
 
@@ -185,8 +338,8 @@ Scope {
                             width: face.u * 0.13
                             height: Math.max(face.u * 0.025, face.u * 0.2 * (1 - face.blink) * (1 - face.happy * 0.6))
                             radius: width / 2
-                            x: face.width / 2 + modelData * (face.u * 0.17 + face.spread * 0.3) - width / 2 + face.lx * face.u * 0.07
-                            y: face.height * 0.42 - height / 2 + face.ly * face.u * 0.05
+                            x: face.width / 2 + modelData * (face.u * 0.17 + face.spread * 0.3) - width / 2 + face.lx * face.u * 0.13
+                            y: face.height * 0.42 - height / 2 + face.ly * face.u * 0.11
                             color: face.ink
                             antialiasing: true
                         }
@@ -196,8 +349,8 @@ Scope {
                         anchors.fill: parent
                         preferredRendererType: Shape.CurveRenderer
                         readonly property real w: face.u * (0.13 + face.happy * 0.07) + face.spread * 0.08
-                        readonly property real y0: face.height * 0.6 + face.ly * face.u * 0.03
-                        readonly property real mx: face.width / 2 + face.lx * face.u * 0.05
+                        readonly property real y0: face.height * 0.6 + face.ly * face.u * 0.06
+                        readonly property real mx: face.width / 2 + face.lx * face.u * 0.09
                         ShapePath {
                             strokeColor: face.ink
                             strokeWidth: Math.max(1.5, face.u * 0.05)
@@ -209,7 +362,16 @@ Scope {
                     }
                 }
             }
-            HoverHandler { id: look; enabled: intro.running }
+            // the face follows your cursor, but only once you move it (else it
+            // looks where the intro says: a pointer just resting there doesn't count)
+            HoverHandler {
+                id: look
+                enabled: intro.running
+                property bool moved: false
+                property point from: Qt.point(-1, -1)
+                onHoveredChanged: if (hovered && from.x < 0) from = point.position
+                onPointChanged: if (from.x >= 0 && Math.hypot(point.position.x - from.x, point.position.y - from.y) > 12) moved = true
+            }
         }
 
         Rectangle {
@@ -272,10 +434,12 @@ Scope {
                 ScriptAction { script: {
                     fx.flood = 0; fx.gather = 0; fx.phase = 0; fx.aurora = 0; fx.grid = 0; fx.dots = 0; fx.wave = 0;
                     hand.reveal = 0; hand.born = 0; hand.shine = 0; hand.opacity = 1; hand.glow = 1; hand.shift = 0; hand.height = 84; hand.cy = hand.rest;
-                    stage.dark = 1; stage.trace = 0; stage.settle = 0; traced.opacity = 1;
-                    morph.width = 0; morph.height = 0; morph.radius = 999; // round from the first frame (clamped to half its size) morph.x = stage.cx; morph.y = stage.sh * 0.55;
+                    stage.dark = 1; stage.trace = 0; stage.settle = 0; stage.lift = 0; stage.fade = 0; traced.opacity = 1;
+                    morph.width = 0; morph.height = 0; morph.x = stage.cx; morph.y = stage.sh * 0.55;
+                    morph.radius = 999; // round from the first frame (clamped to half its size)
+                    stage.rise = 0; stage.wob = 0;
                     morph.glow = 1; morph.toCard = 0; morph.opacity = 1; morph.rotation = 0;
-                    face.opacity = 0; face.blink = 0; face.happy = 0; face.sx = 0;
+                    face.opacity = 0; face.blink = 0; face.happy = 0; face.sx = 0; face.sy = 0; look.moved = false; look.from = Qt.point(-1, -1);
                 } }
                 PauseAnimation { duration: 150 }
                 // a bead pops into the dark, and it's alive
@@ -294,12 +458,35 @@ Scope {
                 NumberAnimation { target: face; property: "blink"; to: 1; duration: 70; easing.type: Easing.InQuad }
                 NumberAnimation { target: face; property: "blink"; to: 0; duration: 120; easing.type: Easing.OutQuad }
                 PauseAnimation { duration: 180 }
-                // looks around (at your cursor, if you move it)
-                NumberAnimation { target: face; property: "sx"; to: -1; duration: 240; easing.type: Easing.InOutQuad }
-                PauseAnimation { duration: 360 }
-                NumberAnimation { target: face; property: "sx"; to: 1; duration: 340; easing.type: Easing.InOutQuad }
-                PauseAnimation { duration: 360 }
-                NumberAnimation { target: face; property: "sx"; to: 0; duration: 220; easing.type: Easing.InOutQuad }
+                // looks around first, curious (at your cursor, if you move it): left,
+                // leaning into it, then right, then up at the top edge, where it's
+                // going, and back at you
+                ParallelAnimation {
+                    NumberAnimation { target: face; property: "sx"; to: -1; duration: 280; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: face; property: "sy"; to: 0.2; duration: 280; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "rotation"; to: -6; duration: 320; easing.type: Easing.InOutQuad }
+                }
+                PauseAnimation { duration: 420 }
+                ParallelAnimation {
+                    NumberAnimation { target: face; property: "sx"; to: 1; duration: 380; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "rotation"; to: 6; duration: 420; easing.type: Easing.InOutQuad }
+                }
+                PauseAnimation { duration: 260 }
+                NumberAnimation { target: face; property: "blink"; to: 1; duration: 60; easing.type: Easing.InQuad }
+                NumberAnimation { target: face; property: "blink"; to: 0; duration: 110; easing.type: Easing.OutQuad }
+                PauseAnimation { duration: 160 }
+                ParallelAnimation {
+                    NumberAnimation { target: face; property: "sx"; to: 0.15; duration: 360; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: face; property: "sy"; to: -1; duration: 360; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "rotation"; to: 0; duration: 360; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 32 - 6; duration: 360; easing.type: Easing.InOutQuad }
+                }
+                PauseAnimation { duration: 520 }
+                ParallelAnimation {
+                    NumberAnimation { target: face; property: "sx"; to: 0; duration: 260; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: face; property: "sy"; to: 0; duration: 260; easing.type: Easing.InOutQuad }
+                    NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 32; duration: 260; easing.type: Easing.InOutQuad }
+                }
                 NumberAnimation { target: face; property: "blink"; to: 1; duration: 70; easing.type: Easing.InQuad }
                 NumberAnimation { target: face; property: "blink"; to: 0; duration: 120; easing.type: Easing.OutQuad }
                 // happy: beams, wiggles and hops
@@ -328,43 +515,66 @@ Scope {
                     NumberAnimation { target: morph; property: "x"; to: stage.cx - 27; duration: 300; easing.type: Easing.OutQuad }
                     NumberAnimation { target: morph; property: "y"; to: stage.sh * 0.5 - 52; duration: 300; easing.type: Easing.OutQuad }
                 }
-                // …and up it goes to the top edge, quicker as it goes, rounding again
+                // …and up it goes. One curve: it leaves gently, is quickest mid-way,
+                // and eases into the top edge; a slim capsule on the way (moving
+                // things stretch), it widens into the island's pill only as it
+                // arrives, then settles with a small wobble. Light runs out of it
+                // round the frame as it lands.
+                ScriptAction { script: {
+                    stage.from = Qt.rect(morph.x, morph.y, morph.width, morph.height);
+                    stage.rise = 0; stage.wob = 0;
+                    const lerp = (a, b, t) => a + (b - a) * t;
+                    const ss = (a, b, t) => { const u = Math.max(0, Math.min(1, (t - a) / (b - a))); return u * u * (3 - 2 * u); };
+                    morph.width = Qt.binding(() => lerp(lerp(stage.from.width, 40, ss(0, 0.45, stage.rise)), stage.islW, ss(0.55, 1, stage.rise)) + 10 * stage.wob);
+                    morph.height = Qt.binding(() => lerp(lerp(stage.from.height, 64, ss(0, 0.45, stage.rise)), 34 + 17, ss(0.5, 1, stage.rise)) - 4 * stage.wob);
+                    morph.x = Qt.binding(() => stage.cx - morph.width / 2);
+                    // the top runs up into the frame (like the island's), so it lands 17px above the edge
+                    morph.y = Qt.binding(() => lerp(stage.from.y, stage.wallW - 17, stage.rise));
+                    morph.radius = Qt.binding(() => lerp(morph.height / 2, 17, ss(0.6, 1, stage.rise)));
+                } }
                 ParallelAnimation {
-                    NumberAnimation { target: morph; property: "y"; to: stage.wallW; duration: 460; easing.type: Easing.InCubic }
-                    NumberAnimation { target: morph; properties: "width,height"; to: 44; duration: 460; easing.type: Easing.InQuad }
-                    NumberAnimation { target: morph; property: "radius"; to: 22; duration: 460 }
-                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 22; duration: 460; easing.type: Easing.InQuad }
-                }
-                // meets it: squashes flat against it
-                ParallelAnimation {
-                    NumberAnimation { target: morph; property: "height"; to: 24; duration: 110; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: morph; property: "width"; to: 50; duration: 110; easing.type: Easing.OutQuad }
-                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 25; duration: 110; easing.type: Easing.OutQuad }
-                }
-                // and spreads into the island's pill; light runs out of it round the frame
-                ParallelAnimation {
-                    NumberAnimation { target: morph; property: "width"; to: 160; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                    NumberAnimation { target: morph; property: "x"; to: stage.cx - 80; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                    NumberAnimation { target: morph; property: "height"; to: 34; duration: 520; easing.type: Easing.OutBack; easing.overshoot: 1.4 }
-                    NumberAnimation { target: morph; property: "radius"; to: 17; duration: 520 }
-                    NumberAnimation { target: face; property: "opacity"; to: 0; duration: 380; easing.type: Easing.InQuad }
+                    NumberAnimation { target: stage; property: "rise"; to: 1; duration: 720; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.55, 0, 0.2, 1, 1, 1] }
                     SequentialAnimation {
-                        PauseAnimation { duration: 120 }
-                        NumberAnimation { target: stage; property: "trace"; to: 1; duration: 820; easing.type: Easing.InOutCubic }
+                        PauseAnimation { duration: 140 }
+                        NumberAnimation { target: face; property: "opacity"; to: 0; duration: 260; easing.type: Easing.InOutQuad }
+                    }
+                    SequentialAnimation { // lands: a quick, damped wobble
+                        PauseAnimation { duration: 600 }
+                        NumberAnimation { target: stage; property: "wob"; to: 1; duration: 120; easing.type: Easing.OutQuad }
+                        NumberAnimation { target: stage; property: "wob"; to: -0.45; duration: 170; easing.type: Easing.InOutSine }
+                        NumberAnimation { target: stage; property: "wob"; to: 0.15; duration: 150; easing.type: Easing.InOutSine }
+                        NumberAnimation { target: stage; property: "wob"; to: 0; duration: 140; easing.type: Easing.InOutSine }
+                    }
+                    SequentialAnimation {
+                        PauseAnimation { duration: 560 }
+                        NumberAnimation { target: stage; property: "trace"; to: 1; duration: 1100; easing.type: Easing.InOutSine }
                     }
                 }
-                // the dark lifts; the light settles into the frame and gives way to it
+                // the bindings go: the pill stays put for what follows
+                ScriptAction { script: {
+                    morph.x = stage.cx - stage.islW / 2; morph.y = stage.wallW - 17; morph.width = stage.islW; morph.height = 34 + 17; morph.radius = 17;
+                } }
+                PauseAnimation { duration: 260 }   // the whole frame in the island's colour, for a moment
+                // the colour settles into the frame's own (the island's pill with it),
                 ParallelAnimation {
-                    NumberAnimation { target: stage; property: "dark"; to: 0; duration: 560; easing.type: Easing.InOutQuad }
-                    NumberAnimation { target: stage; property: "settle"; to: 1; duration: 560; easing.type: Easing.InOutQuad }
-                    NumberAnimation { target: morph; property: "glow"; to: 0; duration: 560; easing.type: Easing.InOutQuad }
-                    SequentialAnimation {
-                        PauseAnimation { duration: 300 }
-                        NumberAnimation { target: traced; property: "opacity"; to: 0; duration: 380 }
-                    }
+                    NumberAnimation { target: stage; property: "settle"; to: 1; duration: 520; easing.type: Easing.InOutSine }
+                    NumberAnimation { target: morph; property: "glow"; to: 0; duration: 520; easing.type: Easing.InOutSine }
+                    // the real island's tucked away (a window's near the top): the pill
+                    // tucks into the frame the same way
+                    NumberAnimation { target: morph; property: "y"; to: root.tucked ? stage.wallW - 17 - 52 : stage.wallW - 17; duration: 520; easing.type: Easing.InOutCubic }
                 }
-                // the pill blooms down into the card
+                // the dark lifts from the island while the sketch, now in the real
+                // frame's colours, stays over the real one; then it simply goes
+                NumberAnimation { target: stage; property: "lift"; to: 1; duration: 900; easing.type: Easing.InOutCubic }
                 ParallelAnimation {
+                    NumberAnimation { target: stage; property: "fade"; to: 1; duration: 300; easing.type: Easing.InOutSine }
+                    NumberAnimation { target: morph; property: "opacity"; to: 0; duration: 300; easing.type: Easing.InOutSine }
+                }
+                ScriptAction { script: { stage.dark = 0; stage.lift = 0; stage.fade = 0; } }
+                PauseAnimation { duration: 180 }
+                // the card blooms out of the island
+                ParallelAnimation {
+                    NumberAnimation { target: morph; property: "opacity"; to: 1; duration: 160; easing.type: Easing.OutQuad }
                     NumberAnimation { target: morph; property: "x"; to: (stage.sw - card.width) / 2; duration: 560; easing.type: Easing.OutQuint }
                     NumberAnimation { target: morph; property: "y"; to: (stage.sh - card.height) / 2; duration: 560; easing.type: Easing.OutQuint }
                     NumberAnimation { target: morph; property: "width"; to: card.width; duration: 560; easing.type: Easing.OutQuint }
