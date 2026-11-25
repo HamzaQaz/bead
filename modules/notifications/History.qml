@@ -382,7 +382,7 @@ Scope {
                         }
                         SequentialAnimation {
                             id: cascade
-                            PauseAnimation { duration: Math.min(260, item.index * 35) }
+                            PauseAnimation { duration: Math.max(0, Math.min(260, item.index * 35)) }
                             NumberAnimation { target: item; property: "fly"; to: item.width + 40; duration: 220; easing.type: Easing.InBack; easing.overshoot: 1.2 }
                         }
                         width: list.width
