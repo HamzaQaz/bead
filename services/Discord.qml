@@ -27,6 +27,9 @@ Singleton {
     property var ring: null         // { channel, name, avatar } while a call rings
     property list<var> voiceNow: [] // { id, name, guild, count, people: [{ id, name, avatar }] }
     property bool scanning: false
+    // no notification for hours since connecting: maybe Do Not Disturb, or
+    // Discord's desktop notifications are off (then it tells bead nothing)
+    property bool quiet: false
     property int dmUnread: 0
     readonly property int dmCount: Demo.on ? 0 : dmUnread // demo mode: none
 
@@ -45,15 +48,17 @@ Singleton {
     function toggleMute(): void { send("toggle-mute"); }
     function toggleDeaf(): void { send("toggle-deaf"); }
     function leave(): void { send("leave"); }
+    // after fixing the app's settings in Discord: connect again
+    function retry(): void { helper.running = false; restart.restart(); }
     function markRead(): void { if (dmUnread > 0) send("read"); }
     function answer(): void { if (ring && ring.channel !== "preview") send("answer " + ring.channel); else ring = null; }
     function dismiss(): void { if (ring?.channel === "preview") ring = null; else send("dismiss"); }
     function join(id: string): void { send("join " + id); }
     function scanVoice(): void { if (helper.running && state === "ready") { scanning = true; send("voice-now"); } }
-    // an inbox item: open its channel in Discord, and it's read
+    // an inbox item (Reply, or the row): its chat in Discord, ready to type; it's read
     function open(item: var): void {
-        send("read " + item.channel);
-        Quickshell.execDetached(["xdg-open", item.link]);
+        if (state === "ready") send("open " + item.channel);
+        else Quickshell.execDetached(["xdg-open", item.link]);
         Hyprland.dispatch('hl.dsp.focus({ window = "class:discord" })');
     }
     signal ringing(var call)
@@ -113,6 +118,7 @@ Singleton {
                     const before = root.dmUnread;
                     root.dms = m.from ?? [];
                     root.dmUnread = m.count ?? 0;
+                    root.quiet = !!m.quiet;
                     if (root.dmUnread > before && root.dms.length) root.dmArrived(root.dms[0]);
                 } else if (m.type === "ring") {
                     root.ring = m.call ?? null;
@@ -174,7 +180,7 @@ Singleton {
         }
         // a pretend unread DM for 8 s, to see how it looks
         function preview(): void {
-            root.dms = [{ channel: "preview", name: "Preview", avatar: "https://cdn.discordapp.com/embed/avatars/0.png", count: 2, text: "" }];
+            root.dms = [{ channel: "preview", name: "Preview", avatar: "https://cdn.discordapp.com/embed/avatars/0.png", count: 2, text: "are you on tonight?", kind: "dm", link: "" }];
             root.dmUnread = 2;
             root.dmArrived(root.dms[0]);
             previewEnd.restart();

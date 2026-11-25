@@ -7,12 +7,15 @@ Run by services/Discord.qml. Writes one JSON object per line on stdout:
    "members": [{"id", "name", "avatar", "mute", "deaf", "speaking", "me"}],
    "mute": bool, "deaf": bool}
   {"type": "dms", "count": n, "from": [{"channel", "guild", "kind", "name", "avatar", "count", "text", "link"}]}
-     the inbox: unread DMs (kind "dm") and @mentions (kind "mention"), newest first
+     the inbox: unread DMs (kind "dm") and @mentions (kind "mention"), newest first;
+     also "last" (when Discord last sent a notification) and "quiet" (none for hours:
+     maybe Do Not Disturb, or Discord's desktop notifications are off)
   {"type": "ring", "call": null | {"channel", "name", "avatar"}}   a DM call ringing
   {"type": "voicenow", "channels": [{"id", "name", "guild", "count", "people": [{"id", "name", "avatar"}]}]}
      busy voice channels in your pinned and recent servers (after `voice-now`)
 Reads commands on stdin, one per line: mute, unmute, toggle-mute, deaf, undeaf,
-toggle-deaf, leave, read [channel] (clears the inbox, or one channel), join <channel>,
+toggle-deaf, leave, read [channel] (clears the inbox, or one channel), open <channel>
+(Reply: shows the chat in Discord), join <channel>,
 answer <channel>, dismiss (stop showing a ring), voice-now,
 presence {"prefs": {"music", "project"}, "track": {"title", "artist"} | null, "project": "..."}.
 
@@ -185,6 +188,24 @@ def remember_guild(recent, gid, keep=20):
     return ([gid] + [g for g in recent if g != gid])[:keep]
 
 
+def explain_auth(msg):
+    """Discord refusing the app: (state, what to do). A config problem is "setup"."""
+    if "redirect_uri" in msg:
+        return "setup", "In your Discord app's OAuth2 page, add the redirect http://localhost and save"
+    if "401" in msg or "invalid_client" in msg:
+        return "setup", "Discord didn't accept the client_id / client_secret in ~/.config/bead/discord.json"
+    return "error", "Authorization refused: " + msg
+
+
+QUIET_AFTER = 2 * 3600
+
+
+def seems_quiet(last, connected, now, after=QUIET_AFTER):
+    """No notification for a good while since connecting: Discord may be on Do
+    Not Disturb, or its desktop notifications off (it then tells bead nothing)."""
+    return now - connected >= after and now - (last or 0) >= after
+
+
 def parse_command(line):
     name, _, arg = line.strip().partition(" ")
     return name, arg.strip()
@@ -206,7 +227,10 @@ class Rpc:
         self.dms = {}  # the inbox (DMs and mentions): channel id -> item, see inbox_add
         self.kinds = {}  # channel id -> its type (None: couldn't ask)
         self.ring = None  # {"channel", "name", "avatar"} while a call rings
-        self.recent = (read_json(RECENT) or {}).get("guilds", [])  # servers you were in voice in, newest first
+        saved = read_json(RECENT) or {}
+        self.recent = saved.get("guilds", [])  # servers you were in voice in, newest first
+        self.last_note = saved.get("last", 0)  # when Discord last told us anything
+        self.connected = time.time()
         self.activity = None
 
     def later(self, seconds, fn):
@@ -293,12 +317,13 @@ class Rpc:
 
         def got(data, err):
             if err:
-                status("error", "Authorization refused: " + err.get("message", ""))
+                status(*explain_auth(err.get("message", "")))
                 return
             try:
                 tok = oauth(self.cfg, grant_type="authorization_code", code=data["code"], redirect_uri=REDIRECT)
             except Exception as e:
-                status("error", f"Token exchange failed: {e}")
+                state, detail = explain_auth(str(e))
+                status(state, detail if state == "setup" else f"Token exchange failed: {e}")
                 return
             write_private(TOKEN, tok)
             self.authenticate(tok, retry=False)
@@ -328,7 +353,8 @@ class Rpc:
         self.cmd("SUBSCRIBE", evt="VOICE_CHANNEL_SELECT")
         self.cmd("SUBSCRIBE", evt="VOICE_SETTINGS_UPDATE")
         self.cmd("SUBSCRIBE", evt="NOTIFICATION_CREATE")
-        self.publish_dms()
+        self.connected = time.time()
+        self.quiet_check()
         self.cmd("GET_VOICE_SETTINGS", then=lambda d, e: e or self.settings(d))
         self.load_channel()
         self.reconcile()
@@ -364,7 +390,7 @@ class Rpc:
             gid = data.get("guild_id")
             if gid and (not self.recent or self.recent[0] != gid):
                 self.recent = remember_guild(self.recent, gid)
-                write_private(RECENT, {"guilds": self.recent})
+                self.save_recent()
             if self.ring and self.ring["channel"] == new:
                 self.set_ring(None)  # answered
             self.channel = {"id": new, "name": data.get("name") or "Call", "guild": self.guilds.get(gid, "") if gid else "Direct call"}
@@ -405,9 +431,18 @@ class Rpc:
         }
 
     # ── the inbox: DMs and @mentions; and calls ringing ──
+    def save_recent(self):
+        write_private(RECENT, {"guilds": self.recent, "last": self.last_note})
+
     def publish_dms(self):
         view = inbox_view(self.dms)
-        emit({"type": "dms", "count": sum(d["count"] for d in view), "from": view})
+        emit({"type": "dms", "count": sum(d["count"] for d in view), "from": view, "last": self.last_note,
+              "quiet": seems_quiet(self.last_note, self.connected, time.time())})
+
+    def quiet_check(self):
+        # say so when Discord goes quiet for a while (re-published every 10 minutes)
+        self.publish_dms()
+        self.later(600, self.quiet_check)
 
     def set_ring(self, ring):
         self.ring = ring
@@ -425,6 +460,8 @@ class Rpc:
             kind = note_kind(data, ch_type, self.me)
             if not kind:
                 return
+            self.last_note = time.time()
+            self.save_recent()
             msg = data.get("message") or {}
             author = msg.get("author") or {}
             name = author.get("global_name") or author.get("username") or data.get("title") or "Someone"
@@ -528,6 +565,11 @@ class Rpc:
                 self.dms = {k: v for k, v in self.dms.items() if k != arg}
             elif not arg:
                 self.dms = {}
+            self.publish_dms()
+        elif c == "open" and arg:
+            # Reply: open the chat in Discord (its message box takes the typing); it's read
+            self.cmd("SELECT_TEXT_CHANNEL", {"channel_id": arg})
+            self.dms = {k: v for k, v in self.dms.items() if k != arg}
             self.publish_dms()
         elif c == "leave":
             self.cmd("SELECT_VOICE_CHANNEL", {"channel_id": None, "force": True})

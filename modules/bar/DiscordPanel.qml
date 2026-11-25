@@ -39,11 +39,19 @@ PanelColumn {
         title: Discord.state === "ready" ? "Discord"
             : Discord.state === "offline" ? "Discord isn't running"
             : Discord.state === "setup" ? "Discord isn't set up"
-            : Discord.state === "authorizing" ? "Allow bead in Discord…" : "Discord"
+            : Discord.state === "authorizing" ? "Allow bead in Discord…"
+            : Discord.state === "error" ? "Discord isn't connected" : "Discord"
     }
+    // not connected: why, in Discord's or bead's words, and a way to try again
     Empty {
-        visible: Discord.state === "setup"
-        text: "Run `bead discord setup` in a terminal to connect your Discord."
+        visible: Discord.state !== "ready" && Discord.state !== ""
+        color: Discord.state === "error" || Discord.state === "setup" ? Theme.tone("warning") : Theme.subtext
+        text: Discord.detail || (Discord.state === "setup" ? "Run `bead discord setup` in a terminal to connect your Discord." : "")
+    }
+    Row {
+        visible: Discord.state === "error" || Discord.state === "setup" || Discord.state === "offline"
+        anchors.right: parent.right
+        Action { text: "Try again"; glyph: "refresh"; onHit: Discord.retry() }
     }
 
     // ── ringing ──
@@ -70,7 +78,13 @@ PanelColumn {
 
     // ── inbox ──
     Label { visible: Discord.state === "ready"; text: "INBOX" }
-    Empty { visible: Discord.state === "ready" && Discord.dms.length === 0; text: "No unread DMs or mentions." }
+    Empty {
+        visible: Discord.state === "ready" && Discord.dms.length === 0
+        color: Discord.quiet ? Theme.tone("warning") : Theme.subtext
+        text: Discord.quiet
+            ? "Nothing from Discord for hours. Is your status Do Not Disturb? Discord tells bead about messages only when it shows a notification (Settings → Notifications → Enable Desktop Notifications)."
+            : "No unread DMs or mentions."
+    }
     Repeater {
         model: Discord.dms.slice(0, 6)
         PanelRow {
@@ -79,6 +93,7 @@ PanelColumn {
             title: modelData.name + (modelData.count > 1 ? "  ·  " + modelData.count : "")
             sub: (modelData.kind === "mention" ? "@ " : "") + (modelData.text || (modelData.kind === "mention" ? "Mentioned you" : "Sent a message"))
             onClicked: { root.done(); Discord.open(modelData); }
+            Action { text: "Reply"; glyph: "reply"; onHit: { root.done(); Discord.open(modelData); } }
         }
     }
 

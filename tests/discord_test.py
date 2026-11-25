@@ -142,6 +142,102 @@ class PickGuilds(unittest.TestCase):
         self.assertEqual(len(bd.remember_guild([str(i) for i in range(30)], "new")), 20)
 
 
+class ExplainAuth(unittest.TestCase):
+    def test_a_missing_redirect_says_what_to_add(self):
+        state, detail = bd.explain_auth('OAuth2 Error: invalid_request: Missing "redirect_uri" in request.')
+        self.assertEqual(state, "setup")
+        self.assertIn("http://localhost", detail)
+
+    def test_a_bad_secret_says_to_check_it(self):
+        state, detail = bd.explain_auth("HTTP Error 401: Unauthorized")
+        self.assertEqual(state, "setup")
+        self.assertIn("client_secret", detail)
+
+    def test_saying_no_in_discord_is_an_error_with_its_own_words(self):
+        self.assertEqual(bd.explain_auth("User cancelled"), ("error", "Authorization refused: User cancelled"))
+
+
+class NotificationFlow(unittest.TestCase):
+    """Rpc.notification end to end: Discord's event in, bead's lines out (no socket)."""
+
+    def setUp(self):
+        self.out = []
+        bd.emit = self.out.append
+        self.rpc = bd.Rpc({"client_id": "1", "client_secret": "x"})
+        self.rpc.me = ME
+        self.asked = []
+
+        def cmd(name, args=None, evt=None, then=None):
+            self.asked.append((name, args))
+            if name == "GET_CHANNEL" and then:
+                then({"type": self.ch_type, "guild_id": self.guild}, None)
+        self.rpc.cmd = cmd
+
+    def last(self, kind):
+        return [o for o in self.out if o.get("type") == kind][-1]
+
+    def test_a_dm_lands_in_the_inbox(self):
+        self.ch_type, self.guild = 1, None
+        self.rpc.notification(note(content="are you on?"))
+        dms = self.last("dms")
+        self.assertEqual(dms["count"], 1)
+        self.assertEqual(dms["from"][0]["kind"], "dm")
+        self.assertEqual(dms["from"][0]["text"], "are you on?")
+        self.assertEqual(dms["from"][0]["link"], "discord://-/channels/@me/9")
+
+    def test_the_channel_type_is_asked_once(self):
+        self.ch_type, self.guild = 1, None
+        self.rpc.notification(note())
+        self.rpc.notification(note())
+        self.assertEqual(sum(1 for n, _ in self.asked if n == "GET_CHANNEL"), 1)
+        self.assertEqual(self.last("dms")["count"], 2)
+
+    def test_a_mention_keeps_its_server(self):
+        self.ch_type, self.guild = 0, "5"
+        self.rpc.notification(note(title="Ada (#general, S)"))
+        self.assertEqual(self.last("dms")["from"][0]["link"], "discord://-/channels/5/9")
+
+    def test_a_call_rings_instead(self):
+        self.ch_type, self.guild = 1, None
+        self.rpc.notification(note(msg_type=3, content=""))
+        self.assertEqual(self.last("ring")["call"]["channel"], "9")
+        self.assertFalse([o for o in self.out if o.get("type") == "dms"])
+
+    def test_reply_opens_the_chat_in_discord_and_reads_it(self):
+        self.ch_type, self.guild = 1, None
+        self.rpc.notification(note())
+        self.rpc.command("open 9")
+        self.assertIn(("SELECT_TEXT_CHANNEL", {"channel_id": "9"}), self.asked)
+        self.assertEqual(self.last("dms")["count"], 0)
+
+    def test_the_last_notification_time_is_reported(self):
+        self.ch_type, self.guild = 1, None
+        self.rpc.notification(note())
+        self.assertGreater(self.last("dms")["last"], 0)
+
+    def test_reading_one_channel_clears_it(self):
+        self.ch_type, self.guild = 1, None
+        self.rpc.notification(note())
+        self.rpc.command("read 9")
+        self.assertEqual(self.last("dms")["count"], 0)
+
+
+class QuietHint(unittest.TestCase):
+    HOUR = 3600
+
+    def test_quiet_for_hours_while_connected_suggests_dnd(self):
+        self.assertTrue(bd.seems_quiet(last=0, connected=0, now=3 * self.HOUR))
+
+    def test_a_recent_notification_means_its_fine(self):
+        self.assertFalse(bd.seems_quiet(last=2.5 * self.HOUR, connected=0, now=3 * self.HOUR))
+
+    def test_just_connected_is_too_soon_to_say(self):
+        self.assertFalse(bd.seems_quiet(last=0, connected=0, now=0.5 * self.HOUR))
+
+    def test_an_old_notification_from_before_counts_as_quiet(self):
+        self.assertTrue(bd.seems_quiet(last=1, connected=10 * self.HOUR, now=13 * self.HOUR))
+
+
 class ParseCommand(unittest.TestCase):
     def test_a_bare_command(self):
         self.assertEqual(bd.parse_command("leave\n"), ("leave", ""))
