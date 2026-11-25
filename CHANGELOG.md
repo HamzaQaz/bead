@@ -5,6 +5,16 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+## 0.4.0
+
+### Claude Code questions
+- Answer Claude's questions from the toast and stay where you are: the pick
+  reaches the Claude terminal without switching to it.
+- Type your own answer in the toast, and an "Open terminal" button when you
+  do want to go there. Question toasts wait 120 s instead of 280 s.
+- Old installs' copy of the Claude Code hook is replaced by a link to the
+  installed one, and `bead update` rebuilds glint, so the hook stays current.
+
 ### Focus modes
 - Work, Game and Night (and your own): a look preset, Do Not Disturb with
   chosen apps let through, night light and a wallpaper, switched together and
