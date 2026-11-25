@@ -241,7 +241,7 @@ Scope {
                 anchors.fill: parent
                 preferredRendererType: Shape.CurveRenderer
                 ShapePath {
-                    fillColor: Theme.frame
+                    fillColor: Theme.frameFill
                     // a new palette ripples out (config/Theme.qml): a ring of light
                     // crosses the frame, from the island at the top to the far corners
                     fillGradient: Theme.ripple < 1 ? ring : null
@@ -292,9 +292,19 @@ Scope {
                 property bool pulsing: false    // something's happening: breathe
                 readonly property bool hovered: ma.containsMouse
                 signal clicked()
+                // coming and going: it opens up (the pill grows round it) and pops in,
+                // and leaves the same way backwards, instead of appearing at once
+                property bool shown: true
+                property real open: shown ? 1 : 0
+                Behavior on open { NumberAnimation { duration: Motion.ms(320); easing.type: Easing.OutCubic } }
+                visible: open > 0.01
+                opacity: open
                 anchors.horizontalCenter: parent?.horizontalCenter
-                width: 32; height: 32; radius: 16
+                width: 32; height: 32 * open; radius: 16
                 color: btn.lit ? Theme.tone("action") : Qt.alpha(Theme.text, ma.containsMouse ? 0.1 : 0)
+                // Customise → Motion: a little lift under the pointer
+                scale: (0.5 + 0.5 * open) * (Look.v.hoverGrow && ma.containsMouse && !ma.pressed ? 1.08 : ma.pressed ? 0.94 : 1)
+                Behavior on scale { NumberAnimation { duration: Motion.ms(160); easing.type: Easing.OutBack } }
                 Behavior on color { ColorAnimation { duration: 150 } }
                 Icon {
                     id: btnIcon
@@ -384,7 +394,7 @@ Scope {
                     width: 32
                     height: wsCol.height + 8
                     radius: 16
-                    color: Qt.alpha(Theme.text, 0.05)
+                    color: Qt.alpha(Theme.text, Look.v.barPillOpacity)
                     // blurred and dimmed behind the specials pill
                     property real veil: spBox.open ? 1 : 0
                     Behavior on veil { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
@@ -598,15 +608,17 @@ Scope {
                 anchors.horizontalCenter: body.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: win.wallW + 6
-                spacing: 6 // the pills sit together, one cluster above power
+                spacing: Look.v.barGap // the pills sit together, one cluster above power
 
+                // bead's first moments: pinned apps are just there, not animated in
+                Timer { id: trayIntro; interval: 3000; running: true }
                 // tools: utilities, the tray panel, pinned tray apps
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 32
                     height: toolsCol.height + 4
                     radius: 16
-                    color: Qt.alpha(Theme.text, 0.05)
+                    color: Qt.alpha(Theme.text, Look.v.barPillOpacity)
                 Column {
                     id: toolsCol
                     y: 2
@@ -615,6 +627,7 @@ Scope {
                     // utilities: screenshots, recording, quick toggles
                     BarButton {
                         id: utilsBtn
+                        shown: Look.v.barUtils
                         icon: Recorder.recording ? "radio_button_checked" : "widgets"
                         tone: Recorder.recording ? Theme.tone("error") : Theme.text
                         pulsing: Recorder.recording
@@ -625,7 +638,7 @@ Scope {
                     BarButton {
                         id: updatesBtn
                         // also while updating: it pulses, and brings the island's updater back
-                        visible: Updates.count > 0 || Updates.phase !== "" || Updates.rebootAt > 0
+                        shown: Look.v.barUpdates && (Updates.count > 0 || Updates.phase !== "" || Updates.rebootAt > 0)
                         icon: Updates.running ? "downloading" : Updates.rebootAt ? "schedule" : "system_update_alt"
                         tone: Updates.running ? Theme.tone("action") : Updates.restart ? Theme.tone("warning") : Theme.text
                         pulsing: Updates.running
@@ -647,7 +660,7 @@ Scope {
                     BarButton {
                         id: discordBtn
                         // also when it can't connect (not when Discord simply isn't running), to say why
-                        visible: Discord.state === "ready" || Discord.state === "error" || Discord.state === "authorizing" || Discord.state === "setup" || !!Discord.ring
+                        shown: Look.v.barDiscord && (Discord.state === "ready" || Discord.state === "error" || Discord.state === "authorizing" || Discord.state === "setup" || !!Discord.ring)
                         icon: Discord.ring ? "ring_volume" : "forum"
                         tone: Discord.ring ? Theme.tone("success") : Discord.state === "ready" ? Theme.text : Theme.tone("warning")
                         pulsing: !!Discord.ring
@@ -666,7 +679,7 @@ Scope {
                     // WhatsApp / Telegram (when on in Settings): with the unread count
                     BarButton {
                         id: messagesBtn
-                        visible: Messengers.enabled
+                        shown: Look.v.barMessages && Messengers.enabled
                         icon: "chat"
                         lit: win.panel === "messages"
                         onClicked: win.toggle("messages", messagesBtn)
@@ -683,18 +696,41 @@ Scope {
                     // the tray panel: every app, pin some to the bar
                     BarButton {
                         id: trayBtn
-                        visible: SystemTray.items.values.length > 0
+                        shown: Look.v.barTray && SystemTray.items.values.length > 0
                         icon: "apps"
                         lit: win.panel === "tray"
                         onClicked: win.toggle("tray", trayBtn)
                     }
+                    // every tray app has a slot; pinned ones open up: the pill grows
+                    // and the icon pops in (unpinning plays it backwards). Slots stay
+                    // put, so pinning one doesn't rebuild (and re-animate) the rest
                     Repeater {
-                        model: SystemTray.items.values.filter(i => TrayPins.pinned.includes(i.id))
+                        model: SystemTray.items
+                        Item {
+                            id: slot
+                            required property SystemTrayItem modelData
+                            readonly property bool pinned: Look.v.barTray && TrayPins.pinned.includes(modelData.id)
+                            // a pinned app that starts later comes in too (born flips after
+                            // creation, so it animates); at bead's start they're just there
+                            property bool early: false
+                            property bool born: false
+                            Component.onCompleted: { early = trayIntro.running; born = true; }
+                            readonly property bool shown: pinned && (born || early)
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 32
+                            height: shown ? 32 : 0
+                            visible: height > 0.5
+                            Behavior on height { enabled: Look.v.trayPop; NumberAnimation { duration: Motion.ms(340); easing.type: Easing.OutCubic } }
                         MouseArea {
                             id: tray
-                            required property SystemTrayItem modelData
+                            readonly property SystemTrayItem modelData: slot.modelData
                             anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.verticalCenter: parent.verticalCenter
                             width: 32; height: 32
+                            scale: slot.shown ? 1 : 0.3
+                            opacity: slot.shown ? 1 : 0
+                            Behavior on scale { enabled: Look.v.trayPop; NumberAnimation { duration: Motion.ms(420); easing.type: Easing.OutBack; easing.overshoot: 2.2 * Motion.bounce } }
+                            Behavior on opacity { enabled: Look.v.trayPop; NumberAnimation { duration: Motion.ms(260); easing.type: Easing.OutCubic } }
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -718,6 +754,7 @@ Scope {
                                 source: tray.modelData.icon
                             }
                         }
+                        }
                     }
                 }
                 }
@@ -725,6 +762,12 @@ Scope {
                 // clock: hours, a sideways colon that fades with the seconds, minutes
                 Rectangle {
                     id: barClock
+                    property real open: Look.v.barClock ? 1 : 0
+                    Behavior on open { NumberAnimation { duration: Motion.ms(320); easing.type: Easing.OutCubic } }
+                    visible: open > 0.01
+                    opacity: open
+                    scale: 0.6 + 0.4 * open
+                    clip: open < 1
                     // where it is, for the lock's clock to fly to on unlock
                     Connections {
                         target: Lock
@@ -738,9 +781,9 @@ Scope {
                     }
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 32
-                    height: clockCol.height + 16
+                    height: (clockCol.height + 16) * open
                     radius: 16
-                    color: Qt.alpha(Theme.text, 0.05)
+                    color: Qt.alpha(Theme.text, Look.v.barPillOpacity)
                 Column {
                     id: clockCol
                     anchors.centerIn: parent
@@ -751,7 +794,7 @@ Scope {
                         font.pixelSize: 14
                         font.features: { "tnum": 1 }
                     }
-                    ClockText { font.weight: Font.Bold; color: Theme.text; text: Qt.formatTime(clock.date, "hh") }
+                    ClockText { font.weight: Font.Bold; color: Theme.text; text: Qt.formatTime(clock.date, Look.v.clock24 ? "hh" : "h") }
                     // a sideways colon, fading with the seconds
                     Row {
                         id: tick
@@ -775,7 +818,7 @@ Scope {
                     width: 32
                     height: statusCol.height
                     radius: 16
-                    color: Qt.alpha(Theme.text, 0.05)
+                    color: Qt.alpha(Theme.text, Look.v.barPillOpacity)
                     Column {
                         id: statusCol
                         width: parent.width
@@ -797,6 +840,7 @@ Scope {
                         }
                         BarButton {
                             id: soundBtn
+                            shown: Look.v.barSound
                             iconRef: "volume_up"
                             icon: Audio.levelGlyph(Audio.volume, Audio.muted)
                             tone: Audio.muted ? Theme.subtext : Theme.text
@@ -815,7 +859,7 @@ Scope {
                             readonly property var d: Osd.lowest
                             readonly property int level: d ? Osd.pct(d) : 100
                             readonly property bool charging: !!d && Osd.charging(d)
-                            visible: !!d
+                            shown: Look.v.barBattery && !!d
                             lit: win.panel === "battery"
                             icon: Osd.batteryGlyph(level, charging)
                             iconRef: "battery_full"
@@ -826,6 +870,7 @@ Scope {
                         }
                         BarButton {
                             id: wifiBtn
+                            shown: Look.v.barWifi
                             iconFill: 1
                             lit: win.panel === "wifi"
                             onClicked: win.toggle("wifi", wifiBtn)
@@ -841,7 +886,7 @@ Scope {
                             id: btBtn
                             lit: win.panel === "bt"
                             // only while it's on (Utilities has the switch), or its panel is open
-                            visible: !!statusCol.bt && (statusCol.bt.enabled || win.panel === "bt")
+                            shown: Look.v.barBluetooth && !!statusCol.bt && (statusCol.bt.enabled || win.panel === "bt")
                             icon: !statusCol.bt?.enabled ? "bluetooth_disabled" : statusCol.btBusy ? "bluetooth_searching"
                                 : statusCol.btConnected ? "bluetooth_connected" : "bluetooth"
                             pulsing: statusCol.btBusy
@@ -853,6 +898,7 @@ Scope {
 
                 BarButton {
                     id: powerBtn
+                    shown: Look.v.barPower
                     icon: "power_settings_new"
                     // quiet until you reach for it
                     tone: hovered || lit ? Theme.tone("error") : Theme.subtext

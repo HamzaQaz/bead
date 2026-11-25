@@ -852,8 +852,8 @@ Scope {
     // the pill shows the track briefly when a song starts or changes (or while
     // hovered), then goes back to the time; a tiny equaliser stays while playing
     property bool peek: false
-    function peekMedia(): void { if (playing) { peek = true; peekTimer.restart(); } }
-    Timer { id: peekTimer; interval: 5000; onTriggered: root.peek = false }
+    function peekMedia(): void { if (playing && Look.v.islandMediaPeek) { peek = true; peekTimer.restart(); } }
+    Timer { id: peekTimer; interval: Look.v.islandMediaPeekMs; onTriggered: root.peek = false }
     onPlayingChanged: playing ? peekMedia() : peek = false
     Connections {
         target: root.player
@@ -880,9 +880,12 @@ Scope {
         if (openCount > 0 && what !== "workspace") return; // the dashboard shows it already
         // a game (or video) fullscreen: no workspace bar dropping over it
         if (what === "workspace" && (root.fullscreen || (Hyprland.focusedWorkspace?.hasFullscreen ?? false))) return;
+        // Customise → Island: which of these show
+        const level = ["volume", "mic", "brightness"].includes(what);
+        if ((level && !Look.v.islandLevels) || (what === "workspace" && !Look.v.islandWorkspaces)) return;
         activityOn = screenName || focused.name;
         activity = what;
-        activityTimer.interval = ms || 1600;
+        activityTimer.interval = ms || (level ? Look.v.islandLevelMs : 1600);
         activityTimer.restart();
     }
     property var peekEntry: null
@@ -892,12 +895,13 @@ Scope {
     function peekAt(e: var): void {
         if (openCount > 0) { peekQueue = []; return; } // the dashboard lists them already
         peekEntry = e;
-        flash("notif", "", peekQueue.length ? 2200 : 3500);
+        flash("notif", "", peekQueue.length ? Math.min(2200, Look.v.islandNotifMs) : Look.v.islandNotifMs);
     }
     Connections {
         target: Notifs
         function onPosted(e: var) {
             if (root.activity === "timerdone" || root.activity === "call") return; // its own alarm is showing
+            if (!Look.v.islandNotifs || !Notifs.showsOnIsland(e)) return;
             if (root.activity === "notif") root.peekQueue = [...root.peekQueue, e].slice(-5);
             else root.peekAt(e);
         }
@@ -915,7 +919,7 @@ Scope {
         toastIcon = icon;
         toastText = text;
         toastTone = tone || "info";
-        flash("toast", "", ms || 1600);
+        flash("toast", "", Math.round((ms || 1600) * Look.v.islandToastScale));
     }
     Connections {
         target: Activities
@@ -952,6 +956,18 @@ Scope {
                 root.toastTap = open(/^www\./i.test(text) ? "https://" + text : text);
                 return;
             }
+        }
+    }
+    // Settings → Customise → Try it: the real thing, with the settings as they are
+    Connections {
+        target: Look
+        function onTryIt(what: string) {
+            if (what === "volume") root.flash("volume", "");
+            else if (what === "toast") root.toast("palette", "A toast, as your settings show it", "action", 1800);
+            else if (what === "notif") { if (Look.v.islandNotifs) root.peekAt(Look.sample(0)); else root.toast("notifications_off", "Notifications don't peek on the island", "info", 1800); }
+            else if (what === "dashboard") root.pinnedOn = root.pinnedOn ? "" : root.home.name;
+            else if (what === "media") root.mediaPinned = !root.mediaPinned;
+            else if (what === "rest") { root.pinnedOn = ""; root.mediaPinned = false; root.activity = ""; }
         }
     }
     Connections {
@@ -1122,7 +1138,7 @@ Scope {
             property bool expanded: false       // hovered long enough
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
-            readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
+            readonly property bool tucked: root.hidden || root.fullscreen || (root.covered && !IslandShape.previewing) || !root.settled
             readonly property string state: Passkey.active || Polkit.active ? "passkey" : Updates.shown && Updates.phase !== "" && root.pinnedOn === "" ? "update" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active && !(Activities.items.length > 0 && !root.fullscreen) ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
@@ -1156,7 +1172,7 @@ Scope {
                 active: win.grabbing
                 onCleared: if (win.grabbing) { win.grabbing = false; root.launcherOpen = false; root.overviewOpen = false; }
             }
-            readonly property bool showMedia: root.playing && (root.peek || hovered)
+            readonly property bool showMedia: Look.v.islandMedia && root.playing && (root.peek || hovered)
             // clock ↔ track: fade the old one out, swap at the low point, let the
             // pill reshape, then fade the new one in (a cut used to jump, and the
             // wider row spilled past the pill while it caught up)
@@ -1178,15 +1194,15 @@ Scope {
             property bool mediaCard: false
             Timer {
                 id: openTimer
-                interval: 220
+                interval: Look.v.islandHoverDelay
                 onTriggered: {
-                    if (root.playing) win.mediaCard = true; // the card opens the dashboard itself
+                    if (root.playing && Look.v.islandHoverMedia) win.mediaCard = true; // the card opens the dashboard itself
                     else win.expanded = true;
                 }
             }
             Timer {
                 id: leaveTimer
-                interval: 300
+                interval: Look.v.islandLeaveDelay
                 onTriggered: {
                     win.hovered = false;
                     if (win.expanded || win.mediaCard) win.closedAt = Date.now();
@@ -1207,7 +1223,7 @@ Scope {
                 if (root.fullscreen && !open) return;
                 leaveTimer.stop();
                 hovered = true;
-                if (Hover.opens({ expanded: expanded, popup: showsActivity, fullscreen: false, sinceClosed: Date.now() - closedAt })) openTimer.restart();
+                if (Look.v.islandHover && Hover.opens({ expanded: expanded, popup: showsActivity, fullscreen: false, sinceClosed: Date.now() - closedAt })) openTimer.restart();
             }
             // a popup arriving under the pointer: it isn't swapped for the media card
             onShowsActivityChanged: if (showsActivity) openTimer.stop()
@@ -1217,8 +1233,8 @@ Scope {
             }
 
             readonly property real wallW: Theme.frameThickness / devicePixelRatio
-            readonly property real openW: 900
-            readonly property real openH: 340
+            readonly property real openW: Look.v.islandOpenW
+            readonly property real openH: Look.v.islandOpenH
             anchors.top: true
             implicitWidth: openW + 80
             implicitHeight: openH + wallW + 60
@@ -1238,14 +1254,17 @@ Scope {
             }
 
             // ── size, springing between the states ──
-            readonly property real restW: Math.max(132, restRow.implicitWidth + 36)
+            readonly property real restW: Math.max(Look.v.islandRestMinW, restRow.implicitWidth + 36)
             Binding { target: IslandShape; property: "restW"; value: win.restW }   // for the welcome intro
             Binding { target: IslandShape; property: "tucked"; value: win.state === "tucked" }
+            Binding { target: IslandShape; property: "state"; value: win.state }
+            Binding { target: IslandShape; property: "w"; value: sw.to }
+            Binding { target: IslandShape; property: "h"; value: sh.to }
             readonly property real activityW: root.activity === "workspace" ? Math.max(120, wsRow.implicitWidth + 44)
-                : root.activity === "notif" ? 400
+                : root.activity === "notif" ? Look.v.islandNotifW
                 : root.activity === "call" ? 380
                 : root.activity === "timerdone" || root.activity === "recstart" || root.activity === "toast" ? eventRow.implicitWidth + 48
-                : 330
+                : Look.v.islandLevelW
             // tucking keeps the width it had, so it only retracts upwards (it used to
             // take the resting width and spread out on its way up)
             property real tuckW: restW
@@ -1259,11 +1278,11 @@ Scope {
             Spring {
                 id: sh
                 to: win.state === "passkey" ? passkeyView.wantH : win.state === "update" ? updateView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
-                    : win.state === "activity" ? (root.activity === "notif" ? 58 : root.activity === "call" ? 104 : 46) : win.state === "tucked" ? 0 : 34
+                    : win.state === "activity" ? (root.activity === "notif" ? 58 : root.activity === "call" ? 104 : 46) : win.state === "tucked" ? 0 : Look.v.islandRestH
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
-            readonly property real radius: Math.min(28, sh.value / 2)
+            readonly property real radius: Math.min(Look.v.islandRadius, sh.value / 2)
 
             // the shape: island + the frame's top edge, joined by rounded fillets
             ShaderEffect {
@@ -1277,12 +1296,12 @@ Scope {
                 property vector4d body: Qt.vector4d(0, 0, 0, 0)
                 property vector4d wall: Qt.vector4d(0, 0, width, win.wallW)
                 property real radius: win.radius
-                property real goo: 16
-                property color fill: Theme.frame
+                property real goo: Look.v.islandGoo
+                property color fill: Theme.frameFill
                 property color shadow: "transparent"
                 // while music plays, a soft halo in the cover's colour (artglow.js)
-                property color glow: root.artGlow && root.playing && win.state !== "open" && win.state !== "launcher" && win.state !== "overview"
-                    ? Qt.rgba(root.artGlow.r, root.artGlow.g, root.artGlow.b, 0.32) : Qt.rgba(root.artGlow?.r ?? 0, root.artGlow?.g ?? 0, root.artGlow?.b ?? 0, 0)
+                property color glow: Look.v.islandGlow && root.artGlow && root.playing && win.state !== "open" && win.state !== "launcher" && win.state !== "overview"
+                    ? Qt.rgba(root.artGlow.r, root.artGlow.g, root.artGlow.b, Look.v.islandGlowStrength) : Qt.rgba(root.artGlow?.r ?? 0, root.artGlow?.g ?? 0, root.artGlow?.b ?? 0, 0)
                 Behavior on glow { ColorAnimation { duration: 900; easing.type: Easing.InOutSine } }
             }
 
@@ -1305,6 +1324,8 @@ Scope {
                 // on the box, not a child: hover-enabled controls inside (sliders,
                 // buttons) would otherwise steal it and the island would close
                 HoverHandler { id: boxHover }
+                // hover doesn't open it (Customise → Island): a click on the resting island does
+                TapHandler { enabled: !Look.v.islandHover && (win.state === "rest" || win.state === "media"); onTapped: root.pinnedOn = win.modelData.name }
 
                 Item {
                     id: hit
@@ -1323,6 +1344,11 @@ Scope {
                     id: restRow
                     anchors.centerIn: parent
                     spacing: 10
+                    // something joining (a timer, the weather, a call) pops in, and the
+                    // rest slide aside for it rather than jumping (scale only: their
+                    // opacity is bound to the media swap)
+                    add: Transition { NumberAnimation { property: "scale"; from: 0.4; to: 1; duration: Motion.ms(380); easing.type: Easing.OutBack } }
+                    move: Transition { NumberAnimation { property: "x"; duration: Motion.ms(320); easing.type: Easing.OutCubic } }
                     // waits for the dashboard to be gone, so the two never overlap
                     opacity: win.state === "rest" && dash.opacity < 0.05 ? 1 : 0
                     visible: opacity > 0.01
@@ -1422,7 +1448,7 @@ Scope {
                     // there (talking lights them up). Unread DMs (never servers): the
                     // latest sender and a count; tap to go read them
                     Row {
-                        visible: Discord.inCall || Discord.dmCount > 0
+                        visible: Look.v.islandLive && (Discord.inCall || Discord.dmCount > 0)
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 6
                         Repeater { // deafen
@@ -1594,7 +1620,7 @@ Scope {
                     // live: timer / stopwatch (click pauses, right-click stops)
                     Row {
                         id: timerChip
-                        visible: Countdown.mode !== ""
+                        visible: Look.v.islandLive && Countdown.mode !== ""
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 6
                         opacity: Countdown.running ? 1 : 0.55
@@ -1637,7 +1663,7 @@ Scope {
                     // live activities (bead-activity, IPC "activity"): a ring and how
                     // long it's been; right-click drops one
                     Repeater {
-                        model: ScriptModel { values: Activities.items.slice(-3); objectProp: "id" }
+                        model: ScriptModel { values: Look.v.islandLive ? Activities.items.slice(-3) : []; objectProp: "id" }
                         delegate: Row {
                             id: act
                             required property var modelData
@@ -1739,7 +1765,7 @@ Scope {
 
                     // idle: time and weather
                     Text {
-                        visible: !win.mediaShown
+                        visible: !win.mediaShown && Look.v.islandClock
                         opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         font.family: Theme.font
@@ -1747,10 +1773,10 @@ Scope {
                         font.weight: Font.DemiBold
                         font.features: { "tnum": 1 }
                         color: Theme.text
-                        text: Qt.formatTime(clock.date, "hh:mm")
+                        text: Qt.formatTime(clock.date, Look.v.clock24 ? "hh:mm" : "h:mm")
                     }
                     Row {
-                        visible: !win.mediaShown && Weather.ready
+                        visible: !win.mediaShown && Weather.ready && Look.v.islandWeather
                         opacity: win.mediaSwapOp
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 4

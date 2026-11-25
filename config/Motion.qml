@@ -2,11 +2,17 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import "look.js" as L
 
 // sileo's motion: a slightly bouncy spring (--sileo-spring-easing, sampled as CSS
 // linear()) and a bounce-free settle used when things close.
 Singleton {
-    readonly property int dur: 600
+    // Customise → Motion: speed, bounce, or none at all
+    readonly property int dur: L.duration(600, Look.v)
+    readonly property bool on: Look.v.motionOn
+    readonly property real bounce: Look.v.bounce
+    // any animation's length, at the chosen speed (1 ms with animations off)
+    function ms(base: real): int { return L.duration(base, Look.v); }
 
     readonly property var curve: [
         [0, 0], [0.006, 0.002], [0.012, 0.007], [0.018, 0.015], [0.024, 0.026], [0.031, 0.041],
@@ -18,6 +24,11 @@ Singleton {
     ]
 
     function spring(t: real): real {
+        if (t <= 0) return 0;
+        if (t >= 1) return 1;
+        return bounce === 1 ? sileo(t) : L.blend(sileo(t), settle(t), bounce);
+    }
+    function sileo(t: real): real {
         if (t <= 0) return 0;
         if (t >= 1) return 1;
         for (let i = 1; i < curve.length; i++) {

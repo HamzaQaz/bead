@@ -48,17 +48,23 @@ Scope {
         Notifs.missed(list);
     }
 
+    // a short sound with each (Customise → Pop-ups), from the freedesktop theme
+    function chime(): void {
+        Quickshell.execDetached(["pw-play", "/usr/share/sounds/freedesktop/stereo/" + Look.v.popSoundName + ".oga"]);
+    }
     // a popup for a recorded history entry (same key)
     function popupFor(n: Notification, e: var): var {
         return Object.assign({}, e, {
             notif: n,
-            sticky: n.urgency === NotificationUrgency.Critical,
-            timeout: n.expireTimeout
+            // Customise → Pop-ups: urgent ones (and an app set to "Stays") wait for you;
+            // the app's own time is used only when asked to
+            sticky: (n.urgency === NotificationUrgency.Critical && Look.v.popCriticalSticky) || Notifs.rule(e) === "sticky",
+            timeout: Look.v.popRespectApp ? n.expireTimeout : 0
         });
     }
 
     // at most `maxShown` on screen: the oldest ones expire
-    readonly property int maxShown: 4
+    readonly property int maxShown: Look.v.popMax
     function trim(): void {
         for (const c of stack.children)
             if (c.pillRect !== undefined && c.index >= maxShown && !c.sticky) c.dismiss("timeout");
@@ -68,7 +74,7 @@ Scope {
     function add(entry: var): void {
         if (popups.length === 0) win.held = win.focused; // stay put while shown
         // one from an app already on screen takes its pill's place (stacks.js)
-        const merged = Stacks.merge(popups, entry);
+        const merged = Look.v.popMerge ? Stacks.merge(popups, entry) : null;
         if (merged) {
             popups = popups.filter(p => p.key !== merged.gone);
             entry = merged.entry;
@@ -150,6 +156,15 @@ Scope {
         target: Notifs
         function onDemoPopup(e) { root.add(Object.assign({}, e, { notif: null, sticky: false, timeout: 0 })); }
     }
+    Connections {
+        target: Look
+        function onTryIt(what: string) {
+            if (what !== "popup" && what !== "popups") return;
+            const n = what === "popups" ? 3 : 1;
+            for (let i = n - 1; i >= 0; i--) root.add(Object.assign({}, Look.sample(i), { key: ++root.serial, notif: null, sticky: false, timeout: 0 }));
+            if (Look.v.popSound) root.chime();
+        }
+    }
 
     NotificationServer {
         id: server
@@ -169,11 +184,13 @@ Scope {
             // the history panel shows it live; Do Not Disturb holds all but critical
             if (Notifs.panelOpen) return;
             if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical) return;
-            if (root.quiet && n.urgency !== NotificationUrgency.Critical) {
+            if (Notifs.rule(e) === "quiet" && n.urgency !== NotificationUrgency.Critical) return; // history only
+            if (root.quiet && Look.v.popFullscreenDots && n.urgency !== NotificationUrgency.Critical) {
                 root.dot(e, false);
                 return;
             }
-            root.add(root.popupFor(n, e));
+            if (Notifs.showsInCorner(e) || (n.urgency === NotificationUrgency.Critical && Notifs.rule(e) !== "island")) root.add(root.popupFor(n, e));
+            if (Look.v.popSound) root.chime();
             Notifs.posted(e);
         }
     }
@@ -233,7 +250,8 @@ Scope {
         id: win
 
         // always the primary monitor (Settings.home: the island's screen, the first one by default)
-        readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
+        readonly property ShellScreen focused: (Look.v.popScreen === "focused" ? Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) : null)
+            ?? Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
         property ShellScreen held: focused
         screen: held
         visible: root.popups.length > 0
@@ -241,7 +259,7 @@ Scope {
         anchors.right: true
         // the frame strip, in logical px (QT_SCALE_FACTOR applies)
         readonly property real wallW: Theme.frameThickness / devicePixelRatio
-        implicitWidth: 350 + 40 + wallW
+        implicitWidth: Look.v.popWidth + 40 + wallW
         implicitHeight: screen?.height ?? 800
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore // the real corner, over the frame
@@ -279,9 +297,9 @@ Scope {
             property size size: Qt.size(width, height)
             property vector4d inner: Qt.vector4d(-2000, win.wallW, width - win.wallW + 2000, height + 2000)
             property real innerRadius: 20 / win.devicePixelRatio
-            property real radius: 16
-            property real goo: 20
-            property color fill: Theme.frame
+            property real radius: Look.v.popRadius
+            property real goo: Look.v.popGoo
+            property color fill: Theme.frameFill
             property vector4d p0: pr(0); property vector4d p1: pr(1); property vector4d p2: pr(2); property vector4d p3: pr(3)
             property vector4d p4: pr(4); property vector4d p5: pr(5); property vector4d p6: pr(6); property vector4d p7: pr(7)
             property vector4d b0: br(0); property vector4d b1: br(1); property vector4d b2: br(2); property vector4d b3: br(3)
@@ -292,7 +310,7 @@ Scope {
             id: stack
             x: win.width - width
             y: win.wallW + 6 // close enough to melt into the top edge
-            width: 350 + win.wallW
+            width: Look.v.popWidth + win.wallW
 
             Repeater {
                 model: ScriptModel {
@@ -324,17 +342,18 @@ Scope {
                         return f ? (body ? body + "<br>" : "") + f : body;
                     }
                     iconSource: spec ? (iconIsPath ? "file://" + icon : "")
+                        : !Look.v.popImages ? ""
                         : modelData.image ? modelData.image
                         : modelData.appIcon ? Quickshell.iconPath(modelData.appIcon, true) : ""
                     iconGlyph: spec && !iconIsPath ? icon : ""
                     buttons: spec ? spec.buttons ?? []
                         : snoozing ? Snooze.choices
                         // (one that came back has no app behind its old buttons)
-                        : pill.own.concat(notif?.hasInlineReply ? [{ id: "__reply", label: "Reply" }] : [])
+                        : (Look.v.popActions ? pill.own : []).concat(notif?.hasInlineReply && Look.v.popActions ? [{ id: "__reply", label: "Reply" }] : [])
                             // bead's snooze, unless the app has a "Later" of its own (updates does)
-                            .concat(pill.own.some(a => /^later$/i.test(a.label.trim())) ? [] : [{ id: "__later", label: "Later" }])
-                    duration: spec ? spec.duration ?? 6000 : critical ? 0
-                        : modelData.timeout > 0 ? modelData.timeout : 6000
+                            .concat(!Look.v.popLater || pill.own.some(a => /^later$/i.test(a.label.trim())) ? [] : [{ id: "__later", label: "Later" }])
+                    duration: spec ? spec.duration ?? 6000 : sticky ? 0
+                        : modelData.timeout > 0 ? modelData.timeout : Look.v.popMs
                     sticky: modelData.sticky
                     autopilot: spec ? spec.autopilot !== false : true
                     align: "right"
@@ -342,9 +361,12 @@ Scope {
                     wideButtons: !spec   // notifications; the CLI's choices keep their size
                     closable: !spec
                     drawShape: false // the blob above draws it
-                    gap: 6           // close enough to melt into each other
+                    gap: Look.v.popGap  // close enough to melt into each other
+                    toastW: Look.v.popWidth
+                    roundness: Look.v.popRadius
+                    expandDelay: Look.v.popExpandDelay
                     calm: true
-                    autoExpand: index === 0 || sticky // only the newest opens by itself
+                    autoExpand: (index === 0 && Look.v.popAutoExpand) || sticky // only the newest opens by itself
                     compact: index > 0 && !sticky      // older ones are just their icon
                     wallW: win.wallW
                     fill: Theme.frame

@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../../config/sizecheck.js" as SizeCheck
+import "../../config/look.js" as L
 import "../island/keys.js" as KeySheet
 import qs.components
 import qs.config
@@ -42,6 +43,8 @@ FloatingWindow {
         { id: "appearance", s: "Personal", t: "Appearance", g: "palette", d: "Colours, size, the bar and the island", k: "theme tint colour color size scale bar title monitor island" },
         { id: "notifications", s: "Personal", t: "Notifications", g: "notifications", d: "Do Not Disturb and the history", k: "dnd quiet alerts history whatsapp telegram messages" },
         { id: "night", s: "Personal", t: "Night light", g: "nightlight", d: "A warmer screen in the evening", k: "warm blue light temperature sunset hyprsunset" },
+        { id: "presets", s: "Customise", t: "Presets & sharing", g: "style", d: "Whole looks in one tap; save, copy and paste them", k: "preset theme look share import export minimal showcase calm snappy focus reset" },
+        ...L.PAGES.map(p => ({ id: p.id, s: "Customise", t: p.t, g: p.g, d: p.d, k: "customise customize " + L.SCHEMA.filter(o => o.page === p.id).map(o => o.label).join(" ").toLowerCase() })),
         { id: "power", s: "System", t: "Power & idle", g: "bedtime", d: "Locking, sleeping, and game mode", k: "lock suspend sleep screen off idle game shutdown reboot log out" },
         { id: "assistant", s: "System", t: "Assistant & voice", g: "graphic_eq", d: "Claude, voice commands and dictation", k: "ai pearl claude model voice dictation microphone" },
         { id: "keyboard", s: "System", t: "Keyboard shortcuts", g: "keyboard", d: "bead's keys", k: "keybinds shortcuts hotkeys keys" },
@@ -54,6 +57,11 @@ FloatingWindow {
     // Size: picking one only shows it; Apply restarts bead with it, and the
     // island then asks whether to keep it (config/sizecheck.js)
     property string sizePick: ""
+    property string lookNote: ""   // what Presets & sharing just did
+    // the window's been up a moment: rows created from now on animate in
+    property bool settled: false
+    Timer { running: win.visible; interval: 700; onTriggered: win.settled = true }
+    Connections { target: Look; function onImported(name: string, error: string) { win.lookNote = error || "Added and applied “" + name + "”"; } }
     function applySize(): void {
         if (!sizePick) return;
         Settings.scaleWas = Settings.scale;
@@ -85,9 +93,19 @@ FloatingWindow {
         signal clicked()
         default property alias trailing: slot.data
         readonly property bool match: !win.searching || win.matches(label, hint, words)
+        // arriving after the window's up (a saved preset, a network, a device): it
+        // grows in; leave() shrinks it away before it's removed
+        property real grow: 1
+        Behavior on grow { id: growB; NumberAnimation { duration: Motion.ms(300); easing.type: Easing.OutCubic } }
+        Component.onCompleted: if (win.settled) { growB.enabled = false; grow = 0; growB.enabled = true; grow = 1; }
+        property var _after: null
+        function leave(after: var): void { _after = after; grow = 0; leaveTimer.start(); }
+        Timer { id: leaveTimer; interval: Motion.ms(300) + 20; onTriggered: if (st._after) st._after() }
+        opacity: grow
+        clip: grow < 1
         visible: match
         width: parent?.width ?? 0
-        height: visible ? Math.max(56, col.implicitHeight + 20) : 0
+        height: (visible ? Math.max(56, col.implicitHeight + 20) : 0) * grow
         Rectangle {
             visible: st.clickable
             anchors.fill: parent; anchors.margins: 4
@@ -242,6 +260,141 @@ FloatingWindow {
         }
     }
 
+    // ── Customise: rows drawn from config/look.js ──
+    // a text field
+    component Field: Rectangle {
+        id: fd
+        property alias text: fin.text
+        property string placeholder: ""
+        signal accepted()
+        width: 180; height: 30; radius: 15
+        color: Qt.alpha(Theme.text, fin.activeFocus ? 0.1 : 0.06)
+        border.width: fin.activeFocus ? 1.5 : 0
+        border.color: Theme.tone("action")
+        TextInput {
+            id: fin
+            x: 12; width: parent.width - 24
+            anchors.verticalCenter: parent.verticalCenter
+            font.family: Theme.font; font.pixelSize: 12
+            color: Theme.text
+            clip: true
+            selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
+            onAccepted: fd.accepted()
+            Label { visible: !fin.text; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; text: fd.placeholder }
+        }
+    }
+    // a small button with words
+    component Word: Rectangle {
+        id: wd
+        property string text: ""
+        property string glyph: ""
+        property bool accent: false
+        signal hit()
+        width: wr.implicitWidth + 24; height: 30; radius: 15
+        color: accent ? Qt.alpha(Theme.tone("action"), wma.containsMouse ? 0.3 : 0.2) : Qt.alpha(Theme.text, wma.containsMouse ? 0.11 : 0.06)
+        Row {
+            id: wr; anchors.centerIn: parent; spacing: 6
+            Icon { visible: wd.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: wd.glyph; size: 15; color: wd.accent ? Theme.tone("action") : Theme.text }
+            Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; color: wd.accent ? Theme.tone("action") : Theme.text; text: wd.text }
+        }
+        MouseArea { id: wma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: wd.hit() }
+    }
+    function shownValue(o: var, x: var): string {
+        if (o.unit === "%") return Math.round(x * 100) + "%";
+        if (o.unit === "×") return x.toFixed(1) + "×";
+        if (o.unit === "ms") return x >= 1000 ? (x / 1000).toFixed(x % 1000 ? 2 : 0).replace(/0$/, "") + " s" : x + " ms";
+        return x + (o.unit ? " " + o.unit : "");
+    }
+    // the fonts worth offering: these, when installed
+    readonly property var fontPicks: ["Noto Sans", "Inter", "Rubik", "Outfit", "Manrope", "Cantarell", "Fira Sans", "Ubuntu", "JetBrains Mono", "DejaVu Sans"].filter(f => Qt.fontFamilies().includes(f)).slice(0, 4)
+    // one option: its control by type, and a reset while it differs from the default
+    component Opt: Setting {
+        id: op
+        required property var o
+        readonly property var val: Look.v[o.k]
+        readonly property bool changed: JSON.stringify(val) !== JSON.stringify(o.def)
+        label: o.label
+        hint: o.hint
+        words: o.group + " " + o.k + " customise customize " + (o.choices ? o.choices.map(c => c.t).join(" ") : "")
+        Row {
+            spacing: 10
+            Btn { visible: op.changed; anchors.verticalCenter: parent.verticalCenter; width: 24; height: 24; glyph: "restart_alt"; onHit: Look.set(op.o.k, op.o.def) }
+            Toggle { visible: op.o.type === "bool"; anchors.verticalCenter: parent.verticalCenter; checked: op.o.type === "bool" && op.val; onToggled: Look.set(op.o.k, !op.val) }
+            Choice { visible: op.o.type === "choice"; anchors.verticalCenter: parent.verticalCenter; options: op.o.choices ?? []; value: op.o.type === "choice" ? op.val : ""; onChose: v => Look.set(op.o.k, v) }
+            Row {
+                visible: op.o.type === "num"
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 12
+                Slider {
+                    width: 200; anchors.verticalCenter: parent.verticalCenter
+                    value: op.o.type === "num" ? (op.val - op.o.min) / (op.o.max - op.o.min) : 0
+                    onMoved: f => Look.set(op.o.k, op.o.min + f * (op.o.max - op.o.min))
+                    onNudged: d => Look.set(op.o.k, op.val + d * op.o.step)
+                }
+                Text { width: 58; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; font.family: Theme.font; font.pixelSize: 12; font.features: { "tnum": 1 }; color: Theme.subtext; text: op.o.type === "num" ? win.shownValue(op.o, op.val) : "" }
+            }
+            // a colour: the wallpaper's, a swatch, or your own hex
+            Row {
+                visible: op.o.type === "color"
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 5
+                Rectangle {
+                    width: 46; height: 22; radius: 11
+                    color: op.val === "" ? Theme.tone("action") : Qt.alpha(Theme.text, 0.06)
+                    Text { anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 10; font.weight: Font.DemiBold; color: op.val === "" ? Theme.frame : Theme.text; text: "Auto" }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Look.set(op.o.k, "") }
+                }
+                Repeater {
+                    model: op.o.type === "color" ? L.SWATCHES : []
+                    Rectangle {
+                        id: sw
+                        required property string modelData
+                        anchors.verticalCenter: parent?.verticalCenter
+                        width: 22; height: 22; radius: 11
+                        color: modelData
+                        border.width: op.val === modelData ? 2 : 0
+                        border.color: Theme.text
+                        scale: swa.containsMouse ? 1.15 : 1
+                        Behavior on scale { NumberAnimation { duration: 120 } }
+                        MouseArea { id: swa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Look.set(op.o.k, sw.modelData) }
+                    }
+                }
+                Field { width: 84; height: 22; placeholder: "#hex"; text: op.o.type === "color" ? op.val : ""; onAccepted: Look.set(op.o.k, /^#?[0-9a-fA-F]{6}$/.test(text) ? (text[0] === "#" ? text : "#" + text) : op.val) }
+            }
+            // a font: a few installed ones, or any by name
+            Row {
+                visible: op.o.type === "font"
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 8
+                Choice { visible: win.fontPicks.length > 1; options: win.fontPicks.map(f => ({ v: f, t: f })); value: op.o.type === "font" ? op.val : ""; onChose: v => Look.set(op.o.k, v) }
+                Field { width: 130; placeholder: "Any font"; text: op.o.type === "font" && !win.fontPicks.includes(op.val) ? op.val : ""
+                    onAccepted: if (Qt.fontFamilies().includes(text.trim())) Look.set(op.o.k, text.trim()) }
+            }
+        }
+    }
+    // a Customise page: its preview, its options in their groups, and a reset
+    component LookPageBody: Column {
+        id: lp
+        required property string pid
+        // while searching: whether any of its rows match (the Page shows it then)
+        readonly property bool shown: children.some(c => c.shown === true)
+        width: parent?.width ?? 0
+        spacing: 22
+        LookPreview { visible: !win.searching; page: lp.pid }
+        Repeater {
+            model: [...new Set(L.SCHEMA.filter(o => o.page === lp.pid && o.type !== "apps").map(o => o.group))]
+            Group {
+                id: lg
+                required property string modelData
+                title: modelData
+                Repeater {
+                    model: L.SCHEMA.filter(o => o.page === lp.pid && o.group === lg.modelData && o.type !== "apps")
+                    Opt { required property var modelData; required property int index; o: modelData; last: index === L.SCHEMA.filter(o => o.page === lp.pid && o.group === lg.modelData && o.type !== "apps").length - 1 }
+                }
+            }
+        }
+    }
+
     // ── keys: Esc closes (or clears the search), Ctrl+F searches, Ctrl+Up/Down change page ──
     Item {
         anchors.fill: parent
@@ -393,6 +546,117 @@ FloatingWindow {
                     spacing: 2
                     Text { font.family: Theme.font; font.pixelSize: 24; font.weight: Font.Bold; color: Theme.text; text: win.searching ? "Search" : win.cur.t }
                     Label { font.pixelSize: 12; text: win.searching ? "Settings matching “" + SettingsApp.query.trim() + "”" : win.cur.d }
+                }
+            }
+
+            // ── Customise (config/look.js) ──
+            Page {
+                pid: "presets"
+                Group {
+                    title: "Presets"
+                    Repeater {
+                        model: L.PRESETS
+                        Pick {
+                            required property var modelData
+                            label: modelData.name; hint: modelData.d; words: "preset look"
+                            on: Look.active === modelData.id
+                            onPicked: Look.apply(modelData.id)
+                        }
+                    }
+                    Repeater {
+                        model: Object.keys(Look.presets)
+                        Setting {
+                            id: mine
+                            required property string modelData
+                            label: modelData; hint: "Saved · " + Object.keys(Look.presets[modelData] ?? {}).length + " changes"; words: "preset saved mine"
+                            clickable: true
+                            onClicked: Look.apply(modelData)
+                            Row {
+                                spacing: 8
+                                Btn { anchors.verticalCenter: parent.verticalCenter; glyph: "content_copy"; onHit: { Look.apply(mine.modelData); Look.copyLook(mine.modelData); win.lookNote = "Copied “" + mine.modelData + "”: paste it anywhere to share it"; } }
+                                Btn { anchors.verticalCenter: parent.verticalCenter; glyph: "delete"; onHit: { const n = mine.modelData; mine.leave(() => Look.deletePreset(n)); } }
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 24; height: 24; radius: 12
+                                    color: Look.active === mine.modelData ? Theme.tone("action") : "transparent"
+                                    border.width: Look.active === mine.modelData ? 0 : 2
+                                    border.color: Qt.alpha(Theme.text, 0.25)
+                                    Icon { anchors.centerIn: parent; visible: Look.active === mine.modelData; name: "check"; size: 16; color: Theme.frame }
+                                }
+                            }
+                        }
+                    }
+                }
+                Group {
+                    title: "Your look"
+                    Setting {
+                        label: "Save as a preset"; hint: Look.active ? "This is “" + (L.PRESETS.find(p => p.id === Look.active)?.name ?? Look.active) + "”" : L.changed(Look.v).length + " changes from bead's defaults"; words: "save preset name"
+                        Row {
+                            spacing: 8
+                            Field { id: presetName; anchors.verticalCenter: parent.verticalCenter; placeholder: "Name"; onAccepted: saveBtn.hit() }
+                            Word { id: saveBtn; anchors.verticalCenter: parent.verticalCenter; text: "Save"; glyph: "bookmark_add"; accent: true
+                                onHit: { const e = Look.savePreset(presetName.text); win.lookNote = e || "Saved “" + presetName.text.trim() + "”"; if (!e) presetName.text = ""; } }
+                        }
+                    }
+                    Setting {
+                        label: "Share it"; hint: "As text on the clipboard, or a file in " + Look.exportDir.replace(Quickshell.env("HOME"), "~"); words: "export copy share file"
+                        Row {
+                            spacing: 8
+                            Word { text: "Copy"; glyph: "content_copy"; onHit: { Look.copyLook(""); win.lookNote = "Copied: paste it to a friend, or into their Settings"; } }
+                            Word { text: "Save file"; glyph: "download"; onHit: win.lookNote = "Saved " + Look.exportFile("").replace(Quickshell.env("HOME"), "~") }
+                        }
+                    }
+                    Setting {
+                        label: "Use a shared look"; hint: "Copy one someone shared, then paste it here: it's saved as a preset and applied"; words: "import paste clipboard"
+                        Word { text: "Paste"; glyph: "content_paste"; accent: true; onHit: Look.importClipboard() }
+                    }
+                    Setting {
+                        label: "Start over"; hint: "Every Customise page back to bead's defaults (your saved presets stay)"; words: "reset defaults"; last: true
+                        Word { text: "Reset all"; glyph: "restart_alt"; onHit: { Look.resetAll(); win.lookNote = "Back to bead's defaults"; } }
+                    }
+                }
+                Text {
+                    visible: win.lookNote !== "" && !win.searching
+                    leftPadding: 4
+                    font.family: Theme.font; font.pixelSize: 12; color: Theme.tone("action")
+                    text: win.lookNote
+                }
+            }
+            Repeater {
+                model: L.PAGES
+                Page {
+                    id: cp
+                    required property var modelData
+                    pid: modelData.id
+                    LookPageBody { pid: cp.modelData.id }
+                    // pop-ups: a rule for each app that has sent one
+                    Group {
+                        visible: cp.modelData.id === "popups" && shown
+                        title: "Per app"
+                        Setting {
+                            visible: match && Notifs.apps.length === 0
+                            label: "No apps yet"; hint: "Apps show here once they've sent a notification"; words: "per app rules"; last: true
+                        }
+                        Repeater {
+                            model: cp.modelData.id === "popups" ? Notifs.apps : []
+                            Setting {
+                                id: ar
+                                required property string modelData
+                                required property int index
+                                label: modelData; hint: ({ normal: "Pop-up and island", corner: "Only the corner pop-up", island: "Only on the island", sticky: "Stays until dismissed", quiet: "Only in the history" })[Notifs.rule({ appName: modelData })]
+                                words: "per app rule notifications " + modelData
+                                last: index === Notifs.apps.length - 1
+                                Choice { options: L.APP_RULES; value: Notifs.rule({ appName: ar.modelData }); onChose: v => Notifs.setRule(ar.modelData, v) }
+                            }
+                        }
+                    }
+                    Row {
+                        visible: !win.searching
+                        spacing: 10
+                        Word { text: "Reset this page"; glyph: "restart_alt"; onHit: Look.resetPage(cp.modelData.id) }
+                        Label { anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12
+                            text: { const n = L.changed(Look.v, cp.modelData.id).length; return n ? n + (n === 1 ? " change" : " changes") + " from bead's defaults" : "All at bead's defaults"; } }
+                    }
                 }
             }
 

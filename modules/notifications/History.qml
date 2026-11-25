@@ -208,7 +208,7 @@ Scope {
             property real innerRadius: 20 / win.devicePixelRatio
             property real radius: 20
             property real goo: 20
-            property color fill: Theme.frame
+            property color fill: Theme.frameFill
             property vector4d p0: Qt.vector4d(panel.x + panel.slide, panel.y, panel.w + panel.tuck, panelH.value)
             property vector4d b0: Qt.vector4d(0, 0, 0, 0)
             property vector4d p1: b0; property vector4d p2: b0; property vector4d p3: b0

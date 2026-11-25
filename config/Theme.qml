@@ -27,7 +27,7 @@ Singleton {
     readonly property real lead: Blend.phase(ripple, 0, 0.72)
     readonly property real trail: Blend.phase(ripple, 0.28, 0.72)
     signal changed()
-    NumberAnimation { id: rippling; target: root; property: "ripple"; from: 0; to: 1; duration: 820; easing.type: Easing.InOutSine }
+    NumberAnimation { id: rippling; target: root; property: "ripple"; from: 0; to: 1; duration: Look.v.ripple ? Motion.ms(820) : 1; easing.type: Easing.InOutSine }
     // take a newly read palette; if there was one before and it differs, ripple
     function adopt(next: var): void {
         const before = scheme;
@@ -45,21 +45,29 @@ Singleton {
 
     function c(key: string, fallback: string): color { return at(key, fallback, lead); }
 
-    readonly property string font: "Noto Sans"
+    readonly property string font: Look.v.font
+    // Customise → Look & feel: an accent of your own (else the wallpaper's), the frame's colour
+    readonly property string accent: Look.v.accent
+    function acc(fallbackKey: string, fallback: string): color { return accent ? accent : c(fallbackKey, fallback); }
     readonly property color fill: c("surfaceContainer", "#1a1a1a")
     // the screen frame: its colour and thickness (physical px)
-    readonly property color frame: at("surface", "#0e0e0e", trail)
-    readonly property int frameThickness: 10
+    readonly property color frameBase: Look.v.frameColor === "black" ? "#000000"
+        : Look.v.frameColor === "accent" ? Qt.tint(at("surface", "#0e0e0e", trail), Qt.alpha(acc("primary", "#2b7fff"), 0.16))
+        : at("surface", "#0e0e0e", trail)
+    readonly property color frame: frameBase
+    // what the frame, the island and the pop-ups are drawn with (see-through when asked)
+    readonly property color frameFill: Qt.alpha(frameBase, Look.v.frameOpacity)
+    readonly property int frameThickness: Look.v.frameThickness
     readonly property color text: at("onSurface", "#e6e6e6", trail)
-    readonly property color subtext: themed && scheme.onSurfaceVariant ? Qt.alpha(at("onSurfaceVariant", "#ffffff", trail), 0.8) : Qt.rgba(1, 1, 1, 0.5)
+    readonly property color subtext: themed && scheme.onSurfaceVariant ? Qt.alpha(at("onSurfaceVariant", "#ffffff", trail), Look.v.subtext) : Qt.rgba(1, 1, 1, 0.5 * Look.v.subtext / 0.8)
     readonly property color neutral: at("outline", "#a3a3a3", trail)
 
     // sileo's state tones, or the scheme's matching roles
     readonly property var tones: ({
         success: c("success", "#3ac530"), loading: c("outline", "#737373"), error: c("error", "#fb2c36"),
         warning: c("term2", "#f0b100"), info: c("tertiary", "#00a6f4"),
-        action: c("primary", "#2b7fff"), notify: c("primary", "#2b7fff"),
-        confirm: c("primary", "#2b7fff"), choose: c("primary", "#2b7fff")
+        action: acc("primary", "#2b7fff"), notify: acc("primary", "#2b7fff"),
+        confirm: acc("primary", "#2b7fff"), choose: acc("primary", "#2b7fff")
     })
     function tone(kind: string): color { return tones[kind] || tones.info; }
 

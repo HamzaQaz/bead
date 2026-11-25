@@ -50,7 +50,7 @@ Item {
     readonly property rect bodyRect: Qt.rect(toast.slide, pillH, toastW + toast.tuck, Math.max(0, bodyHt.value))
     property real gap: 10                 // space below it when stacked
     readonly property int pillH: 40
-    readonly property int toastW: 350
+    property int toastW: 350              // the body's width (Customise → Pop-ups)
     property int roundness: 16
     readonly property real blur: roundness * 0.5
     readonly property int pillPadding: 10
@@ -472,7 +472,7 @@ Item {
                 linkColor: Theme.tone("action")
                 textFormat: Text.StyledText
                 text: root.desc
-                onLinkActivated: link => Qt.openUrlExternally(link)
+                onLinkActivated: link => Paths.openUrl(link)
             }
 
             Flow {

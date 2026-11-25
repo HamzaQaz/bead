@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import qs.config
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
@@ -101,6 +102,18 @@ Singleton {
                 root.returned(back);
             }
         }
+    }
+
+    // ── per-app rules (Customise → Pop-ups): normal | corner | island | sticky | quiet ──
+    function rule(e: var): string { return Look.v.popApps[e?.appName ?? ""] ?? "normal"; }
+    function showsOnIsland(e: var): bool { const r = rule(e); return r !== "corner" && r !== "quiet"; }
+    function showsInCorner(e: var): bool { const r = rule(e); return Look.v.popCorner && r !== "island" && r !== "quiet"; }
+    // the apps to set rules for: the ones in the history, and any with a rule already
+    readonly property var apps: [...new Set([...(Demo.on ? realEntries : entries).map(e => e.appName), ...Object.keys(Look.v.popApps)].filter(Boolean))].sort((x, y) => x.localeCompare(y))
+    function setRule(app: string, r: string): void {
+        const m = Object.assign({}, Look.v.popApps);
+        if (r === "normal") delete m[app]; else m[app] = r;
+        Look.set("popApps", m);
     }
 
     function record(n: Notification): var {

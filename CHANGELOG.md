@@ -5,6 +5,17 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+### Customise
+- Settings has a Customise section: Look & feel, Motion, Island, Pop-ups and
+  Bar, about 75 options in all, each page with a live preview and "Try it"
+  buttons that show the real island or pop-ups.
+- Per-app notification rules: normal, corner only, island only, stays, or
+  history only.
+- Presets (bead, Minimal, Showcase, Calm, Snappy, Focus) and your own; share a
+  look by copying it or saving a file, and paste one someone shared.
+- Pinning a tray app animates it into the bar.
+- Links (an AUR package's changes, the App Store) bring the browser forward.
+
 ### Update history and rollback
 - The Updates panel has a History tab: every update pacman made (from its
   log, bead's or not), with its packages and versions.
