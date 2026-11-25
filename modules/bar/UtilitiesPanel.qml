@@ -11,7 +11,7 @@ import qs.services
 
 // Utilities: capture (a screenshot, a video or a GIF of an area, a window or
 // the screen; the latest screenshots to reopen; stop a running recording) and
-// a row of quick toggles: do not disturb, keep awake, mic, Bluetooth, colour picker.
+// focus modes (services/Focus.qml), and a row of quick toggles: do not disturb, keep awake, mic, Bluetooth, colour picker.
 PanelColumn {
     id: root
     property bool active: false
@@ -261,6 +261,47 @@ PanelColumn {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: { root.done(); Quickshell.execDetached(["satty", "--filename", thumb.path, "--output-filename", thumb.path]); }
                 }
+            }
+        }
+    }
+
+    // ── focus modes: tap one to turn it on, again to turn it off ──
+    Rectangle { width: root.width; height: 1; color: Qt.alpha(Theme.text, 0.08) }
+    Item {
+        width: root.width; height: 16
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold
+            color: Theme.subtext
+            text: "Focus"
+        }
+        Text {
+            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - 60
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+            font.family: Theme.font; font.pixelSize: 11
+            color: Focus.mode ? Theme.tone("action") : Theme.subtext
+            text: !Focus.mode ? "Off"
+                : Focus.reason === "schedule" ? Focus.mode.name + " · on its schedule"
+                : Focus.reason === "app" ? Focus.mode.name + " · while an app is open"
+                : Focus.mode.name + " · on"
+        }
+    }
+    Flow {
+        width: root.width
+        spacing: 6
+        readonly property int perRow: Math.min(3, Math.max(1, Focus.modes.length))
+        readonly property real w: (root.width - 6 * (perRow - 1)) / perRow
+        Repeater {
+            model: Focus.modes
+            Chip {
+                required property var modelData
+                width: parent.w
+                glyph: modelData.icon
+                label: modelData.name
+                on: Focus.active === modelData.id
+                onHit: Focus.toggle(modelData.id)
             }
         }
     }

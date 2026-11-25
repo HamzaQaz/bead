@@ -5,6 +5,14 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+### Utilities
+- Focus modes in the Utilities panel: tap Work, Game, Night (or your own) to
+  turn one on or off, with a line saying why one is on.
+
+### Fixes
+- Bluetooth headphones that blink out for a moment (a game or a call starting)
+  no longer move your sound to another device and keep it there.
+
 ## 0.5.0
 
 ### Widgets
