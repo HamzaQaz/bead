@@ -116,10 +116,19 @@ TestCase {
     }
 
     // ── when, in words (pacman's log times carry their offset: -0600) ──
+    // a local time as the history file writes it ("2026-11-25T00:56:05-0600"), so
+    // the days come out the same in any time zone (CI runs in UTC)
+    function stamp(d) {
+        const p = n => String(n).padStart(2, "0");
+        const off = -d.getTimezoneOffset();
+        return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds())
+            + (off < 0 ? "-" : "+") + p(Math.floor(Math.abs(off) / 60)) + p(Math.abs(off) % 60);
+    }
     function test_when_reads_today_yesterday_or_a_date() {
-        const now = new Date("2026-11-25T10:00:00-06:00");
-        compare(H.when("2026-11-25T00:56:05-0600", now), "Today " + Qt.formatTime(new Date("2026-11-25T00:56:05-06:00"), "HH:mm"));
-        compare(H.when("2026-11-24T23:11:58-0600", now), "Yesterday " + Qt.formatTime(new Date("2026-11-24T23:11:58-06:00"), "HH:mm"));
-        compare(H.when("2026-11-20T09:00:06-0600", now), Qt.formatDate(new Date("2026-11-20T09:00:06-06:00"), "ddd d MMM"));
+        const now = new Date(2026, 10, 25, 10, 0);
+        const early = new Date(2026, 10, 25, 0, 56, 5), late = new Date(2026, 10, 24, 23, 11, 58), old = new Date(2026, 10, 20, 9, 0, 6);
+        compare(H.when(stamp(early), now), "Today 00:56");
+        compare(H.when(stamp(late), now), "Yesterday 23:11");
+        compare(H.when(stamp(old), now), Qt.formatDate(old, "ddd d MMM"));
     }
 }
