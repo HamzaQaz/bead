@@ -5,6 +5,8 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+## 0.5.0
+
 ### Widgets
 - Keep an eye on a server, a build or a number: Settings → Widgets makes one
   from a template (Server up, Number from a URL, GitHub, Toggle, Command),
