@@ -327,7 +327,7 @@ FloatingWindow {
             color: Theme.text
             selectionColor: Qt.alpha(Theme.tone("action"), 0.4)
             clip: true
-            text: Store.query
+            text: Store.pending
             focus: true
             Component.onCompleted: forceActiveFocus()
             onTextEdited: { win.confirmAur = ""; Store.search(text); }
@@ -910,7 +910,7 @@ FloatingWindow {
                 // Editor's choice: only for bead's maintainer (Store.maintainer)
                 Rectangle {
                     id: edBox
-                    visible: Store.maintainer && !!sheet.app
+                    visible: Store.maintainer && !Demo.on && !!sheet.app   // never in demo mode (screenshots, videos)
                     readonly property var pick: Store.pickOf(sheet.app)
                     readonly property string note: Store.editorNote(sheet.app)
                     width: sc.width
