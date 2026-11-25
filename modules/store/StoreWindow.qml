@@ -320,6 +320,7 @@ FloatingWindow {
         Behavior on border.color { ColorAnimation { duration: 200 } }
         Icon { x: 16; anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 20; color: Theme.subtext }
         TextInput {
+            TextMenu {}   // right-click: cut, copy, paste
             id: field
             x: 46; width: parent.width - 46 - 46
             anchors.verticalCenter: parent.verticalCenter
@@ -941,6 +942,7 @@ FloatingWindow {
                             border.width: 1
                             border.color: Qt.alpha(Theme.tone("warning"), noteIn.activeFocus ? 0.5 : 0)
                             TextInput {
+                                TextMenu {}   // right-click: cut, copy, paste
                                 id: noteIn
                                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 44
                                 verticalAlignment: TextInput.AlignVCenter

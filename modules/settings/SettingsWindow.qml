@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import "../../config/sizecheck.js" as SizeCheck
 import "../../config/look.js" as L
+import "../../services/focus.js" as FJ
 import "../island/keys.js" as KeySheet
 import qs.components
 import qs.config
@@ -32,7 +33,7 @@ FloatingWindow {
         const hay = texts.join(" ").toLowerCase();
         return words.every(w => hay.includes(w));
     }
-    function go(id: string): void { SettingsApp.query = ""; SettingsApp.page = id; scroller.contentY = 0; }
+    function go(id: string): void { closeMenu(); SettingsApp.query = ""; SettingsApp.page = id; scroller.contentY = 0; }
 
     readonly property var pages: [
         { id: "wifi", s: "Connections", t: "Wi-Fi", g: "wifi", d: "Networks, and joining one", k: "network internet wireless password" },
@@ -43,6 +44,7 @@ FloatingWindow {
         { id: "appearance", s: "Personal", t: "Appearance", g: "palette", d: "Colours, size, the bar and the island", k: "theme tint colour color size scale bar title monitor island" },
         { id: "notifications", s: "Personal", t: "Notifications", g: "notifications", d: "Do Not Disturb and the history", k: "dnd quiet alerts history whatsapp telegram messages" },
         { id: "night", s: "Personal", t: "Night light", g: "nightlight", d: "A warmer screen in the evening", k: "warm blue light temperature sunset hyprsunset" },
+        { id: "focus", s: "Customise", t: "Focus modes", g: "self_improvement", d: "Work, Game, Night: a look, Do Not Disturb and more, together", k: "focus mode work game night schedule dnd do not disturb automatic" },
         { id: "presets", s: "Customise", t: "Presets & sharing", g: "style", d: "Whole looks in one tap; save, copy and paste them", k: "preset theme look share import export minimal showcase calm snappy focus reset" },
         ...L.PAGES.map(p => ({ id: p.id, s: "Customise", t: p.t, g: p.g, d: p.d, k: "customise customize " + L.SCHEMA.filter(o => o.page === p.id).map(o => o.label).join(" ").toLowerCase() })),
         { id: "power", s: "System", t: "Power & idle", g: "bedtime", d: "Locking, sleeping, and game mode", k: "lock suspend sleep screen off idle game shutdown reboot log out" },
@@ -58,6 +60,10 @@ FloatingWindow {
     // island then asks whether to keep it (config/sizecheck.js)
     property string sizePick: ""
     property string lookNote: ""   // what Presets & sharing just did
+    // the open dropdown's menu (one at a time)
+    property Item menuFor: null
+    function openMenu(d: Item): void { menuFor = d; ddMenu.place(); }
+    function closeMenu(): void { menuFor = null; }
     // the window's been up a moment: rows created from now on animate in
     property bool settled: false
     Timer { running: win.visible; interval: 700; onTriggered: win.settled = true }
@@ -92,6 +98,9 @@ FloatingWindow {
         property bool clickable: false   // the whole row is a button (a choice among devices)
         signal clicked()
         default property alias trailing: slot.data
+        // right-click: () => [menu rows] (ContextMenu), or null for none
+        property var menu: null
+        TapHandler { acceptedButtons: Qt.RightButton; enabled: !!st.menu; onTapped: ep => Menus.open(st, ep.position.x, ep.position.y, st.menu()) }
         readonly property bool match: !win.searching || win.matches(label, hint, words)
         // arriving after the window's up (a saved preset, a network, a device): it
         // grows in; leave() shrinks it away before it's removed
@@ -105,7 +114,8 @@ FloatingWindow {
         clip: grow < 1
         visible: match
         width: parent?.width ?? 0
-        height: (visible ? Math.max(56, col.implicitHeight + 20) : 0) * grow
+        // as tall as its words or its controls (chips can wrap to a few lines)
+        height: (visible ? Math.max(56, col.implicitHeight + 20, slot.height + 20) : 0) * grow
         Rectangle {
             visible: st.clickable
             anchors.fill: parent; anchors.margins: 4
@@ -272,6 +282,7 @@ FloatingWindow {
         border.width: fin.activeFocus ? 1.5 : 0
         border.color: Theme.tone("action")
         TextInput {
+            TextMenu {}   // right-click: cut, copy, paste
             id: fin
             x: 12; width: parent.width - 24
             anchors.verticalCenter: parent.verticalCenter
@@ -282,6 +293,63 @@ FloatingWindow {
             onAccepted: fd.accepted()
             Label { visible: !fin.text; anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 12; text: fd.placeholder }
         }
+    }
+    // a dropdown: the choice now, and a menu (the window's, below) to change it.
+    // multi: value is a list and the menu ticks several, staying open
+    component Dropdown: Rectangle {
+        id: dd
+        property var options: []        // [{ v, t, g? }]
+        property var value
+        property bool multi: false
+        property string placeholder: "Choose"
+        property int menuWidth: 0
+        signal chose(var v)              // the value; with multi, the new list
+        readonly property var picked: multi ? options.filter(o => (value ?? []).includes(o.v)) : options.filter(o => o.v === value)
+        readonly property string label: picked.length ? (multi && picked.length > 2 ? picked.length + " chosen" : picked.map(o => o.t).join(", ")) : placeholder
+        readonly property bool open: win.menuFor === dd
+        width: Math.min(240, Math.max(150, ddRow.implicitWidth + 44)); height: 30; radius: 15
+        color: Qt.alpha(Theme.text, open ? 0.12 : dda.containsMouse ? 0.1 : 0.06)
+        border.width: open ? 1.5 : 0
+        border.color: Theme.tone("action")
+        Behavior on color { ColorAnimation { duration: Motion.ms(120) } }
+        Row {
+            id: ddRow
+            x: 12; anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
+            Icon { visible: !dd.multi && !!dd.picked[0]?.g; anchors.verticalCenter: parent.verticalCenter; name: dd.picked[0]?.g ?? ""; size: 15; color: Theme.text }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, 170)
+                elide: Text.ElideRight
+                font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium
+                color: dd.picked.length ? Theme.text : Theme.subtext
+                text: dd.label
+            }
+        }
+        Icon {
+            anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+            name: "expand_more"; size: 16; color: Theme.subtext
+            rotation: dd.open ? 180 : 0
+            Behavior on rotation { NumberAnimation { duration: Motion.ms(180); easing.type: Easing.OutCubic } }
+        }
+        MouseArea { id: dda; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: dd.open ? win.closeMenu() : win.openMenu(dd) }
+    }
+    // a chip that's on or off
+    component Chip: Rectangle {
+        id: cp
+        property string text: ""
+        property string glyph: ""
+        property bool on: false
+        signal hit()
+        width: cr.implicitWidth + (text ? 20 : 12); height: 26; radius: 13
+        color: on ? Theme.tone("action") : Qt.alpha(Theme.text, cma.containsMouse ? 0.11 : 0.06)
+        Behavior on color { ColorAnimation { duration: Motion.ms(140) } }
+        Row {
+            id: cr; anchors.centerIn: parent; spacing: 5
+            Icon { visible: cp.glyph !== ""; anchors.verticalCenter: parent.verticalCenter; name: cp.glyph; size: 15; fill: cp.on ? 1 : 0; color: cp.on ? Theme.frame : Theme.text }
+            Text { visible: cp.text !== ""; anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Medium; color: cp.on ? Theme.frame : Theme.text; text: cp.text }
+        }
+        MouseArea { id: cma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: cp.hit() }
     }
     // a small button with words
     component Word: Rectangle {
@@ -313,6 +381,12 @@ FloatingWindow {
         required property var o
         readonly property var val: Look.v[o.k]
         readonly property bool changed: JSON.stringify(val) !== JSON.stringify(o.def)
+        menu: () => [
+            { t: "Reset to default", g: "restart_alt", enabled: op.changed, act: () => Look.set(op.o.k, op.o.def) },
+            { t: "Copy value", g: "content_copy", act: () => { Quickshell.clipboardText = typeof op.val === "object" ? JSON.stringify(op.val) : String(op.val); } },
+            { sep: true },
+            { t: "Reset this page", g: "settings_backup_restore", danger: true, act: () => Look.resetPage(op.o.page) }
+        ]
         label: o.label
         hint: o.hint
         words: o.group + " " + o.k + " customise customize " + (o.choices ? o.choices.map(c => c.t).join(" ") : "")
@@ -366,9 +440,13 @@ FloatingWindow {
                 visible: op.o.type === "font"
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
-                Choice { visible: win.fontPicks.length > 1; options: win.fontPicks.map(f => ({ v: f, t: f })); value: op.o.type === "font" ? op.val : ""; onChose: v => Look.set(op.o.k, v) }
-                Field { width: 130; placeholder: "Any font"; text: op.o.type === "font" && !win.fontPicks.includes(op.val) ? op.val : ""
-                    onAccepted: if (Qt.fontFamilies().includes(text.trim())) Look.set(op.o.k, text.trim()) }
+                Dropdown {
+                    menuWidth: 260
+                    // every installed font, each shown in itself
+                    options: op.o.type === "font" ? Qt.fontFamilies().filter(f => !/^(Noto (Color )?Emoji|Material)/.test(f)).map(f => ({ v: f, t: f, font: f })) : []
+                    value: op.o.type === "font" ? op.val : ""
+                    onChose: v => Look.set(op.o.k, v)
+                }
             }
         }
     }
@@ -400,6 +478,7 @@ FloatingWindow {
         anchors.fill: parent
         focus: true
         Keys.onPressed: e => {
+            if (e.key === Qt.Key_Escape && win.menuFor) { win.closeMenu(); e.accepted = true; return; }
             if (e.key === Qt.Key_Escape) { if (win.searching) SettingsApp.query = ""; else SettingsApp.open = false; e.accepted = true; }
             else if (e.key === Qt.Key_F && (e.modifiers & Qt.ControlModifier)) { search.forceActiveFocus(); e.accepted = true; }
             else if ((e.key === Qt.Key_Down || e.key === Qt.Key_Up) && (e.modifiers & Qt.ControlModifier)) {
@@ -429,6 +508,7 @@ FloatingWindow {
             border.color: Theme.tone("action")
             Icon { x: 13; anchors.verticalCenter: parent.verticalCenter; name: "search"; size: 18; color: Theme.subtext }
             TextInput {
+                TextMenu {}   // right-click: cut, copy, paste
                 id: search
                 x: 40; width: parent.width - 40 - 34
                 anchors.verticalCenter: parent.verticalCenter
@@ -524,6 +604,7 @@ FloatingWindow {
         width: parent.width - side.width
         height: parent.height
         contentHeight: body.height + 64
+        onContentYChanged: win.closeMenu()
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
@@ -546,6 +627,149 @@ FloatingWindow {
                     spacing: 2
                     Text { font.family: Theme.font; font.pixelSize: 24; font.weight: Font.Bold; color: Theme.text; text: win.searching ? "Search" : win.cur.t }
                     Label { font.pixelSize: 12; text: win.searching ? "Settings matching “" + SettingsApp.query.trim() + "”" : win.cur.d }
+                }
+            }
+
+            // ── Focus modes (services/Focus.qml) ──
+            Page {
+                pid: "focus"
+                Repeater {
+                    // by id: editing a mode keeps its rows (and an open menu) in place
+                    model: ScriptModel { values: Focus.modes.map(m => m.id) }
+                    Group {
+                        id: fm
+                        required property string modelData
+                        readonly property var m: Focus.modes.find(x => x.id === modelData) ?? FJ.clean({ id: modelData, name: modelData })
+                        readonly property bool isOn: Focus.active === m.id
+                        title: m.name + (isOn ? "  ·  ON" : "")
+                        // right-click anywhere on the mode
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onTapped: ep => Menus.open(parent, ep.position.x, ep.position.y, [
+                                { t: fm.isOn ? "Leave " + fm.m.name : "Turn on " + fm.m.name, g: fm.isOn ? "do_not_disturb_off" : fm.m.icon, act: () => Focus.toggle(fm.m.id) },
+                                { t: "Duplicate", g: "content_copy", act: () => Focus.duplicate(fm.m.id) },
+                                { sep: true },
+                                { t: "Remove", g: "delete", danger: true, act: () => Focus.remove(fm.m.id) }
+                            ])
+                        }
+                        Setting {
+                            label: fm.isOn ? m.name + " is on" : "Turn on now"
+                            hint: fm.isOn ? (Focus.reason === "schedule" ? "By its schedule" : Focus.reason === "app" ? "An app of its is open" : "You turned it on") + " · " + Focus.summary(fm.m)
+                                : (Focus.when(fm.m) ? "On by itself: " + Focus.when(fm.m) : "Only by hand") + " · " + Focus.summary(fm.m)
+                            words: "focus mode " + fm.m.name
+                            Toggle { checked: fm.isOn; onToggled: Focus.toggle(fm.m.id) }
+                        }
+                        Setting {
+                            label: "Name and icon"; words: "focus name icon"
+                            Row {
+                                spacing: 8
+                                Field { anchors.verticalCenter: parent.verticalCenter; width: 120; text: fm.m.name; onAccepted: if (text.trim()) Focus.update(fm.m.id, { name: text }) }
+                                Dropdown {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    options: FJ.ICONS.map(g => ({ v: g, g: g, t: ({ work: "Work", sports_esports: "Games", bedtime: "Night", menu_book: "Reading", code: "Code", brush: "Drawing", headphones: "Music", self_improvement: "Calm", school: "Study", videocam: "Video" })[g] ?? g }))
+                                    value: fm.m.icon
+                                    onChose: v => Focus.update(fm.m.id, { icon: v })
+                                }
+                            }
+                        }
+                        Setting {
+                            label: "Look"; hint: "A Customise preset while it's on"; words: "focus preset look"
+                            Dropdown {
+                                options: [{ v: "", t: "Keep mine" }, ...L.PRESETS.filter(p => p.id !== "bead").map(p => ({ v: p.id, t: p.name })), ...Object.keys(Look.presets).map(k => ({ v: k, t: k + " (yours)" }))]
+                                value: fm.m.preset
+                                onChose: v => Focus.update(fm.m.id, { preset: v })
+                            }
+                        }
+                        Setting {
+                            label: "Do Not Disturb"; hint: "Pop-ups held (urgent ones still show)"; words: "focus dnd quiet"
+                            Toggle { checked: fm.m.dnd; onToggled: Focus.update(fm.m.id, { dnd: !fm.m.dnd }) }
+                        }
+                        Setting {
+                            visible: fm.m.dnd && match
+                            label: "Let through"; hint: Notifs.apps.length ? "These still pop up" : "Apps show here once they've sent a notification"; words: "focus allow apps through"
+                            Dropdown {
+                                multi: true
+                                placeholder: "None"
+                                menuWidth: 240
+                                // the apps (named as they send), with any already allowed in another spelling
+                                options: [...new Set([...Notifs.apps, ...fm.m.allow.filter(a => !Notifs.apps.some(n => n.toLowerCase() === a.toLowerCase()))])].map(a => ({ v: a, t: a }))
+                                value: options.filter(o => fm.m.allow.some(a => a.toLowerCase() === o.v.toLowerCase())).map(o => o.v)
+                                onChose: list => Focus.update(fm.m.id, { allow: list })
+                            }
+                        }
+                        Setting {
+                            label: "Night light"; words: "focus night light warm"
+                            Choice { options: [{ v: "", t: "Keep" }, { v: "on", t: "On" }, { v: "off", t: "Off" }]; value: fm.m.nightLight; onChose: v => Focus.update(fm.m.id, { nightLight: v }) }
+                        }
+                        Setting {
+                            label: "Wallpaper"; hint: fm.m.wallpaper ? (fm.m.wallpaper.id ? "A live wallpaper" : fm.m.wallpaper.path.replace(/^.*\//, "")) : "Keeps yours"; words: "focus wallpaper background"
+                            Row {
+                                spacing: 6
+                                Word { text: "Use the current one"; glyph: "wallpaper"; onHit: Focus.update(fm.m.id, { wallpaper: Wallpaper.kind === "live" ? { id: Wallpaper.current } : { path: Wallpaper.current } }) }
+                                Word { visible: !!fm.m.wallpaper; text: "Keep mine"; onHit: Focus.update(fm.m.id, { wallpaper: null }) }
+                            }
+                        }
+                        Setting {
+                            label: "Schedule"; hint: fm.m.schedule.on ? "From–to, on these days (overnight works)" : "Off"; words: "focus schedule time days automatic"
+                            Row {
+                                spacing: 8
+                                Row {
+                                    visible: fm.m.schedule.on
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 3
+                                    Repeater {
+                                        model: FJ.DAYS
+                                        Chip {
+                                            required property var modelData
+                                            text: modelData.t; on: fm.m.schedule.days.includes(modelData.v)
+                                            onHit: Focus.update(fm.m.id, { schedule: Object.assign({}, fm.m.schedule, { days: on ? fm.m.schedule.days.filter(d => d !== modelData.v) : [...fm.m.schedule.days, modelData.v] }) })
+                                        }
+                                    }
+                                }
+                                Field { visible: fm.m.schedule.on; anchors.verticalCenter: parent.verticalCenter; width: 62; text: fm.m.schedule.from
+                                    onAccepted: if (/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) Focus.update(fm.m.id, { schedule: Object.assign({}, fm.m.schedule, { from: text }) }) }
+                                Field { visible: fm.m.schedule.on; anchors.verticalCenter: parent.verticalCenter; width: 62; text: fm.m.schedule.to
+                                    onAccepted: if (/^([01]\d|2[0-3]):[0-5]\d$/.test(text)) Focus.update(fm.m.id, { schedule: Object.assign({}, fm.m.schedule, { to: text }) }) }
+                                Toggle { anchors.verticalCenter: parent.verticalCenter; checked: fm.m.schedule.on; onToggled: Focus.update(fm.m.id, { schedule: Object.assign({}, fm.m.schedule, { on: !fm.m.schedule.on }) }) }
+                            }
+                        }
+                        Setting {
+                            label: "While an app is open"; hint: "Pick open apps, or type a window class (* matches anything)"; words: "focus app open game automatic"
+                            Row {
+                                spacing: 8
+                                Field { anchors.verticalCenter: parent.verticalCenter; width: 130; placeholder: "or type: steam_app_*"; onAccepted: if (text.trim()) { Focus.update(fm.m.id, { apps: [...fm.m.apps, text.trim()] }); text = ""; } }
+                                Dropdown {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    multi: true
+                                    placeholder: "None"
+                                    menuWidth: 240
+                                    // what's open now, and what it already has
+                                    options: [...new Set([...fm.m.apps, ...Focus.classes])].map(c => ({ v: c, t: c }))
+                                    value: fm.m.apps
+                                    onChose: list => Focus.update(fm.m.id, { apps: list })
+                                }
+                            }
+                        }
+                        Setting {
+                            label: "Remove this mode"; words: "focus delete remove"; last: true
+                            Word { text: "Remove"; glyph: "delete"; onHit: Focus.remove(fm.m.id) }
+                        }
+                    }
+                }
+                Group {
+                    title: "More"
+                    Setting {
+                        label: "New mode"; hint: "Starts empty: pick what it changes"; words: "focus add new mode"
+                        Row {
+                            spacing: 8
+                            Field { id: newMode; anchors.verticalCenter: parent.verticalCenter; placeholder: "Name, e.g. Reading"; onAccepted: addMode.hit() }
+                            Word { id: addMode; anchors.verticalCenter: parent.verticalCenter; text: "Add"; glyph: "add"; accent: true; onHit: { if (newMode.text.trim()) { Focus.add(newMode.text); newMode.text = ""; } } }
+                        }
+                    }
+                    Setting {
+                        label: "Back to Work, Game and Night"; hint: "Your modes are replaced by bead's three"; words: "focus defaults reset"; last: true
+                        Word { text: "Restore"; glyph: "restart_alt"; onHit: Focus.restoreDefaults() }
+                    }
                 }
             }
 
@@ -638,7 +862,7 @@ FloatingWindow {
                             label: "No apps yet"; hint: "Apps show here once they've sent a notification"; words: "per app rules"; last: true
                         }
                         Repeater {
-                            model: cp.modelData.id === "popups" ? Notifs.apps : []
+                            model: ScriptModel { values: cp.modelData.id === "popups" ? Notifs.apps : [] }
                             Setting {
                                 id: ar
                                 required property string modelData
@@ -646,7 +870,7 @@ FloatingWindow {
                                 label: modelData; hint: ({ normal: "Pop-up and island", corner: "Only the corner pop-up", island: "Only on the island", sticky: "Stays until dismissed", quiet: "Only in the history" })[Notifs.rule({ appName: modelData })]
                                 words: "per app rule notifications " + modelData
                                 last: index === Notifs.apps.length - 1
-                                Choice { options: L.APP_RULES; value: Notifs.rule({ appName: ar.modelData }); onChose: v => Notifs.setRule(ar.modelData, v) }
+                                Dropdown { options: L.APP_RULES; value: Notifs.rule({ appName: ar.modelData }); onChose: v => Notifs.setRule(ar.modelData, v) }
                             }
                         }
                     }
@@ -1146,6 +1370,83 @@ FloatingWindow {
                 spacing: 6
                 Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "search_off"; size: 36; color: Theme.subtext }
                 Label { anchors.horizontalCenter: parent.horizontalCenter; font.pixelSize: 13; text: "No setting matches that" }
+            }
+        }
+    }
+
+    // ── a dropdown's ddMenu, over everything; a click outside or scrolling closes it ──
+    Item {
+        anchors.fill: parent
+        z: 100
+        visible: win.menuFor !== null
+        MouseArea { anchors.fill: parent; onClicked: win.closeMenu(); onWheel: win.closeMenu() }
+        Rectangle {
+            id: ddMenu
+            readonly property var src: win.menuFor
+            readonly property var opts: src?.options ?? []
+            readonly property real rowH: 32
+            function place(): void {
+                if (!src) return;
+                const p = src.mapToItem(win.contentItem, 0, 0);
+                const h = Math.min(opts.length * rowH + 12, 300);
+                width = Math.max(src.width, src.menuWidth, 180);
+                height = h;
+                x = Math.min(p.x + src.width - width, win.width - width - 12);
+                x = Math.max(12, x);
+                y = p.y + src.height + 6 + h < win.height - 8 ? p.y + src.height + 6 : Math.max(8, p.y - h - 6);
+                ddList.positionViewAtIndex(Math.max(0, opts.findIndex(o => src.multi ? false : o.v === src.value)), ListView.Center);
+                pop.restart();
+            }
+            radius: 14
+            color: Qt.tint(Theme.frame, Qt.alpha(Theme.text, 0.07))
+            border.width: 1
+            border.color: Qt.alpha(Theme.text, 0.1)
+            transformOrigin: Item.Top
+            ParallelAnimation {
+                id: pop
+                NumberAnimation { target: ddMenu; property: "opacity"; from: 0; to: 1; duration: Motion.ms(140) }
+                NumberAnimation { target: ddMenu; property: "scale"; from: 0.94; to: 1; duration: Motion.ms(200); easing.type: Easing.OutBack }
+            }
+            MouseArea { anchors.fill: parent }   // clicks between rows stay in the ddMenu
+            ListView {
+                id: ddList
+                anchors.fill: parent; anchors.margins: 6
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: ddMenu.opts
+                delegate: Rectangle {
+                    id: mi
+                    required property var modelData
+                    readonly property bool ticked: ddMenu.src ? (ddMenu.src.multi ? (ddMenu.src.value ?? []).includes(modelData.v) : ddMenu.src.value === modelData.v) : false
+                    width: ddList.width; height: ddMenu.rowH; radius: 9
+                    color: Qt.alpha(Theme.text, mia.containsMouse ? 0.08 : 0)
+                    Row {
+                        x: 10; anchors.verticalCenter: parent.verticalCenter
+                        spacing: 8
+                        Icon { visible: !!mi.modelData.g; anchors.verticalCenter: parent.verticalCenter; name: mi.modelData.g ?? ""; size: 16; color: Theme.text }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: mi.width - 54 - (mi.modelData.g ? 24 : 0)
+                            elide: Text.ElideRight
+                            font.family: mi.modelData.font ?? Theme.font; font.pixelSize: 12
+                            font.weight: mi.ticked ? Font.DemiBold : Font.Normal
+                            color: Theme.text
+                            text: mi.modelData.t
+                        }
+                    }
+                    Icon { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; visible: mi.ticked; name: "check"; size: 16; color: Theme.tone("action") }
+                    MouseArea {
+                        id: mia; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            const d = ddMenu.src;
+                            if (!d) return;
+                            if (d.multi) {
+                                const cur = Array.from(d.value ?? []);
+                                d.chose(mi.ticked ? cur.filter(x => x !== mi.modelData.v) : [...cur, mi.modelData.v]);
+                            } else { d.chose(mi.modelData.v); win.closeMenu(); }
+                        }
+                    }
+                }
             }
         }
     }

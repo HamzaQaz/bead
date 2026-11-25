@@ -15,6 +15,7 @@ import Quickshell.Widgets
 import qs.components
 import qs.config
 import qs.services
+import "../../config/look.js" as L
 
 // The frame and side bar of every monitor. bead draws the whole frame itself
 // (Caelestia's border is set to 0): one shape, the frame colour everywhere but
@@ -231,7 +232,7 @@ Scope {
                     onMenu: (it, at) => {
                         win.panel = "";
                         const p = at.mapToItem(win.contentItem, at.width + 8, 0);
-                        it.display(win, p.x, p.y);
+                        Menus.tray(win.contentItem, p.x, p.y, it.menu);
                     }
                 }
             }
@@ -289,6 +290,7 @@ Scope {
                 property real iconFill: 0
                 property bool lit: false
                 property string iconRef: ""     // see Icon.ref
+                property string lookKey: ""     // its Customise → Bar switch (right-click can hide it)
                 property bool pulsing: false    // something's happening: breathe
                 readonly property bool hovered: ma.containsMouse
                 signal clicked()
@@ -322,7 +324,18 @@ Scope {
                         NumberAnimation { to: 1; duration: 650; easing.type: Easing.InOutSine }
                     }
                 }
-                MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: btn.clicked() }
+                MouseArea {
+                    id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: e => {
+                        if (e.button !== Qt.RightButton) { btn.clicked(); return; }
+                        const k = btn.lookKey, o = L.entry(k);
+                        Menus.open(btn, btn.width + 6, 0, [
+                            { t: "Hide " + (o ? o.label.toLowerCase() : "this button"), g: "visibility_off", enabled: !!o, act: () => Look.set(k, false) },
+                            { t: "Customise the bar…", g: "tune", act: () => SettingsApp.show("bar") }
+                        ]);
+                    }
+                }
             }
 
             // ── top: logo + workspaces ──
@@ -627,6 +640,7 @@ Scope {
                     // utilities: screenshots, recording, quick toggles
                     BarButton {
                         id: utilsBtn
+                        lookKey: "barUtils"
                         shown: Look.v.barUtils
                         icon: Recorder.recording ? "radio_button_checked" : "widgets"
                         tone: Recorder.recording ? Theme.tone("error") : Theme.text
@@ -638,6 +652,7 @@ Scope {
                     BarButton {
                         id: updatesBtn
                         // also while updating: it pulses, and brings the island's updater back
+                        lookKey: "barUpdates"
                         shown: Look.v.barUpdates && (Updates.count > 0 || Updates.phase !== "" || Updates.rebootAt > 0)
                         icon: Updates.running ? "downloading" : Updates.rebootAt ? "schedule" : "system_update_alt"
                         tone: Updates.running ? Theme.tone("action") : Updates.restart ? Theme.tone("warning") : Theme.text
@@ -660,6 +675,7 @@ Scope {
                     BarButton {
                         id: discordBtn
                         // also when it can't connect (not when Discord simply isn't running), to say why
+                        lookKey: "barDiscord"
                         shown: Look.v.barDiscord && (Discord.state === "ready" || Discord.state === "error" || Discord.state === "authorizing" || Discord.state === "setup" || !!Discord.ring)
                         icon: Discord.ring ? "ring_volume" : "forum"
                         tone: Discord.ring ? Theme.tone("success") : Discord.state === "ready" ? Theme.text : Theme.tone("warning")
@@ -679,6 +695,7 @@ Scope {
                     // WhatsApp / Telegram (when on in Settings): with the unread count
                     BarButton {
                         id: messagesBtn
+                        lookKey: "barMessages"
                         shown: Look.v.barMessages && Messengers.enabled
                         icon: "chat"
                         lit: win.panel === "messages"
@@ -696,6 +713,7 @@ Scope {
                     // the tray panel: every app, pin some to the bar
                     BarButton {
                         id: trayBtn
+                        lookKey: "barTray"
                         shown: Look.v.barTray && SystemTray.items.values.length > 0
                         icon: "apps"
                         lit: win.panel === "tray"
@@ -736,8 +754,7 @@ Scope {
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                             onClicked: e => {
                                 if (e.button === Qt.RightButton || tray.modelData.onlyMenu) {
-                                    const p = tray.mapToItem(null, tray.width + 6, 0);
-                                    tray.modelData.display(win, p.x, p.y);
+                                    Menus.tray(tray, tray.width + 6, 0, tray.modelData.menu);
                                 } else if (e.button === Qt.MiddleButton) tray.modelData.secondaryActivate();
                                 else tray.modelData.activate();
                             }
@@ -840,6 +857,7 @@ Scope {
                         }
                         BarButton {
                             id: soundBtn
+                            lookKey: "barSound"
                             shown: Look.v.barSound
                             iconRef: "volume_up"
                             icon: Audio.levelGlyph(Audio.volume, Audio.muted)
@@ -859,6 +877,7 @@ Scope {
                             readonly property var d: Osd.lowest
                             readonly property int level: d ? Osd.pct(d) : 100
                             readonly property bool charging: !!d && Osd.charging(d)
+                            lookKey: "barBattery"
                             shown: Look.v.barBattery && !!d
                             lit: win.panel === "battery"
                             icon: Osd.batteryGlyph(level, charging)
@@ -870,6 +889,7 @@ Scope {
                         }
                         BarButton {
                             id: wifiBtn
+                            lookKey: "barWifi"
                             shown: Look.v.barWifi
                             iconFill: 1
                             lit: win.panel === "wifi"
@@ -886,6 +906,7 @@ Scope {
                             id: btBtn
                             lit: win.panel === "bt"
                             // only while it's on (Utilities has the switch), or its panel is open
+                            lookKey: "barBluetooth"
                             shown: Look.v.barBluetooth && !!statusCol.bt && (statusCol.bt.enabled || win.panel === "bt")
                             icon: !statusCol.bt?.enabled ? "bluetooth_disabled" : statusCol.btBusy ? "bluetooth_searching"
                                 : statusCol.btConnected ? "bluetooth_connected" : "bluetooth"
@@ -898,6 +919,7 @@ Scope {
 
                 BarButton {
                     id: powerBtn
+                    lookKey: "barPower"
                     shown: Look.v.barPower
                     icon: "power_settings_new"
                     // quiet until you reach for it

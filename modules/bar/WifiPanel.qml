@@ -124,6 +124,7 @@ PanelColumn {
                 border.width: 1
                 border.color: Qt.alpha(Theme.tone("action"), pw.activeFocus ? 0.5 : 0)
                 TextInput {
+                    TextMenu {}   // right-click: cut, copy, paste
                     id: pw
                     anchors.fill: parent
                     anchors.leftMargin: 16

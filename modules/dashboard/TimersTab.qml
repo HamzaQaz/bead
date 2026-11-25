@@ -156,6 +156,7 @@ Row {
                 border.width: nameField.activeFocus ? 1.5 : 0
                 border.color: Theme.tone("action")
                 TextInput {
+                    TextMenu {}   // right-click: cut, copy, paste
                     id: nameField
                     anchors.fill: parent
                     anchors.leftMargin: 12; anchors.rightMargin: 12

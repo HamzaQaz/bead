@@ -333,6 +333,8 @@ Item {
         { id: "walls", title: "Wallpapers", sub: "Pick one on the dashboard; the colours follow", glyph: "wallpaper" },
         { id: "wallshuffle", title: "Shuffle wallpaper", sub: "Another one at random", glyph: "shuffle" },
         { id: "awake", title: Idle.keepAwake ? "Stop keeping awake" : "Keep awake", sub: "Don't lock, blank or sleep when idle", glyph: "coffee" },
+        // focus modes: each one, and off
+        ...Focus.modes.map(m => ({ id: "focus:" + m.id, title: m.id === Focus.active ? "Leave " + m.name + " mode" : m.name + " mode", sub: "Focus · " + Focus.summary(m), glyph: m.icon })),
         // toggles
         { id: "wifi", title: Networking.wifiEnabled ? "Turn Wi-Fi off" : "Turn Wi-Fi on", sub: "Wi-Fi", glyph: Networking.wifiEnabled ? "wifi_off" : "wifi" },
         { id: "bt", title: Bluetooth.defaultAdapter?.enabled ? "Turn Bluetooth off" : "Turn Bluetooth on", sub: "Bluetooth", glyph: Bluetooth.defaultAdapter?.enabled ? "bluetooth_disabled" : "bluetooth" },
@@ -368,6 +370,7 @@ Item {
             return;
         }
         if (a.id === "pkg:none") return;
+        if (String(a.id).startsWith("focus:")) { Focus.toggle(a.id.slice(6)); return; }
         switch (a.id) {
         case "dnd": Notifs.dnd = !Notifs.dnd; break;
         case "clear": Notifs.clear(); break;
@@ -545,6 +548,7 @@ Item {
             TapHandler { onTapped: { if (root.acting) root.leaveActions(); else root.mode = ""; field.forceActiveFocus(); } }
         }
         TextInput {
+            TextMenu {}   // right-click: cut, copy, paste
             id: field
             x: modeChip.width > 1 ? modeChip.x + modeChip.width + 10 : 44
             width: parent.width - x - 16
@@ -984,6 +988,7 @@ Item {
                 }
 
                 TextEdit {
+                    TextMenu {}   // right-click: cut, copy, paste
                     width: parent.width
                     visible: !!Ask.answer
                     readOnly: true

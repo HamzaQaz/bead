@@ -183,7 +183,8 @@ Scope {
             if (Demo.on) return; // recording a demo: yours stay off the screen (and in your history)
             // the history panel shows it live; Do Not Disturb holds all but critical
             if (Notifs.panelOpen) return;
-            if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical) return;
+            // (a focus mode can let some apps through)
+            if (Notifs.dnd && n.urgency !== NotificationUrgency.Critical && !Focus.letsThrough(n.appName)) return;
             if (Notifs.rule(e) === "quiet" && n.urgency !== NotificationUrgency.Critical) return; // history only
             if (root.quiet && Look.v.popFullscreenDots && n.urgency !== NotificationUrgency.Critical) {
                 root.dot(e, false);
@@ -467,6 +468,7 @@ Scope {
                         border.width: 1
                         border.color: Qt.alpha(Theme.tone("action"), replyField.activeFocus ? 0.6 : 0.2)
                         TextInput {
+                            TextMenu {}   // right-click: cut, copy, paste
                             id: replyField
                             anchors.fill: parent
                             anchors.leftMargin: 14

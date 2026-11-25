@@ -796,6 +796,23 @@ Scope {
     // ── dashboard ──
     readonly property ShellScreen focused: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
     property string pinnedOn: ""           // screen opened from IPC (stays until closed)
+    property real rightTaken: 0            // a chip's own right-click just happened (the island menu stays shut)
+    // the island's right-click menu
+    function islandMenu(screen: string): var {
+        return [
+            { t: pinnedOn ? "Close the dashboard" : "Open the dashboard", g: "dashboard", act: () => { pinnedOn = pinnedOn ? "" : screen; } },
+            { t: "Focus mode", g: Focus.mode?.icon ?? "self_improvement", sub: [
+                ...Focus.modes.map(m => ({ t: m.name, g: m.icon, checked: Focus.active === m.id, act: () => Focus.toggle(m.id) })),
+                { sep: true },
+                { t: "Off", g: "block", enabled: !!Focus.active, act: () => Focus.off() },
+                { t: "Edit modes…", g: "edit", act: () => SettingsApp.show("focus") }
+            ] },
+            { t: Notifs.dnd ? "Turn off Do Not Disturb" : "Do Not Disturb", g: Notifs.dnd ? "notifications_active" : "notifications_off", act: () => { Notifs.dnd = !Notifs.dnd; } },
+            { sep: true },
+            { t: "Customise the island…", g: "tune", act: () => SettingsApp.show("island") },
+            { t: "Hide the island", g: "visibility_off", keys: "Super+I", act: () => { hidden = true; } }
+        ];
+    }
     property int tab: 0
     property int openCount: 0              // islands currently open
     IpcHandler {
@@ -956,6 +973,16 @@ Scope {
                 root.toastTap = open(/^www\./i.test(text) ? "https://" + text : text);
                 return;
             }
+        }
+    }
+    // focus modes: say so when one comes on or goes off
+    Connections {
+        target: Focus
+        function onSwitched(from: string, to: string) {
+            if (!root.ready) return;
+            const m = Focus.modes.find(x => x.id === to), was = Focus.modes.find(x => x.id === from);
+            if (m) root.toast(m.icon, m.name + " mode" + (Focus.reason === "schedule" ? " (scheduled)" : Focus.reason === "app" ? " (app opened)" : "") + " · " + Focus.summary(m), "action", 3200);
+            else if (was) root.toast(was.icon, was.name + " mode off · back as it was", "info", 2200);
         }
     }
     // Settings → Customise → Try it: the real thing, with the settings as they are
@@ -1326,6 +1353,21 @@ Scope {
                 HoverHandler { id: boxHover }
                 // hover doesn't open it (Customise → Island): a click on the resting island does
                 TapHandler { enabled: !Look.v.islandHover && (win.state === "rest" || win.state === "media"); onTapped: root.pinnedOn = win.modelData.name }
+                Connections {
+                    target: Menus
+                    function onDemo(what: string) { if (what === "island" && win.modelData.name === root.home.name) Menus.open(box, box.width / 2, box.height / 2, root.islandMenu(win.modelData.name)); }
+                }
+                // right-click the island: its menu (unless a chip took the click: see rightTaken)
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    onTapped: ep => {
+                        const at = ep.position;
+                        Qt.callLater(() => {
+                            if (Date.now() - root.rightTaken < 300) return;
+                            Menus.open(box, at.x, at.y, root.islandMenu(win.modelData.name));
+                        });
+                    }
+                }
 
                 Item {
                     id: hit
@@ -1617,6 +1659,15 @@ Scope {
                         }
                         TapHandler { onTapped: Recorder.stop() }
                     }
+                    // a focus mode on: its icon (click leaves it)
+                    Item {
+                        visible: !!Focus.mode
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 22; height: 22
+                        Rectangle { anchors.fill: parent; radius: 11; color: Qt.alpha(Theme.tone("action"), focusTap.pressed ? 0.3 : 0.18) }
+                        Icon { anchors.centerIn: parent; name: Focus.mode?.icon ?? ""; size: 14; fill: 1; color: Theme.tone("action") }
+                        TapHandler { id: focusTap; onTapped: Focus.off() }
+                    }
                     // live: timer / stopwatch (click pauses, right-click stops)
                     Row {
                         id: timerChip
@@ -1658,7 +1709,7 @@ Scope {
                             text: Countdown.label
                         }
                         TapHandler { acceptedButtons: Qt.LeftButton; onTapped: Countdown.toggle() }
-                        TapHandler { acceptedButtons: Qt.RightButton; onTapped: Countdown.stop() }
+                        TapHandler { acceptedButtons: Qt.RightButton; onTapped: { root.rightTaken = Date.now(); Countdown.stop(); } }
                     }
                     // live activities (bead-activity, IPC "activity"): a ring and how
                     // long it's been; right-click drops one
@@ -1706,7 +1757,7 @@ Scope {
                                 text: act.modelData.label.slice(0, 18).replace(/&/g, "&amp;").replace(/</g, "&lt;")
                                     + " <font color=\"" + Theme.subtext + "\">" + (act.modelData.progress >= 0 ? Math.round(act.modelData.progress * 100) + "%" : Activities.elapsed(act.modelData)) + "</font>"
                             }
-                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: Activities.items = Activities.items.filter(i => i.id !== act.modelData.id) }
+                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: { root.rightTaken = Date.now(); Activities.items = Activities.items.filter(i => i.id !== act.modelData.id); } }
                         }
                     }
                     Rectangle { // between live chips and the rest

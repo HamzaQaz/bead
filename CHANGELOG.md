@@ -5,6 +5,18 @@ section is what `bead update` shows as "what's new".
 
 ## Unreleased
 
+### Focus modes
+- Work, Game and Night (and your own): a look preset, Do Not Disturb with
+  chosen apps let through, night light and a wallpaper, switched together and
+  put back exactly when the mode ends.
+- On by hand (Settings, launcher, island, `qs ipc call focus`), on a schedule,
+  or while an app is open. The island shows the mode and says when it changes.
+
+### Menus
+- Settings uses dropdowns for long choices (icons, presets, apps, fonts).
+- One right-click menu in bead's style: text fields (cut, copy, paste), tray
+  apps (their own menu), bar buttons, the island, Settings rows and modes.
+
 ### Customise
 - Settings has a Customise section: Look & feel, Motion, Island, Pop-ups and
   Bar, about 75 options in all, each page with a live preview and "Try it"

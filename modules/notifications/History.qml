@@ -680,6 +680,7 @@ Scope {
                                 border.width: 1
                                 border.color: Qt.alpha(Theme.tone("action"), replyField.activeFocus ? 0.6 : 0.2)
                                 TextInput {
+                                    TextMenu {}   // right-click: cut, copy, paste
                                     id: replyField
                                     anchors.fill: parent
                                     anchors.leftMargin: 14
