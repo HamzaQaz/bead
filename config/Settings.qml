@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 
 // bead's settings, kept in ~/.config/bead/settings.json. Changing one here (or
@@ -30,7 +31,10 @@ Singleton {
     property alias nightTemp: a.nightTemp           // its colour temperature, K (2500 to 6000)
     property alias gameMode: a.gameMode             // performance, no blur or animations while a game is fullscreen
 
-    readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN") || (Quickshell.screens[0]?.name ?? "")
+    // the island's monitor: chosen, or Hyprland's first (id 0; Quickshell's own
+    // screen order doesn't follow it, so screens[0] could be a side monitor)
+    readonly property string home: islandScreen || Quickshell.env("BEAD_ISLAND_SCREEN")
+        || ([...Hyprland.monitors.values].sort((a, b) => a.id - b.id)[0]?.name ?? Quickshell.screens[0]?.name ?? "")
 
     FileView {
         id: file
