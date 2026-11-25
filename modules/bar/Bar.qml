@@ -106,7 +106,7 @@ Scope {
 
     SystemClock { id: clock; precision: SystemClock.Minutes }
 
-    // `qs ipc call bar panel wifi|bt|tray|sound|utils|power|battery|updates|discord|close` on the focused monitor
+    // `qs ipc call bar panel wifi|bt|tray|sound|utils|power|battery|updates|discord|messages|close` on the focused monitor
     signal panelRequested(string name, string screen)
     // Ctrl+Alt+Delete (bead:session): the power panel on the focused monitor
     GlobalShortcut {
@@ -190,7 +190,7 @@ Scope {
                 target: root
                 function onPanelRequested(name, screen) {
                     if (screen !== scope.modelData.name) return;
-                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn, battery: batteryBtn, updates: updatesBtn, discord: discordBtn }[name];
+                    const from = { wifi: wifiBtn, bt: btBtn, tray: trayBtn, power: powerBtn, sound: soundBtn, utils: utilsBtn, battery: batteryBtn, updates: updatesBtn, discord: discordBtn, messages: messagesBtn }[name];
                     if (from) win.toggle(name, from); else win.panel = "";
                 }
             }
@@ -209,7 +209,7 @@ Scope {
                 anchorY: win.panelY
                 frameTop: win.wallW
                 frameBottom: win.height - win.wallW
-                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel, battery: batteryPanel, updates: updatesPanel, discord: discordPanel })[win.shownPanel] ?? trayPanel
+                readonly property Item cur: ({ wifi: wifiPanel, bt: btPanel, tray: trayPanel, power: powerPanel, sound: soundPanel, utils: utilsPanel, battery: batteryPanel, updates: updatesPanel, discord: discordPanel, messages: messagesPanel })[win.shownPanel] ?? trayPanel
                 panel: cur
                 contentW: cur.width
                 contentH: cur.implicitHeight
@@ -217,11 +217,12 @@ Scope {
 
                 WifiPanel { id: wifiPanel; visible: win.shownPanel === "wifi"; active: win.panel === "wifi" }
                 BluetoothPanel { id: btPanel; visible: win.shownPanel === "bt"; active: win.panel === "bt" }
-                SoundPanel { id: soundPanel; visible: win.shownPanel === "sound" }
+                SoundPanel { id: soundPanel; visible: win.shownPanel === "sound"; onDone: win.panel = "" }
                 UtilitiesPanel { id: utilsPanel; visible: win.shownPanel === "utils"; active: win.panel === "utils"; onDone: win.panel = "" }
                 PowerPanel { id: powerPanel; visible: win.shownPanel === "power"; active: win.panel === "power"; onDone: win.panel = "" }
                 BatteryPanel { id: batteryPanel; visible: win.shownPanel === "battery" }
                 UpdatesPanel { id: updatesPanel; visible: win.shownPanel === "updates"; active: win.panel === "updates"; onDone: win.panel = "" }
+                MessagesPanel { id: messagesPanel; visible: win.shownPanel === "messages"; active: win.panel === "messages"; onDone: win.panel = "" }
                 DiscordPanel { id: discordPanel; visible: win.shownPanel === "discord"; active: win.panel === "discord"; onDone: win.panel = "" }
                 TrayPanel {
                     id: trayPanel
@@ -623,11 +624,18 @@ Scope {
                     // updates waiting: only then, with how many
                     BarButton {
                         id: updatesBtn
-                        visible: Updates.count > 0
-                        icon: "system_update_alt"
-                        tone: Updates.restart ? Theme.tone("warning") : Theme.text
-                        lit: win.panel === "updates"
-                        onClicked: win.toggle("updates", updatesBtn)
+                        // also while updating: it pulses, and brings the island's updater back
+                        visible: Updates.count > 0 || Updates.phase !== "" || Updates.rebootAt > 0
+                        icon: Updates.running ? "downloading" : Updates.rebootAt ? "schedule" : "system_update_alt"
+                        tone: Updates.running ? Theme.tone("action") : Updates.restart ? Theme.tone("warning") : Theme.text
+                        pulsing: Updates.running
+                        lit: win.panel === "updates" || (Updates.shown && Updates.phase !== "")
+                        onClicked: {
+                            // a restart scheduled: its card (when, cancel, now)
+                            if (Updates.phase === "" && Updates.rebootAt) { Updates.needsRestart = true; Updates.phase = "done"; Updates.shown = true; }
+                            else if (Updates.phase !== "") Updates.shown = !Updates.shown;
+                            else win.toggle("updates", updatesBtn);
+                        }
                         Rectangle {
                             x: parent.width - width + 1; y: -1
                             width: Math.max(14, n.implicitWidth + 6); height: 14; radius: 7
@@ -638,9 +646,10 @@ Scope {
                     // Discord: while it's connected, with the unread count; rings with a call
                     BarButton {
                         id: discordBtn
-                        visible: Discord.state === "ready" || !!Discord.ring
+                        // also when it can't connect (not when Discord simply isn't running), to say why
+                        visible: Discord.state === "ready" || Discord.state === "error" || Discord.state === "authorizing" || Discord.state === "setup" || !!Discord.ring
                         icon: Discord.ring ? "ring_volume" : "forum"
-                        tone: Discord.ring ? Theme.tone("success") : Theme.text
+                        tone: Discord.ring ? Theme.tone("success") : Discord.state === "ready" ? Theme.text : Theme.tone("warning")
                         pulsing: !!Discord.ring
                         lit: win.panel === "discord"
                         onClicked: win.toggle("discord", discordBtn)
@@ -652,6 +661,23 @@ Scope {
                             scale: visible ? 1 : 0
                             Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
                             Text { id: dn; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 8; font.weight: Font.Bold; color: Theme.frame; text: Discord.dmCount > 99 ? "99+" : Discord.dmCount }
+                        }
+                    }
+                    // WhatsApp / Telegram (when on in Settings): with the unread count
+                    BarButton {
+                        id: messagesBtn
+                        visible: Messengers.enabled
+                        icon: "chat"
+                        lit: win.panel === "messages"
+                        onClicked: win.toggle("messages", messagesBtn)
+                        Rectangle {
+                            visible: Messengers.count > 0
+                            x: parent.width - width + 1; y: -1
+                            width: Math.max(14, mn.implicitWidth + 6); height: 14; radius: 7
+                            color: Theme.tone("action")
+                            scale: visible ? 1 : 0
+                            Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
+                            Text { id: mn; anchors.centerIn: parent; font.family: Theme.font; font.pixelSize: 8; font.weight: Font.Bold; color: Theme.frame; text: Messengers.count > 99 ? "99+" : Messengers.count }
                         }
                     }
                     // the tray panel: every app, pin some to the bar

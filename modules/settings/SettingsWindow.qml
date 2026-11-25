@@ -40,7 +40,7 @@ FloatingWindow {
         { id: "displays", s: "Device", t: "Displays", g: "monitor", d: "Layout, resolution, scale and brightness", k: "monitor screen resolution refresh rate brightness scale" },
         { id: "wallpaper", s: "Personal", t: "Wallpaper", g: "wallpaper", d: "Stills and live wallpapers", k: "background image picture" },
         { id: "appearance", s: "Personal", t: "Appearance", g: "palette", d: "Colours, size, the bar and the island", k: "theme tint colour color size scale bar title monitor island" },
-        { id: "notifications", s: "Personal", t: "Notifications", g: "notifications", d: "Do Not Disturb and the history", k: "dnd quiet alerts history" },
+        { id: "notifications", s: "Personal", t: "Notifications", g: "notifications", d: "Do Not Disturb and the history", k: "dnd quiet alerts history whatsapp telegram messages" },
         { id: "night", s: "Personal", t: "Night light", g: "nightlight", d: "A warmer screen in the evening", k: "warm blue light temperature sunset hyprsunset" },
         { id: "power", s: "System", t: "Power & idle", g: "bedtime", d: "Locking, sleeping, and game mode", k: "lock suspend sleep screen off idle game shutdown reboot log out" },
         { id: "assistant", s: "System", t: "Assistant & voice", g: "graphic_eq", d: "Claude, voice commands and dictation", k: "ai pearl claude model voice dictation microphone" },
@@ -593,6 +593,14 @@ FloatingWindow {
                     Setting {
                         label: "Do Not Disturb"; hint: Notifs.dnd ? "On: notifications wait quietly in the history" : "Off"; words: "dnd quiet silence"
                         Toggle { checked: Notifs.dnd; onToggled: Notifs.dnd = !Notifs.dnd }
+                    }
+                    Setting {
+                        label: "WhatsApp"; hint: "An inbox in the bar, from WhatsApp's notifications (its app, or web.whatsapp.com)"; words: "messages chat whatsapp inbox"
+                        Toggle { checked: Settings.whatsapp; onToggled: Settings.whatsapp = !Settings.whatsapp }
+                    }
+                    Setting {
+                        label: "Telegram"; hint: "An inbox in the bar, from Telegram's notifications; reply right from it"; words: "messages chat telegram inbox"
+                        Toggle { checked: Settings.telegram; onToggled: Settings.telegram = !Settings.telegram }
                     }
                     Setting {
                         label: "History"; hint: Notifs.entries.length ? Notifs.entries.length + (Notifs.entries.length === 1 ? " notification" : " notifications") : "Empty"; words: "clear past old"; last: true
