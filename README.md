@@ -171,6 +171,12 @@ To build by hand: `make install` (the shell), `make install-glint`, and
 podman container, both with `./install.sh` and as the package, and checks it;
 CI runs the same on every push.
 
+## Credits
+
+Made by [HamzaQaz](https://github.com/HamzaQaz), with the help of
+[Claude Code](https://claude.com/claude-code). Built on
+[Quickshell](https://quickshell.org) and [Hyprland](https://hyprland.org).
+
 ## Licence
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
