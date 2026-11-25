@@ -12,6 +12,8 @@ Singleton {
 
     // idle, in minutes (0 = never)
     property alias lockAfter: a.lockAfter
+    property alias discordMusic: a.discordMusic     // Discord presence: the music playing (off by default)
+    property alias discordProject: a.discordProject // Discord presence: the project you're in (off by default)
     property alias workspaceGroups: a.workspaceGroups // each monitor owns ten workspaces (services/Windows.qml)
     property alias lockAtLogin: a.lockAtLogin       // "auto" (when the machine logs in by itself) | "on" | "off"
     property alias screenOffAfter: a.screenOffAfter
@@ -54,6 +56,8 @@ Singleton {
             property real lockAfter: 3
             property string lockAtLogin: "auto"
             property bool workspaceGroups: true
+            property bool discordMusic: false
+            property bool discordProject: false
             property real screenOffAfter: 5
             property real suspendAfter: 10
             property bool pauseForMedia: true

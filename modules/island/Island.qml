@@ -897,7 +897,7 @@ Scope {
     Connections {
         target: Notifs
         function onPosted(e: var) {
-            if (root.activity === "timerdone") return; // its own alarm is showing
+            if (root.activity === "timerdone" || root.activity === "call") return; // its own alarm is showing
             if (root.activity === "notif") root.peekQueue = [...root.peekQueue, e].slice(-5);
             else root.peekAt(e);
         }
@@ -909,7 +909,7 @@ Scope {
     property string toastText: ""
     property string toastTone: "info"
     function toast(icon: string, text: string, tone: string, ms: int): void {
-        if (activity === "timerdone") return; // its own alarm is showing
+        if (activity === "timerdone" || activity === "call") return; // its own alarm is showing
         toastTap = null; // set again after this by a toast that leads somewhere
         toastColour = "";
         toastIcon = icon;
@@ -1021,6 +1021,10 @@ Scope {
         target: Discord
         function onJoined(name: string) { root.toast("headset_mic", "Joined " + name, "action", 1800); }
         function onLeft() { root.toast("call_end", "Left the call", "loading", 1500); }
+        // a call ringing: tap the toast to answer (the bar's Discord panel has Answer too)
+        // a call ringing: the island pops out with the caller (Answer / Decline)
+        function onRinging(call: var) { root.flash("call", "", 45000); }
+        function onRingChanged() { if (!Discord.ring && root.activity === "call") root.activity = ""; }
         function onMuteToggled(mute: bool) { root.toast(mute ? "mic_off" : "mic", mute ? "Discord muted" : "Discord unmuted", mute ? "error" : "action", 1300); }
     }
     Connections {
@@ -1239,6 +1243,7 @@ Scope {
             Binding { target: IslandShape; property: "tucked"; value: win.state === "tucked" }
             readonly property real activityW: root.activity === "workspace" ? Math.max(120, wsRow.implicitWidth + 44)
                 : root.activity === "notif" ? 400
+                : root.activity === "call" ? 380
                 : root.activity === "timerdone" || root.activity === "recstart" || root.activity === "toast" ? eventRow.implicitWidth + 48
                 : 330
             // tucking keeps the width it had, so it only retracts upwards (it used to
@@ -1254,7 +1259,7 @@ Scope {
             Spring {
                 id: sh
                 to: win.state === "passkey" ? passkeyView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
-                    : win.state === "activity" ? (root.activity === "notif" ? 58 : 46) : win.state === "tucked" ? 0 : 34
+                    : win.state === "activity" ? (root.activity === "notif" ? 58 : root.activity === "call" ? 104 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
@@ -1926,6 +1931,135 @@ Scope {
                             if (e && Notifs.invoke(e.key, "default")) Notifs.remove(e.key);
                             root.activity = "";
                         }
+                    }
+                }
+
+                // ── activity: a Discord call ringing: the caller, big, with rings
+                // rippling out of their avatar; Answer joins, Decline stops ringing ──
+                Item {
+                    id: callCard
+                    anchors.fill: parent
+                    opacity: win.state === "activity" && root.activity === "call" ? 1 : 0
+                    visible: opacity > 0.01
+                    SwapFade on opacity {}
+                    // kept while the card fades out (Discord.ring is null by then)
+                    property var call: null
+                    Connections { target: Discord; function onRingChanged() { if (Discord.ring) callCard.call = Discord.ring; } }
+                    // springs in: a little late, so the island has room first
+                    property real pop: visible ? 1 : 0
+                    Behavior on pop { NumberAnimation { duration: 520; easing.type: Easing.OutBack; easing.overshoot: 2 } }
+
+                    Item {
+                        id: face
+                        x: 22
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: 4
+                        width: 60; height: 60
+                        scale: 0.6 + 0.4 * callCard.pop
+                        // rings rippling out while it rings
+                        Repeater {
+                            model: 2
+                            Rectangle {
+                                required property int index
+                                anchors.centerIn: parent
+                                width: face.width; height: width; radius: width / 2
+                                color: "transparent"
+                                border.width: 2
+                                border.color: Theme.tone("success")
+                                opacity: 0
+                                SequentialAnimation on scale {
+                                    running: callCard.visible
+                                    loops: Animation.Infinite
+                                    PauseAnimation { duration: index * 700 }
+                                    NumberAnimation { from: 1; to: 1.7; duration: 1400; easing.type: Easing.OutCubic }
+                                }
+                                SequentialAnimation on opacity {
+                                    running: callCard.visible
+                                    loops: Animation.Infinite
+                                    PauseAnimation { duration: index * 700 }
+                                    NumberAnimation { from: 0.7; to: 0; duration: 1400; easing.type: Easing.OutCubic }
+                                }
+                            }
+                        }
+                        Image {
+                            id: callImg
+                            anchors.fill: parent
+                            source: callCard.call?.avatar ?? ""
+                            sourceSize: Qt.size(120, 120)
+                            visible: false
+                        }
+                        Rectangle { id: callMask; anchors.fill: parent; radius: width / 2; visible: false; layer.enabled: true }
+                        MultiEffect { anchors.fill: parent; source: callImg; maskEnabled: true; maskSource: callMask; visible: callImg.status === Image.Ready }
+                        Rectangle {
+                            anchors.fill: parent; radius: width / 2
+                            visible: callImg.status !== Image.Ready
+                            color: Qt.alpha(Theme.tone("success"), 0.2)
+                            Icon { anchors.centerIn: parent; name: "person"; size: 30; fill: 1; color: Theme.tone("success") }
+                        }
+                        // a little phone badge, wiggling like a ringer
+                        Rectangle {
+                            x: parent.width - width + 2; y: parent.height - height + 2
+                            width: 22; height: 22; radius: 11
+                            color: Theme.tone("success")
+                            border.width: 2; border.color: Theme.frame
+                            Icon {
+                                anchors.centerIn: parent; name: "call"; size: 12; fill: 1; color: Theme.frame
+                                SequentialAnimation on rotation {
+                                    running: callCard.visible
+                                    loops: Animation.Infinite
+                                    NumberAnimation { to: 18; duration: 80 }
+                                    NumberAnimation { to: -18; duration: 160 }
+                                    NumberAnimation { to: 0; duration: 80 }
+                                    PauseAnimation { duration: 700 }
+                                }
+                            }
+                        }
+                    }
+                    Column {
+                        anchors.left: face.right
+                        anchors.leftMargin: 16
+                        anchors.right: callBtns.left
+                        anchors.rightMargin: 10
+                        anchors.verticalCenter: face.verticalCenter
+                        spacing: 2
+                        opacity: callCard.pop
+                        Text {
+                            width: parent.width
+                            elide: Text.ElideRight
+                            font.family: Theme.font
+                            font.pixelSize: 16
+                            font.weight: Font.Bold
+                            color: Theme.text
+                            text: callCard.call?.name ?? ""
+                        }
+                        Text {
+                            font.family: Theme.font
+                            font.pixelSize: 12
+                            color: Theme.subtext
+                            text: "Discord call"
+                        }
+                    }
+                    Row {
+                        id: callBtns
+                        anchors.right: parent.right
+                        anchors.rightMargin: 22
+                        anchors.verticalCenter: face.verticalCenter
+                        spacing: 10
+                        component CallBtn: Rectangle {
+                            id: cb
+                            property string glyph: ""
+                            property color tone: Theme.text
+                            signal hit()
+                            width: 44; height: 44; radius: 22
+                            color: cbMa.containsMouse ? Qt.lighter(tone, 1.15) : tone
+                            scale: (cbMa.pressed ? 0.9 : 1) * callCard.pop
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Behavior on scale { SpringAnimation { spring: 6; damping: 0.3; epsilon: 0.002 } }
+                            Icon { anchors.centerIn: parent; name: cb.glyph; size: 22; fill: 1; color: Theme.frame }
+                            MouseArea { id: cbMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: cb.hit() }
+                        }
+                        CallBtn { glyph: "call_end"; tone: Theme.tone("error"); onHit: { Discord.dismiss(); root.activity = ""; } }
+                        CallBtn { glyph: "call"; tone: Theme.tone("success"); onHit: { Discord.answer(); root.activity = ""; } }
                     }
                 }
 

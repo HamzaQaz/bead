@@ -63,6 +63,7 @@ test:
 	cd strand && go test ./...
 	cd glint && go vet ./...
 	tests/scripts-test.sh
+	python3 tests/discord_test.py
 
 # install on a fresh Arch in a throwaway container (podman) and check it
 friend-test:

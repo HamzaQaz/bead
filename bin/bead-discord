@@ -6,10 +6,17 @@ Run by services/Discord.qml. Writes one JSON object per line on stdout:
   {"type": "voice", "channel": null | {"id", "name", "guild"},
    "members": [{"id", "name", "avatar", "mute", "deaf", "speaking", "me"}],
    "mute": bool, "deaf": bool}
-  {"type": "dms", "count": n, "from": [{"channel", "name", "avatar", "count", "text"}]}
-     unread direct messages (DMs and group DMs only, never servers), newest first
+  {"type": "dms", "count": n, "from": [{"channel", "guild", "kind", "name", "avatar", "count", "text", "link"}]}
+     the inbox: unread DMs (kind "dm") and @mentions (kind "mention"), newest first
+  {"type": "ring", "call": null | {"channel", "name", "avatar"}}   a DM call ringing
+  {"type": "voicenow", "channels": [{"id", "name", "guild", "count", "people": [{"id", "name", "avatar"}]}]}
+     busy voice channels in your pinned and recent servers (after `voice-now`)
 Reads commands on stdin, one per line: mute, unmute, toggle-mute, deaf, undeaf,
-toggle-deaf, leave, read (clears the unread DMs; bead sends it when you look).
+toggle-deaf, leave, read [channel] (clears the inbox, or one channel), join <channel>,
+answer <channel>, dismiss (stop showing a ring), voice-now,
+presence {"prefs": {"music", "project"}, "track": {"title", "artist"} | null, "project": "..."}.
+
+Optional in the config: "pinned_guilds": ["<server id>", ...] always scanned by voice-now.
 
 Config (yours, chmod 600): ~/.config/bead/discord.json
   {"client_id": "...", "client_secret": "..."}   from discord.com/developers
@@ -32,6 +39,7 @@ import uuid
 HOME = os.path.expanduser("~")
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", HOME + "/.config"), "bead/discord.json")
 TOKEN = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "bead/discord-token.json")
+RECENT = os.path.join(os.environ.get("XDG_STATE_HOME", HOME + "/.local/state"), "bead/discord-recent.json")
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
 SCOPES = ["rpc", "rpc.voice.read", "rpc.voice.write", "rpc.notifications.read"]
 REDIRECT = "http://localhost"
@@ -97,6 +105,91 @@ def avatar(user):
     return f"https://cdn.discordapp.com/embed/avatars/{(int(uid) >> 22) % 6}.png"
 
 
+# ── pure parts (tests/discord_test.py) ──
+MSG_CALL = 3            # Discord's message type for "started a call"
+DM_TYPES = (1, 3)       # DM, group DM
+TEXT_LIMIT = 128        # Rich Presence details/state
+
+
+def note_kind(data, ch_type, me):
+    """A notification: "call", "dm", "mention" (a server channel), or None (yours)."""
+    msg = data.get("message") or {}
+    if (msg.get("author") or {}).get("id") == me:
+        return None
+    if msg.get("type") == MSG_CALL:
+        return "call"
+    if ch_type is None:
+        # can't ask: a server notification's title names the #channel
+        return "mention" if "#" in (data.get("title") or "") else "dm"
+    return "dm" if ch_type in DM_TYPES else "mention"
+
+
+def channel_link(guild_id, channel_id):
+    return f"discord://-/channels/{guild_id or '@me'}/{channel_id}"
+
+
+def inbox_add(inbox, item, now, limit=20):
+    """A new inbox with item added: one entry per channel, counting messages."""
+    box = {k: dict(v) for k, v in inbox.items()}
+    d = box.get(item["channel"]) or {"count": 0}
+    d.update(item, at=now, count=d["count"] + 1)
+    box[item["channel"]] = d
+    for k in sorted(box, key=lambda k: box[k]["at"])[:max(0, len(box) - limit)]:
+        del box[k]
+    return box
+
+
+def inbox_view(inbox):
+    keys = ("channel", "guild", "kind", "name", "avatar", "text", "count")
+    return [dict({k: d.get(k) for k in keys}, link=channel_link(d.get("guild"), d["channel"]))
+            for d in sorted(inbox.values(), key=lambda d: -d["at"])]
+
+
+def presence(prefs, track, project):
+    """The Rich Presence activity bead may publish, or None."""
+    def fit(s):
+        return s if len(s) <= TEXT_LIMIT else s[:TEXT_LIMIT - 1] + "…"
+    if prefs.get("music") and track and track.get("title"):
+        a = {"details": fit("Listening to " + track["title"])}
+        if track.get("artist"):
+            a["state"] = fit("by " + track["artist"])
+        return a
+    if prefs.get("project") and project:
+        return {"details": fit("Working on " + project)}
+    return None
+
+
+def voice_now(channels, me, current):
+    """Voice channels with someone (other than you) in them, busiest first; not your own call."""
+    out = []
+    for ch in channels:
+        if ch["id"] == current:
+            continue
+        people = [{"id": u.get("id"), "name": vs.get("nick") or u.get("global_name") or u.get("username") or "?", "avatar": avatar(u)}
+                  for vs in ch.get("voice_states") or [] for u in [vs.get("user") or {}] if u.get("id") != me]
+        if people:
+            out.append({"id": ch["id"], "name": ch.get("name", ""), "guild": ch.get("guild", ""), "people": people, "count": len(people)})
+    return sorted(out, key=lambda c: -c["count"])
+
+
+def pick_guilds(recent, pinned, limit=8):
+    """The servers "Voice now" scans: pinned, then the ones you were in voice in lately."""
+    out = []
+    for g in list(pinned) + list(recent):
+        if g not in out:
+            out.append(g)
+    return out[:limit]
+
+
+def remember_guild(recent, gid, keep=20):
+    return ([gid] + [g for g in recent if g != gid])[:keep]
+
+
+def parse_command(line):
+    name, _, arg = line.strip().partition(" ")
+    return name, arg.strip()
+
+
 class Rpc:
     def __init__(self, cfg):
         self.cfg = cfg
@@ -110,8 +203,11 @@ class Rpc:
         self.deaf = False
         self.guilds = {}  # id -> name
         self.timers = []  # (due time.monotonic(), fn)
-        self.dms = {}  # channel id -> {"channel", "name", "avatar", "count", "text", "at"}
-        self.kinds = {}  # channel id -> True for a DM / group DM
+        self.dms = {}  # the inbox (DMs and mentions): channel id -> item, see inbox_add
+        self.kinds = {}  # channel id -> its type (None: couldn't ask)
+        self.ring = None  # {"channel", "name", "avatar"} while a call rings
+        self.recent = (read_json(RECENT) or {}).get("guilds", [])  # servers you were in voice in, newest first
+        self.activity = None
 
     def later(self, seconds, fn):
         self.timers.append((time.monotonic() + seconds, fn))
@@ -266,6 +362,11 @@ class Rpc:
                 self.publish()
                 return
             gid = data.get("guild_id")
+            if gid and (not self.recent or self.recent[0] != gid):
+                self.recent = remember_guild(self.recent, gid)
+                write_private(RECENT, {"guilds": self.recent})
+            if self.ring and self.ring["channel"] == new:
+                self.set_ring(None)  # answered
             self.channel = {"id": new, "name": data.get("name") or "Call", "guild": self.guilds.get(gid, "") if gid else "Direct call"}
             self.members = {}
             for vs in data.get("voice_states") or []:
@@ -303,44 +404,73 @@ class Rpc:
             "me": uid == self.me,
         }
 
-    # ── direct messages ──
+    # ── the inbox: DMs and @mentions; and calls ringing ──
     def publish_dms(self):
-        dms = sorted(self.dms.values(), key=lambda d: -d["at"])
-        emit({"type": "dms", "count": sum(d["count"] for d in dms),
-              "from": [{k: d[k] for k in ("channel", "name", "avatar", "count", "text")} for d in dms]})
+        view = inbox_view(self.dms)
+        emit({"type": "dms", "count": sum(d["count"] for d in view), "from": view})
+
+    def set_ring(self, ring):
+        self.ring = ring
+        emit({"type": "ring", "call": ring})
+        if ring:
+            cid = ring["channel"]
+            self.later(45, lambda: self.ring and self.ring["channel"] == cid and self.set_ring(None))
 
     def notification(self, data):
         cid = data.get("channel_id")
-        msg = data.get("message") or {}
-        author = msg.get("author") or {}
-        if not cid or author.get("id") == self.me:
+        if not cid:
             return
 
-        def add():
-            d = self.dms.get(cid) or {"channel": cid, "count": 0}
-            d.update(name=author.get("global_name") or author.get("username") or data.get("title") or "Someone",
-                     avatar=avatar(author) if author.get("id") else data.get("icon_url", ""),
-                     text=(msg.get("content") or data.get("body") or "")[:120], at=time.time())
-            d["count"] += 1
-            self.dms[cid] = d
+        def go(ch_type, guild):
+            kind = note_kind(data, ch_type, self.me)
+            if not kind:
+                return
+            msg = data.get("message") or {}
+            author = msg.get("author") or {}
+            name = author.get("global_name") or author.get("username") or data.get("title") or "Someone"
+            pic = avatar(author) if author.get("id") else data.get("icon_url", "")
+            if kind == "call":
+                if not (self.channel and self.channel["id"] == cid):
+                    self.set_ring({"channel": cid, "name": name, "avatar": pic})
+                return
+            self.dms = inbox_add(self.dms, {"channel": cid, "guild": guild, "kind": kind, "name": name, "avatar": pic,
+                                            "text": (msg.get("content") or data.get("body") or "")[:120]}, now=time.time())
             self.publish_dms()
 
         if cid in self.kinds:
-            if self.kinds[cid]:
-                add()
+            go(*self.kinds[cid])
             return
 
         def got(ch, err):
-            if err:
-                # can't ask: a server notification's title names the #channel
-                dm = "#" not in (data.get("title") or "")
-            else:
-                dm = ch.get("type") in (1, 3) or (not ch.get("guild_id") and ch.get("type") != 2)
-            self.kinds[cid] = dm
-            if dm:
-                add()
+            self.kinds[cid] = (None, None) if err else (ch.get("type"), ch.get("guild_id"))
+            go(*self.kinds[cid])
 
         self.cmd("GET_CHANNEL", {"channel_id": cid}, then=got)
+
+    # ── voice now: busy voice channels in the servers you use ──
+    def voice_scan(self):
+        guilds = pick_guilds(self.recent, self.cfg.get("pinned_guilds") or [])
+        found, waiting = [], [len(guilds)]
+
+        def done():
+            waiting[0] -= 1
+            if waiting[0] <= 0:
+                emit({"type": "voicenow", "channels": voice_now(found, self.me, self.channel and self.channel["id"])})
+
+        def channels(gid, d, err):
+            voice = [c for c in (d or {}).get("channels") or [] if c.get("type") in (2, 13)] if not err else []
+            waiting[0] += len(voice)
+            for c in voice:
+                self.cmd("GET_CHANNEL", {"channel_id": c["id"]}, then=lambda ch, e, gid=gid: (
+                    e or found.append(dict(ch, guild=self.guilds.get(gid, ""))), done()))
+            if gid not in self.guilds:
+                self.cmd("GET_GUILD", {"guild_id": gid}, then=lambda g, e, gid=gid: e or self.guilds.__setitem__(gid, g.get("name", "")))
+            done()
+
+        if not guilds:
+            emit({"type": "voicenow", "channels": []})
+        for gid in guilds:
+            self.cmd("GET_CHANNELS", {"guild_id": gid}, then=lambda d, e, gid=gid: channels(gid, d, e))
 
     def dispatch(self, evt, data):
         if evt == "READY":
@@ -385,7 +515,7 @@ class Rpc:
 
     # ── commands from bead ──
     def command(self, line):
-        c = line.strip()
+        c, arg = parse_command(line)
         if c in ("mute", "unmute", "toggle-mute"):
             v = (not self.mute) if c == "toggle-mute" else c == "mute"
             self.cmd("SET_VOICE_SETTINGS", {"mute": v})
@@ -393,11 +523,30 @@ class Rpc:
             v = (not self.deaf) if c == "toggle-deaf" else c == "deaf"
             self.cmd("SET_VOICE_SETTINGS", {"deaf": v})
         elif c == "read":
-            if self.dms:
+            # read: all; read <channel>: one
+            if arg and arg in self.dms:
+                self.dms = {k: v for k, v in self.dms.items() if k != arg}
+            elif not arg:
                 self.dms = {}
-                self.publish_dms()
+            self.publish_dms()
         elif c == "leave":
             self.cmd("SELECT_VOICE_CHANNEL", {"channel_id": None, "force": True})
+        elif c in ("join", "answer") and arg:
+            self.cmd("SELECT_VOICE_CHANNEL", {"channel_id": arg, "force": True})
+        elif c == "dismiss":
+            self.set_ring(None)
+        elif c == "voice-now":
+            self.voice_scan()
+        elif c == "presence":
+            # presence {"prefs": {...}, "track": {...}|null, "project": "..."}
+            try:
+                p = json.loads(arg or "{}")
+            except ValueError:
+                return
+            a = presence(p.get("prefs") or {}, p.get("track"), p.get("project") or "")
+            if a != self.activity:
+                self.activity = a
+                self.cmd("SET_ACTIVITY", {"pid": os.getpid(), "activity": a})
 
 
 def main():
