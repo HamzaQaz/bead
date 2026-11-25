@@ -123,6 +123,7 @@ Item {
         { name: "Wallpapers", icon: "wallpaper" },
         { name: "Apps", icon: "apps" },
         { name: "Displays", icon: "monitor" },
+        { name: "Widgets", icon: "widgets" },
         { name: "Settings", icon: "settings" }
     ]
 
@@ -154,7 +155,7 @@ Item {
         Item {
             id: track
             anchors.verticalCenter: parent.verticalCenter
-            width: 110; height: 20
+            width: 96; height: 20
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width
@@ -194,6 +195,7 @@ Item {
 
     // volume, left of the tabs
     QuickSlider {
+        id: volSlider
         x: 22
         y: 12
         icon: Audio.muted || Audio.volume <= 0 ? "volume_off" : Audio.volume < 0.5 ? "volume_down" : "volume_up"
@@ -216,6 +218,13 @@ Item {
     }
 
     // ── tab bar ──
+    // the space around each tab: as much as fits between the two sliders (with
+    // 20 px clear on either side), 24 at most, 10 at least
+    readonly property real tabPad: {
+        const room = width - 2 * (volSlider.x + volSlider.width + 20);
+        const fixed = tabs.length * 19 + 100;   // the icons, and the open tab's name
+        return Math.max(10, Math.min(24, Math.floor((room - fixed) / tabs.length)));
+    }
     Item {
         id: bar
         anchors.horizontalCenter: parent.horizontalCenter
@@ -248,7 +257,7 @@ Item {
                     readonly property real focusRadius: height / 2
                     function focusPress(): void { root.select(tb.index); }
                     // only the current tab shows its name; it slides open as you switch
-                    width: tbRow.implicitWidth + 24
+                    width: tbRow.implicitWidth + root.tabPad
                     height: parent.height
                     Row {
                         id: tbRow
@@ -370,6 +379,10 @@ Item {
         }
         Page {
             index: 8
+            WidgetsTab { anchors.fill: parent }
+        }
+        Page {
+            index: 9
             SettingsTab { anchors.fill: parent }
         }
     }

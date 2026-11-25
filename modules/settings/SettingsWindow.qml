@@ -6,6 +6,7 @@ import Quickshell.Io
 import "../../config/sizecheck.js" as SizeCheck
 import "../../config/look.js" as L
 import "../../services/focus.js" as FJ
+import "../../services/widgets.js" as WJ
 import "../island/keys.js" as KeySheet
 import qs.components
 import qs.config
@@ -45,6 +46,7 @@ FloatingWindow {
         { id: "notifications", s: "Personal", t: "Notifications", g: "notifications", d: "Do Not Disturb and the history", k: "dnd quiet alerts history whatsapp telegram messages" },
         { id: "night", s: "Personal", t: "Night light", g: "nightlight", d: "A warmer screen in the evening", k: "warm blue light temperature sunset hyprsunset" },
         { id: "focus", s: "Customise", t: "Focus modes", g: "self_improvement", d: "Work, Game, Night: a look, Do Not Disturb and more, together", k: "focus mode work game night schedule dnd do not disturb automatic" },
+        { id: "widgets", s: "Customise", t: "Widgets", g: "widgets", d: "A server, a build or a number, on the island and the dashboard", k: "widget island server github ci number toggle command pin" },
         { id: "presets", s: "Customise", t: "Presets & sharing", g: "style", d: "Whole looks in one tap; save, copy and paste them", k: "preset theme look share import export minimal showcase calm snappy focus reset" },
         ...L.PAGES.map(p => ({ id: p.id, s: "Customise", t: p.t, g: p.g, d: p.d, k: "customise customize " + L.SCHEMA.filter(o => o.page === p.id).map(o => o.label).join(" ").toLowerCase() })),
         { id: "power", s: "System", t: "Power & idle", g: "bedtime", d: "Locking, sleeping, and game mode", k: "lock suspend sleep screen off idle game shutdown reboot log out" },
@@ -769,6 +771,170 @@ FloatingWindow {
                     Setting {
                         label: "Back to Work, Game and Night"; hint: "Your modes are replaced by bead's three"; words: "focus defaults reset"; last: true
                         Word { text: "Restore"; glyph: "restart_alt"; onHit: Focus.restoreDefaults() }
+                    }
+                }
+            }
+
+            // ── Widgets (services/Widgets.qml) ──
+            Page {
+                pid: "widgets"
+                Repeater {
+                    // by id: editing one keeps its rows in place
+                    model: ScriptModel { values: Widgets.config.map(w => w.id) }
+                    Group {
+                        id: wg
+                        required property string modelData
+                        readonly property var w: Widgets.items.find(x => x.id === modelData) ?? ({ id: modelData, label: modelData, icon: "widgets", fields: {}, value: "", tone: "", every: 60, template: "command" })
+                        readonly property var tpl: WJ.template(w.template)
+                        title: w.label
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onTapped: ep => Menus.open(parent, ep.position.x, ep.position.y, [
+                                { t: wg.w.pinned ? "Take off the island" : "Keep on the island", g: "keep", act: () => Widgets.setPinned(wg.w.id, !wg.w.pinned) },
+                                { t: "Check now", g: "refresh", act: () => Widgets.refresh(wg.w.id) },
+                                { t: "Move up", g: "arrow_upward", act: () => Widgets.move(wg.w.id, -1) },
+                                { t: "Move down", g: "arrow_downward", act: () => Widgets.move(wg.w.id, 1) },
+                                { sep: true },
+                                { t: "Remove", g: "delete", danger: true, act: () => Widgets.remove(wg.w.id) }
+                            ])
+                        }
+                        Setting {
+                            label: "On the island"
+                            hint: (wg.tpl?.name ?? "") + " · showing " + (wg.w.value || "…")
+                                + (wg.w.pinned && Widgets.chips.shown.every(c => c.id !== wg.w.id) ? " · the island shows " + Widgets.maxPinned + " at most" : "")
+                            words: "widget pin island " + wg.w.label
+                            Toggle { checked: wg.w.pinned; onToggled: Widgets.setPinned(wg.w.id, !wg.w.pinned) }
+                        }
+                        Setting {
+                            label: "Name"; words: "widget name label"
+                            Field { width: 200; text: wg.w.label; onAccepted: if (text.trim()) Widgets.update(wg.w.id, { label: text }) }
+                        }
+                        Repeater {
+                            model: wg.tpl?.fields ?? []
+                            Setting {
+                                id: wf
+                                required property var modelData
+                                label: modelData.label; hint: modelData.choices ? "" : modelData.optional ? "Optional · Enter saves" : "Enter saves"; words: "widget " + modelData.label
+                                Loader {
+                                    sourceComponent: wf.modelData.choices ? wChoice : wField
+                                    Component {
+                                        id: wField
+                                        Field {
+                                            width: 300
+                                            placeholder: wf.modelData.placeholder
+                                            text: wg.w.fields[wf.modelData.key] ?? ""
+                                            onAccepted: Widgets.update(wg.w.id, { fields: Object.assign({}, wg.w.fields, { [wf.modelData.key]: text }) })
+                                        }
+                                    }
+                                    Component {
+                                        id: wChoice
+                                        Dropdown {
+                                            options: wf.modelData.choices
+                                            value: wg.w.fields[wf.modelData.key] ?? ""
+                                            onChose: v => Widgets.update(wg.w.id, { fields: Object.assign({}, wg.w.fields, { [wf.modelData.key]: v }) })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Setting {
+                            label: "Check every"; hint: "Seconds (5 at least)"; words: "widget interval every seconds"
+                            Field { width: 70; text: String(wg.w.every); onAccepted: { const n = parseInt(text); if (n >= 5) Widgets.update(wg.w.id, { every: n }); } }
+                        }
+                        Setting {
+                            label: "Remove this widget"; words: "widget delete remove"; last: true
+                            Row {
+                                spacing: 6
+                                Word { text: "Check now"; glyph: "refresh"; onHit: Widgets.refresh(wg.w.id) }
+                                Word { text: "Remove"; glyph: "delete"; onHit: Widgets.remove(wg.w.id) }
+                            }
+                        }
+                    }
+                }
+                Group {
+                    id: nw
+                    title: "New widget"
+                    property string tid: "server"
+                    property var draft: ({})
+                    property string name: ""
+                    readonly property var tpl: WJ.template(tid)
+                    onTidChanged: { draft = {}; Widgets.preview = null; }
+                    function clear(): void { draft = {}; name = ""; Widgets.preview = null; tid = ""; tid = "server"; }
+                    Setting {
+                        label: "Kind"; hint: nw.tpl.hint; words: "widget new add template kind server github number toggle command"
+                        Dropdown {
+                            options: WJ.TEMPLATES.map(t => ({ v: t.id, t: t.name, g: t.icon }))
+                            value: nw.tid
+                            onChose: v => nw.tid = v
+                        }
+                    }
+                    Repeater {
+                        model: nw.tpl.fields
+                        Setting {
+                            id: nf
+                            required property var modelData
+                            label: modelData.label; hint: modelData.optional ? "Optional" : ""; words: "widget new " + modelData.label
+                            Loader {
+                                sourceComponent: nf.modelData.choices ? nChoice : nField
+                                Component {
+                                    id: nField
+                                    Field {
+                                        width: 300
+                                        placeholder: nf.modelData.placeholder
+                                        text: nw.draft[nf.modelData.key] ?? ""
+                                        onTextChanged: if ((nw.draft[nf.modelData.key] ?? "") !== text) nw.draft = Object.assign({}, nw.draft, { [nf.modelData.key]: text })
+                                        onAccepted: Widgets.test(nw.tid, nw.draft)
+                                    }
+                                }
+                                Component {
+                                    id: nChoice
+                                    Dropdown {
+                                        options: nf.modelData.choices
+                                        value: nw.draft[nf.modelData.key] ?? nf.modelData.choices[0].v
+                                        onChose: v => nw.draft = Object.assign({}, nw.draft, { [nf.modelData.key]: v })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Setting {
+                        label: "Name"; hint: "Optional"; words: "widget new name"
+                        Field { width: 200; placeholder: nw.tpl.name; text: nw.name; onTextChanged: nw.name = text }
+                    }
+                    Setting {
+                        label: "Preview"
+                        hint: Widgets.previewing ? "Checking…" : Widgets.preview ? "What it shows now" : "Try it to see what it shows"
+                        words: "widget preview try test"
+                        Row {
+                            spacing: 10
+                            // the chip, as the island will show it
+                            Rectangle {
+                                visible: Widgets.preview !== null
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: pv.width + 24; height: 30; radius: 15
+                                color: Theme.frame
+                                Row {
+                                    id: pv
+                                    anchors.centerIn: parent
+                                    spacing: 5
+                                    readonly property var p: Widgets.preview ?? ({ value: "", tone: "" })
+                                    Icon { anchors.verticalCenter: parent.verticalCenter; name: pv.p.icon || nw.tpl.icon; size: 16; fill: 1; color: pv.p.tone ? Theme.tone(pv.p.tone) : Theme.subtext }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Medium; color: Theme.text; text: pv.p.value }
+                                }
+                            }
+                            Word { anchors.verticalCenter: parent.verticalCenter; text: "Try it"; glyph: "play_arrow"; onHit: Widgets.test(nw.tid, nw.draft) }
+                        }
+                    }
+                    Setting {
+                        label: "Add it"; hint: Widgets.chips.shown.length < Widgets.maxPinned ? "It goes on the island too" : "The island is full: it goes on the dashboard"; words: "widget new add create"; last: true
+                        Word {
+                            text: "Add"; glyph: "add"; accent: true
+                            onHit: {
+                                const fields = Object.assign({}, ...nw.tpl.fields.filter(f => f.choices).map(f => ({ [f.key]: f.choices[0].v })), nw.draft);
+                                if (Widgets.add(nw.tid, fields, nw.name, Widgets.chips.shown.length < Widgets.maxPinned)) nw.clear();
+                                else Widgets.preview = { value: "fill in the fields", tone: "warning" };
+                            }
+                        }
                     }
                 }
             }

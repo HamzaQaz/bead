@@ -31,7 +31,8 @@ Row {
             font.pixelSize: 12
         }
         Item { width: 1; height: 8 }
-        Text {
+        RollText {
+            rise: 12
             font.family: Theme.font
             font.pixelSize: 56
             font.weight: Font.DemiBold

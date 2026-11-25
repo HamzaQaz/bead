@@ -805,7 +805,7 @@ Scope {
                     id: clockCol
                     anchors.centerIn: parent
                     spacing: 2
-                    component ClockText: Text {
+                    component ClockText: RollText {
                         anchors.horizontalCenter: parent.horizontalCenter
                         font.family: Theme.font
                         font.pixelSize: 14
