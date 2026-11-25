@@ -177,6 +177,9 @@ Made by [HamzaQaz](https://github.com/HamzaQaz), with the help of
 [Claude Code](https://claude.com/claude-code). Built on
 [Quickshell](https://quickshell.org) and [Hyprland](https://hyprland.org).
 
+Inspired by [Caelestia](https://github.com/caelestia-dots/shell), a fluid,
+morphing Quickshell shell.
+
 ## Licence
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
