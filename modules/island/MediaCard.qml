@@ -37,8 +37,16 @@ Item {
         running: root.active && root.pointerIn && !root.usingControls // restarts after you stop using it
         onTriggered: root.expand()
     }
-    // the cover, behind it all
-    CoverBackdrop { anchors.fill: parent; radius: root.radius; source: root.player?.trackArtUrl ?? ""; blur: 0.6; veil: 0.4 }
+    // the cover, behind it all: inset, so a rim of the island shows around it
+    readonly property real inset: 6
+    CoverBackdrop {
+        anchors.fill: parent
+        anchors.margins: root.inset
+        radius: Math.max(0, root.radius - root.inset)
+        source: root.player?.trackArtUrl ?? ""
+        blur: 0.6
+        veil: 0.4
+    }
     MouseArea { // clicking the card itself: at once
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
