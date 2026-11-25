@@ -48,7 +48,9 @@ float along(vec2 p) {
     float s;
     if (ds < dt && ds < db) s = a + clamp(p.y - top, 0.0, h);
     else if (dt <= db) s = clamp(abs(p.x - cx) - span, 0.0, a);
-    else s = a + h + (a - clamp(abs(p.x - cx) - span, 0.0, a));
+    // the bottom has no island in it: its whole length, corner to centre, is the
+    // path (the top's island gap here made its middle light all at once)
+    else { float b = max(abs(side - cx), 1.0); s = a + h + a * (1.0 - clamp(abs(p.x - cx), 0.0, b) / b); }
     return s / (2.0 * a + h);
 }
 
@@ -58,19 +60,26 @@ void main() {
     float d = sdRoundBox(p, inner, radius);   // > 0 in the frame
     float inFrame = smoothstep(-0.5, 0.5, d);
 
-    // the dark over the screen, with a soft hole growing from the island
-    float far = length(size) * 1.1;
+    // the dark over the screen, with a soft hole growing from the island. It
+    // spans exactly to the farthest corner, so the bottom clears last, as the
+    // lift slows to its end (a larger circle cleared it mid-way, at full speed)
+    float soft = 480.0;
+    float far = max(max(distance(origin, vec2(0.0)), distance(origin, vec2(size.x, 0.0))),
+                    max(distance(origin, vec2(0.0, size.y)), distance(origin, size))) + soft;
     float R = lift * far;
-    float hole = smoothstep(R - 260.0, R, distance(p, origin));
+    float hole = smoothstep(R - soft, R, distance(p, origin));
     float black = dark * hole;
 
     // the frame: filled where the colour has reached, with a soft front
     float u = along(p);
-    float filled = 1.0 - smoothstep(trace - 0.025, trace, u);
-    if (trace >= 1.0) filled = 1.0;
+    // the front runs a little past the bottom centre, so the two soft fronts
+    // close the gap there smoothly as the trace ends (stopping at 1 left a sliver
+    // that filled in one frame)
+    float t = trace * 1.04;
+    float filled = 1.0 - smoothstep(t - 0.025, t, u);
     vec3 c = mix(accent.rgb, frame.rgb, settle);
     // a little brighter right at the front, like a wave
-    float front = filled * smoothstep(trace - 0.08, trace, u) * (1.0 - settle);
+    float front = filled * smoothstep(t - 0.08, t, u) * (1.0 - settle);
     c = mix(c, min(vec3(1.0), accent.rgb * 1.25), front * 0.6);
     // in the frame: the colour where it's reached (fading to the real frame),
     // the dark where it hasn't yet

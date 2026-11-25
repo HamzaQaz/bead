@@ -82,11 +82,13 @@ Scope {
         function open(): void { root.show(); }
         function close(): void { root.open = false; }   // without marking it seen
         function step(n: int): void { root.step = Math.max(0, Math.min(root.steps - 1, n)); }
+        // is the intro still playing (tools/reel.sh waits for it)
+        function playing(): bool { return intro.running || !root.bloomed; }
     }
 
     PanelWindow {
         id: win
-        visible: root.open || card.opacity > 0.01
+        visible: root.open || card.opacity > 0.01 || veil.opacity > 0.01
         // the monitor you're on when it opens (else the island's)
         screen: Quickshell.screens.find(s => s.name === root.onScreen) ?? Quickshell.screens.find(s => s.name === Settings.home) ?? Quickshell.screens[0]
         anchors { top: true; bottom: true; left: true; right: true }
@@ -97,9 +99,11 @@ Scope {
         WlrLayershell.keyboardFocus: root.open ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
         ShaderEffect { // the room dims: inside the frame, round the island (shaders/veil.frag)
+            id: veil
             anchors.fill: parent
             opacity: root.open ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+            // leaving: the room brightens a little after the card has gone
+            Behavior on opacity { NumberAnimation { duration: root.open ? 320 : 620; easing.type: Easing.InOutCubic } }
             fragmentShader: Qt.resolvedUrl("../../shaders/veil.frag.qsb")
             property size size: Qt.size(width, height)
             property vector4d inner: Qt.vector4d(stage.leftW, stage.wallW, stage.sw - stage.leftW - stage.wallW, stage.sh - 2 * stage.wallW)
@@ -384,9 +388,10 @@ Scope {
             border.width: 1
             border.color: Qt.alpha(Theme.text, 0.07)
             opacity: root.open && root.bloomed ? 1 : 0
-            scale: root.open ? 1 : 0.92
-            Behavior on opacity { NumberAnimation { duration: 260 } }
-            Behavior on scale { SpringAnimation { spring: 4; damping: 0.36; epsilon: 0.002 } }
+            scale: root.open ? 1 : 0.95
+            // leaving: an eased fade and a gentle shrink (no spring bounce on the way out)
+            Behavior on opacity { NumberAnimation { duration: root.open ? 260 : 440; easing.type: Easing.OutCubic } }
+            Behavior on scale { NumberAnimation { duration: root.open ? 420 : 480; easing.type: root.open ? Easing.OutBack : Easing.OutCubic } }
             Behavior on color { ColorAnimation { duration: 500 } }
 
             // ── the backdrop (shaders/intro.frag) ──
@@ -565,7 +570,7 @@ Scope {
                 }
                 // the dark lifts from the island while the sketch, now in the real
                 // frame's colours, stays over the real one; then it simply goes
-                NumberAnimation { target: stage; property: "lift"; to: 1; duration: 900; easing.type: Easing.InOutCubic }
+                NumberAnimation { target: stage; property: "lift"; to: 1; duration: 1250; easing.type: Easing.OutCubic }
                 ParallelAnimation {
                     NumberAnimation { target: stage; property: "fade"; to: 1; duration: 300; easing.type: Easing.InOutSine }
                     NumberAnimation { target: morph; property: "opacity"; to: 0; duration: 300; easing.type: Easing.InOutSine }
