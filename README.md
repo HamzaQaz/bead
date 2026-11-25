@@ -13,14 +13,15 @@ dashboard, a lock screen and notifications, all coloured by your wallpaper.
 | | |
 |---|---|
 | ![The island at the top of the screen: resting, growing into the media card, then the launcher](docs/screenshots/island.gif) | ![Notifications growing out of the frame's corner, opening, and tucking back in](docs/screenshots/notifications.gif) |
+| ![The dashboard dropping out of the frame](docs/screenshots/dashboard.gif) | ![A toast in the island, then a voice command](docs/screenshots/toast-voice.gif) |
 
 ![bead's welcome card, the first thing a new install shows](docs/screenshots/welcome.webp)
 
 | | |
 |---|---|
-| ![The dashboard: clock, weather, calendar, what's playing and system gauges](docs/screenshots/dashboard.webp) | ![A clean desktop: the bar down the left, the island at the top](docs/screenshots/desktop.webp) |
+| ![A clean desktop: the bar down the left, the island at the top](docs/screenshots/desktop.webp) | ![The dashboard: clock, weather, calendar, what's playing and system gauges](docs/screenshots/dashboard.webp) |
+| ![The island as a media card: cover, track, controls and seek](docs/screenshots/media.webp) | ![Notification history, grouped per app](docs/screenshots/history.webp) |
 | ![The launcher searching apps](docs/screenshots/launcher.webp) | ![The launcher doing a currency conversion](docs/screenshots/launcher-maths.webp) |
-| ![A voice command, the words it understood lit up](docs/screenshots/voice.webp) | ![A toast in the island](docs/screenshots/toast.webp) |
 
 ## Install
 
