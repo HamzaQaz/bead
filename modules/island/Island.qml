@@ -25,8 +25,8 @@ import qs.services
 //             a timer finishing; a screen recording starting
 //   live      a running timer / stopwatch or screen recording rides on the pill
 //             (click: pause / stop)
-//   passkey   keyhold asks to approve a passkey: the island becomes the prompt
-//             (services/Passkey.qml)
+//   passkey   a password prompt: keyhold's passkeys (services/Passkey.qml) or
+//             admin rights through polkit (services/Polkit.qml)
 //   launcher  tap Super (global shortcut bead:launcher) or IPC "launcher":
 //             apps, maths, > actions (LauncherView.qml); click outside closes
 //   open      hover it (or the top edge) a moment: it grows into the dashboard
@@ -1123,7 +1123,7 @@ Scope {
             readonly property bool open: expanded || root.pinnedOn === modelData.name
             readonly property bool showsActivity: root.activity !== ""
             readonly property bool tucked: root.hidden || root.fullscreen || root.covered || !root.settled
-            readonly property string state: Passkey.active ? "passkey" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active && !(Activities.items.length > 0 && !root.fullscreen) ? "tucked" : "rest"
+            readonly property string state: Passkey.active || Polkit.active ? "passkey" : Updates.shown && Updates.phase !== "" && root.pinnedOn === "" ? "update" : Voice.active ? "voice" : root.overviewOpen ? "overview" : root.launcherOpen ? "launcher" : open ? "open" : mediaCard || (root.mediaPinned && root.playing) ? "media" : showsActivity ? "activity" : tucked && !Dictation.active && !Voice.active && !(Activities.items.length > 0 && !root.fullscreen) ? "tucked" : "rest"
             onStateChanged: {
                 // see tuckW: keep a small state's width; a big one (dashboard,
                 // launcher…) tucks at the resting width, not as a wide strip
@@ -1230,7 +1230,7 @@ Scope {
             readonly property bool dashKeys: root.pinnedOn === modelData.name && state === "open"
             onDashKeysChanged: if (dashKeys) dashFocus.restart()
             Timer { id: dashFocus; interval: 140; onTriggered: if (win.dashKeys) dash.takeKeys() }
-            WlrLayershell.keyboardFocus: Passkey.asking || root.launcherOpen || root.overviewOpen || dashKeys ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: Passkey.asking || Polkit.asking || root.launcherOpen || root.overviewOpen || dashKeys ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             // input: the island itself, plus the top frame strip (hover opens it)
             mask: Region {
                 item: win.state === "tucked" ? null : hit
@@ -1252,13 +1252,13 @@ Scope {
             property string prevState: "rest"
             Spring {
                 id: sw
-                to: win.state === "passkey" ? passkeyView.wantW : win.state === "voice" ? voiceView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
+                to: win.state === "passkey" ? passkeyView.wantW : win.state === "update" ? updateView.wantW : win.state === "voice" ? voiceView.wantW : win.state === "overview" ? overviewView.wantW : win.state === "launcher" ? launcherView.wantW : win.state === "open" ? win.openW : win.state === "media" ? mediaView.wantW : win.state === "activity" ? win.activityW : win.state === "tucked" ? win.tuckW : win.restW
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
             }
             Spring {
                 id: sh
-                to: win.state === "passkey" ? passkeyView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
+                to: win.state === "passkey" ? passkeyView.wantH : win.state === "update" ? updateView.wantH : win.state === "voice" ? voiceView.wantH : win.state === "overview" ? overviewView.wantH : win.state === "launcher" ? launcherView.wantH : win.state === "open" ? win.openH : win.state === "media" ? mediaView.wantH
                     : win.state === "activity" ? (root.activity === "notif" ? 58 : root.activity === "call" ? 104 : 46) : win.state === "tucked" ? 0 : 34
                 settleWhenShrinking: true
                 duration: Motion.dur * 0.9
@@ -2196,6 +2196,17 @@ Scope {
                     visible: opacity > 0.01
                     Behavior on opacity { NumberAnimation { duration: win.state === "overview" ? 240 : 110 } }
                     onClose: root.overviewOpen = false
+                }
+
+                // ── the system update ──
+                UpdateView {
+                    id: updateView
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: wantW
+                    height: wantH
+                    opacity: win.state === "update" ? 1 : 0
+                    visible: opacity > 0.01
+                    Behavior on opacity { NumberAnimation { duration: win.state === "update" ? 260 : 120 } }
                 }
 
                 // ── passkey ──

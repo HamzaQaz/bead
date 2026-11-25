@@ -1,0 +1,41 @@
+#!/bin/sh
+# bead-sysupdate [repo] [aur] [flatpak]: the system update, run by
+# services/Updates.qml and shown in the island (modules/island/UpdateView.qml).
+#
+# No terminal and no questions: pacman and paru run with --noconfirm (their
+# default answers), paru skips its PKGBUILD review (bead shows the AUR
+# changes before you start). Passwords go through polkit (pkexec), which
+# bead itself answers as your polkit agent (services/Polkit.qml).
+#
+# Prints the tools' own output, plus "@@stage <name>" before each stage and
+# "@@done" or "@@fail <stage> <code>" at the end. Exits with the failing code.
+set -u
+export LC_ALL=C   # English output, for services/sysupdate.js to read
+stages=${*:-repo aur flatpak}
+
+fail() { echo "@@fail $1 $2"; exit "$2"; }
+
+for s in $stages; do
+	case $s in
+	repo)
+		echo "@@stage repo"
+		# stdbuf: line by line, not in blocks at the end
+		pkexec stdbuf -oL -eL pacman -Syu --noconfirm --noprogressbar 2>&1 || fail repo $?
+		;;
+	aur)
+		helper=$(command -v paru || command -v yay) || continue
+		echo "@@stage aur"
+		if [ "${helper##*/}" = paru ]; then
+			stdbuf -oL -eL paru -Sua --noconfirm --skipreview --noprogressbar --sudo pkexec --nosudoloop 2>&1 || fail aur $?
+		else
+			stdbuf -oL -eL yay -Sua --noconfirm --noprogressbar --sudo pkexec --nosudoloop --answerdiff None --answerclean None 2>&1 || fail aur $?
+		fi
+		;;
+	flatpak)
+		command -v flatpak >/dev/null || continue
+		echo "@@stage flatpak"
+		stdbuf -oL -eL flatpak update -y --noninteractive 2>&1 || fail flatpak $?
+		;;
+	esac
+done
+echo "@@done"
