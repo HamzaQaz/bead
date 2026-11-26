@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -195,6 +196,12 @@ func plan(s system, parts []*part, c choices) (steps []step, repoPkgs, aurPkgs [
 	if c.has("huddle") {
 		steps = append(steps, step{title: "Huddle", detail: "~/.config/bead/discord.json for your Discord app", run: huddleConfig})
 	}
+	if c.has("phone") {
+		// KDE Connect finds phones on ports 1714–1764; a closed firewall makes pairing fail silently
+		if fw := firewallFix(); fw != nil {
+			steps = append(steps, step{title: "Phone link", detail: "open ports 1714–1764 for KDE Connect", interactive: true, cmd: fw})
+		}
+	}
 	if c.has("pearl") {
 		way, key := c.pearl, c.apiKey
 		name := way
@@ -316,4 +323,31 @@ func firstWallpaper(dirs ...string) string {
 		}
 	}
 	return ""
+}
+
+// firewallFix opens KDE Connect's ports when ufw or firewalld is running and
+// they aren't open yet (nil: nothing to do).
+func firewallFix() *exec.Cmd {
+	active := func(unit string) bool { return exec.Command("systemctl", "is-active", "--quiet", unit).Run() == nil }
+	switch {
+	case active("ufw"):
+		if b, err := os.ReadFile("/etc/ufw/user.rules"); err == nil && ufwOpen(string(b)) {
+			return nil
+		}
+		return exec.Command("sh", "-c", "sudo ufw allow 1714:1764/udp && sudo ufw allow 1714:1764/tcp")
+	case active("firewalld"):
+		if exec.Command("firewall-cmd", "--query-service=kdeconnect").Run() == nil {
+			return nil
+		}
+		return exec.Command("sh", "-c", "sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload")
+	}
+	return nil
+}
+
+// ufwOpen: both TCP and UDP 1714:1764 accepted in ufw's user rules (as bin/bead-phone checks).
+func ufwOpen(rules string) bool {
+	ok := func(proto string) bool {
+		return regexp.MustCompile(`(?m)^-A ufw-user-input -p ` + proto + `\b.*--dports 1714:1764 -j ACCEPT`).MatchString(rules)
+	}
+	return ok("tcp") && ok("udp")
 }

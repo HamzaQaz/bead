@@ -558,6 +558,9 @@ func (m model) nextSteps() string {
 		b.WriteString("    " + sKey.Render("http://localhost") + " under OAuth2, then paste its client id and secret into\n")
 		b.WriteString("    " + sKey.Render("~/.config/bead/discord.json") + ". Discord asks you to allow it once.\n")
 	}
+	if c.has("phone") {
+		b.WriteString("  • Phone link: install KDE Connect on your phone, then pair it in " + sKey.Render("Settings → Phone") + "\n")
+	}
 	if c.has("murmur") {
 		b.WriteString("  • Murmur: hold " + sKey.Render("Super+Space") + " and speak; hold " + sKey.Render("Super+A") + " to dictate\n")
 	}

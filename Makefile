@@ -8,7 +8,7 @@ build: shaders/goo.frag.qsb shaders/stack.frag.qsb shaders/blob.frag.qsb shaders
 shaders/%.frag.qsb: shaders/%.frag
 	/usr/lib/qt6/bin/qsb --glsl "100es,120,150" --hlsl 50 --msl 12 -o $@ $<
 
-BINS   := bead bead-resume bead-openurl bead-sysupdate bead-pkgcheck bead-appinfo bead-editors bead-discord bead-dictate bead-look bead-tint bead-pearl bead-term bead-activity bead-doctor bead-update bead-uninstall
+BINS   := bead bead-resume bead-openurl bead-sysupdate bead-pkgcheck bead-appinfo bead-editors bead-discord bead-phone bead-dictate bead-look bead-tint bead-pearl bead-term bead-activity bead-doctor bead-update bead-uninstall
 # a user install puts the resume watcher in the user's systemd folder, a package in the system's
 UNITDIR ?= $(if $(filter $(HOME)/.local,$(PREFIX)),$(HOME)/.config/systemd/user,$(PREFIX)/lib/systemd/user)
 
@@ -69,6 +69,7 @@ test:
 	cd glint && go vet ./...
 	tests/scripts-test.sh
 	python3 tests/discord_test.py
+	python3 tests/phone_test.py
 
 # install on a fresh Arch in a throwaway container (podman) and check it
 friend-test:

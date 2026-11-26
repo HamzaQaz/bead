@@ -27,6 +27,7 @@ optdepends=(
 	'power-profiles-daemon: power modes'
 	'flatpak: installing apps from Flathub'
 	'paru: installing apps from the AUR'
+	'kdeconnect: Phone link, your phone in bead (battery, ring it, send it links)'
 )
 provides=(bead-shell)
 conflicts=(bead-shell)

@@ -340,6 +340,8 @@ Item {
         { id: "bt", title: Bluetooth.defaultAdapter?.enabled ? "Turn Bluetooth off" : "Turn Bluetooth on", sub: "Bluetooth", glyph: Bluetooth.defaultAdapter?.enabled ? "bluetooth_disabled" : "bluetooth" },
         { id: "mute", title: Audio.muted ? "Unmute sound" : "Mute sound", sub: "Output", glyph: Audio.muted ? "volume_up" : "volume_off" },
         { id: "mic", title: Audio.micMuted ? "Unmute microphone" : "Mute microphone", sub: "Input", glyph: Audio.micMuted ? "mic" : "mic_off" },
+        // your phone (KDE Connect): only once one is paired and near
+        ...(Phone.can("ring") ? [{ id: "ringphone", title: "Ring my phone", sub: Phone.phone.name + " · to find it", glyph: "ring_volume" }] : []),
         // capture
         { id: "shot", title: "Screenshot an area", sub: "Select a region", glyph: "screenshot_region" },
         { id: "shotscreen", title: "Screenshot the screen", sub: "The focused monitor", glyph: "screenshot_monitor" },
@@ -383,6 +385,7 @@ Item {
         case "wallshuffle": Wallpaper.random("all"); break;
         case "timer": Countdown.startTimer(a.ms, a.name ?? ""); break;
         case "wifi": Networking.wifiEnabled = !Networking.wifiEnabled; break;
+        case "ringphone": Phone.ring(); break;
         case "bt": if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled; break;
         case "mute": Audio.toggleMute(); break;
         case "mic": Audio.toggleMicMute(); break;

@@ -52,6 +52,11 @@ func allParts() []*part {
 			blurb: "Discord on the island: who's talking, mute / deafen, unread DMs",
 		},
 		{
+			id: "phone", name: "Phone link", on: true,
+			blurb: "Your phone through KDE Connect: its battery, ringing it, sending it links",
+			pkgs:  []string{"kdeconnect"},
+		},
+		{
 			id: "pearl", name: "Pearl", on: true,
 			blurb: "Ask a question from the launcher with \"?\" (Claude, or a local model)",
 		},

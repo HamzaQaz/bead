@@ -67,6 +67,9 @@ check tint magick "ImageMagick (Tint: colours from the wallpaper)" "Install imag
 check murmur whisper "whisper-server (Murmur)" "Install whisper-cpp" whisper-cpp has whisper-server
 check murmur llama "llama-server (Murmur)" "Install llama-cpp" llama-cpp has llama-server
 check murmur models "Murmur's models" "Re-run ./install.sh and choose Murmur" "" test -f "${XDG_DATA_HOME:-$HOME/.local/share}/bead-models/ggml-base.en.bin"
+check phone kdeconnect "KDE Connect (Phone link)" "Install kdeconnect" kdeconnect has kdeconnectd
+check phone ports "KDE Connect's ports are open in the firewall (1714–1764)" "sudo ufw allow 1714:1764/udp && sudo ufw allow 1714:1764/tcp" "" \
+	sh -c '! systemctl is-active --quiet ufw || { grep -Eq -- "-p udp .*--dports 1714:1764 -j ACCEPT" /etc/ufw/user.rules && grep -Eq -- "-p tcp .*--dports 1714:1764 -j ACCEPT" /etc/ufw/user.rules; }'
 check extra aur "An AUR helper (installing from the AUR)" "Install paru or yay" "" sh -c 'command -v paru || command -v yay'
 check extra flatpak "Flatpak (installing from Flathub)" "Install flatpak" flatpak has flatpak
 check extra satty "satty (drawing on screenshots)" "Install satty" satty has satty

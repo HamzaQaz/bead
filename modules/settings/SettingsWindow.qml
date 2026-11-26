@@ -39,6 +39,7 @@ FloatingWindow {
     readonly property var pages: [
         { id: "wifi", s: "Connections", t: "Wi-Fi", g: "wifi", d: "Networks, and joining one", k: "network internet wireless password" },
         { id: "bluetooth", s: "Connections", t: "Bluetooth", g: "bluetooth", d: "Pairing and connecting devices", k: "headphones pair device speaker" },
+        { id: "phone", s: "Connections", t: "Phone", g: "smartphone", d: "Your phone through KDE Connect: battery, ringing it, sending it things", k: "kde connect kdeconnect phone mobile android iphone pair battery ring find send share" },
         { id: "sound", s: "Device", t: "Sound", g: "volume_up", d: "Speakers, microphones and volume", k: "audio output input mic speaker headphones volume mute" },
         { id: "displays", s: "Device", t: "Displays", g: "monitor", d: "Layout, resolution, scale and brightness", k: "monitor screen resolution refresh rate brightness scale" },
         { id: "wallpaper", s: "Personal", t: "Wallpaper", g: "wallpaper", d: "Stills and live wallpapers", k: "background image picture" },
@@ -56,7 +57,7 @@ FloatingWindow {
         { id: "updates", s: "System", t: "Updates", g: "system_update", d: "The system's packages", k: "pacman aur flatpak upgrade packages" },
         { id: "about", s: "System", t: "About bead", g: "info", d: "Version, health and the settings file", k: "version doctor restart welcome release changelog" }
     ]
-    readonly property var cur: pages.find(p => p.id === SettingsApp.page) ?? pages[5]
+    readonly property var cur: pages.find(p => p.id === SettingsApp.page) ?? pages.find(p => p.id === "appearance")
 
     // Size: picking one only shows it; Apply restarts bead with it, and the
     // island then asks whether to keep it (config/sizecheck.js)
@@ -1058,6 +1059,116 @@ FloatingWindow {
             Page {
                 pid: "bluetooth"
                 Panel { BluetoothPanel { width: parent.width; active: SettingsApp.page === "bluetooth" && !win.searching } }
+            }
+
+            // ── Phone ──
+            Page {
+                pid: "phone"
+                Group {
+                    title: "Your phone"
+                    visible: shown && !!Phone.phone
+                    Setting {
+                        label: Phone.phone?.name ?? ""
+                        hint: !Phone.phone ? "" : !Phone.near ? "Not nearby: open KDE Connect on it, on the same Wi-Fi"
+                            : "Connected" + (Phone.phone.battery !== null && Phone.phone.battery !== undefined ? " · " + Phone.phone.battery + "%" + (Phone.phone.charging ? ", charging" : "") : "")
+                        words: "paired connected battery"
+                        Row {
+                            spacing: 8
+                            Word { visible: Phone.can("ring"); text: "Ring"; glyph: "ring_volume"; onHit: Phone.ring() }
+                            Word { visible: Phone.can("ping"); text: "Ping"; glyph: "notifications_active"; onHit: Phone.ping() }
+                            Word { text: "Unpair"; onHit: Phone.unpair(Phone.phone.id) }
+                        }
+                    }
+                    Setting {
+                        visible: Phone.near
+                        label: "Send to your phone"; hint: "The link you've copied opens on it"; words: "share send link url"
+                        last: true
+                        Word { text: "Send copied link"; glyph: "send_to_mobile"; onHit: clipLink.running = true }
+                    }
+                }
+                Group {
+                    title: "Asking to pair"
+                    visible: shown && Phone.asking.length > 0
+                    Repeater {
+                        model: Phone.asking
+                        Setting {
+                            required property var modelData
+                            required property int index
+                            label: modelData.name; hint: "Check the code on both screens matches"; words: "pair request accept"
+                            last: index === Phone.asking.length - 1
+                            Row {
+                                spacing: 8
+                                Word { text: "Accept"; accent: true; onHit: Phone.accept(modelData.id) }
+                                Word { text: "Decline"; onHit: Phone.reject(modelData.id) }
+                            }
+                        }
+                    }
+                }
+                Group {
+                    readonly property var others: Phone.devices.filter(d => d.pair === "none" || d.pair === "requested" || (d.pair === "paired" && d.id !== Phone.phone?.id))
+                    id: nearby
+                    title: Phone.phone ? "Other devices" : "Pair a phone"
+                    visible: shown && (others.length > 0 || !Phone.phone)
+                    Setting {
+                        visible: Phone.ready && nearby.others.length === 0 && !Phone.phone
+                        label: "No phones found"
+                        hint: "Install KDE Connect on your phone and open it, on the same Wi-Fi as this computer"
+                        words: "pair find phone"
+                        last: true
+                        Word { text: "Look again"; glyph: "refresh"; onHit: Phone.refresh() }
+                    }
+                    Setting {
+                        visible: Phone.state === "off"
+                        label: "KDE Connect isn't running"
+                        hint: "bead couldn't reach its background service (kdeconnectd)"
+                        words: "kdeconnectd daemon"
+                        last: true
+                        Word { text: "Try again"; glyph: "refresh"; onHit: Phone.refresh() }
+                    }
+                    Repeater {
+                        model: nearby.others
+                        Setting {
+                            required property var modelData
+                            required property int index
+                            label: modelData.name
+                            hint: modelData.pair === "requested" ? "Waiting: accept on the phone"
+                                : modelData.pair === "paired" ? (modelData.reachable ? "Paired" : "Paired, not nearby")
+                                : modelData.reachable ? "Nearby" : "Not nearby"
+                            words: "pair device"
+                            last: index === nearby.others.length - 1
+                            Word {
+                                text: modelData.pair === "requested" ? "Cancel" : modelData.pair === "paired" ? "Unpair" : "Pair"
+                                accent: modelData.pair === "none"
+                                onHit: modelData.pair === "requested" ? Phone.cancel(modelData.id) : modelData.pair === "paired" ? Phone.unpair(modelData.id) : Phone.pair(modelData.id)
+                            }
+                        }
+                    }
+                }
+                Group {
+                    title: "This computer"
+                    Setting {
+                        label: "Name on your phone"; hint: Phone.name || "…"; words: "computer name announced"
+                    }
+                    Setting {
+                        label: "Firewall"
+                        hint: ({ open: "Open for KDE Connect (ports 1714–1764)",
+                                 closed: "Blocking KDE Connect: phones can't find this computer",
+                                 none: "No firewall running",
+                                 unknown: "Couldn't check" })[Phone.firewall] ?? "Checking…"
+                        words: "firewall ufw firewalld ports 1714 1764 blocked"
+                        last: true
+                        Word {
+                            visible: Phone.firewall === "closed"
+                            text: "Copy the fix"; glyph: "content_copy"
+                            onHit: Quickshell.execDetached(["wl-copy", Phone.fixCommand])
+                        }
+                    }
+                }
+                Process {
+                    id: clipLink
+                    command: ["wl-paste", "--no-newline", "--type", "text/plain"]
+                    stdout: StdioCollector { onStreamFinished: { const t = text.trim(); if (/^https?:\/\//.test(t) || t.startsWith("/")) Phone.share(t); } }
+                }
             }
 
             // ── Sound ──

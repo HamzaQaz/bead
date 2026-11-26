@@ -1,6 +1,6 @@
 # Phone link
 
-**Status: backlog** (2026-11-25). KDE Connect is installed and its daemon runs; pick up at pairing the iPhone (app open, same Wi-Fi, check the ufw rule for 1714–1764).
+**Status: slice 1 built** (2026-11-25): `bin/bead-phone` + `services/Phone.qml`, Settings → Phone (pair, unpair, firewall check), the phone's battery in the bar's Devices panel, "Ring my phone" in the launcher, a strand part and doctor checks. Not yet tried with a real phone: pair the iPhone next (ufw already allows 1714–1764).
 
 ## Problem Statement
 How might we make your phone feel like part of the desktop (its

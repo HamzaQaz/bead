@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""Your phone for bead, through KDE Connect's daemon (kdeconnectd) on D-Bus.
+
+Run by services/Phone.qml. Writes one JSON object per line on stdout:
+  {"type": "status", "state": "ready|off", "name": "this computer's name",
+   "firewall": "open|closed|unknown|none", "wall": "ufw|firewalld|"}
+  {"type": "devices", "devices": [{"id", "name", "kind", "reachable",
+   "pair": "paired|requested|incoming|none", "battery": n | null, "charging": bool,
+   "can": ["battery", "ping", "ring", "share"]}]}   paired and near first
+Reads commands on stdin, one per line:
+  pair ID, unpair ID, accept ID, reject ID, cancel ID, ring ID, ping ID,
+  share ID URL-OR-PATH, refresh
+
+It follows the daemon with `gdbus monitor` and asks it with `busctl` (both
+ship with systemd and GLib), so there's nothing to install. Standard library only.
+"""
+import json
+import os
+import re
+import select
+import subprocess
+import sys
+import time
+import urllib.parse
+
+BUS = "org.kde.kdeconnect"
+ROOT = "/modules/kdeconnect"
+DEV = "org.kde.kdeconnect.device"
+UFW_RULES = "/etc/ufw/user.rules"
+
+PAIR = {0: "none", 1: "requested", 2: "incoming", 3: "paired"}
+# what bead can do with a plugin the phone has
+CAN = {"kdeconnect_battery": "battery", "kdeconnect_findmyphone": "ring",
+       "kdeconnect_share": "share", "kdeconnect_ping": "ping"}
+
+
+def emit(obj):
+    sys.stdout.write(json.dumps(obj) + "\n")
+    sys.stdout.flush()
+
+
+# ── pure: tests/phone_test.py ──
+
+def _plain(v):
+    if isinstance(v, dict) and set(v) == {"type", "data"}:
+        return _plain(v["data"])
+    if isinstance(v, dict):
+        return {k: _plain(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_plain(x) for x in v]
+    return v
+
+
+def reply(out):
+    """busctl --json=short's reply: its (first) value, unwrapped."""
+    if not out or not out.get("data"):
+        return None
+    return _plain(out["data"][0])
+
+
+def device(dev_id, p, battery):
+    p = p or {}
+    if "pairState" in p:
+        pair = PAIR.get(p["pairState"], "none")
+    elif p.get("isPaired"):
+        pair = "paired"
+    elif p.get("isPairRequestedByPeer"):
+        pair = "incoming"
+    elif p.get("isPairRequested"):
+        pair = "requested"
+    else:
+        pair = "none"
+    charge = (battery or {}).get("charge")
+    paired = pair == "paired"
+    return {
+        "id": dev_id,
+        "name": p.get("name") or "Phone",
+        "kind": p.get("type") or "phone",
+        "reachable": bool(p.get("isReachable")),
+        "pair": pair,
+        "battery": charge if isinstance(charge, int) and 0 <= charge <= 100 else None,
+        "charging": bool((battery or {}).get("isCharging")),
+        "can": sorted(CAN[x] for x in p.get("supportedPlugins") or [] if x in CAN) if paired else [],
+    }
+
+
+def ordered(devices):
+    rank = {"paired": 0, "incoming": 1, "requested": 1, "none": 2}
+    return sorted(devices, key=lambda d: (rank.get(d["pair"], 2) + (0 if d["reachable"] else 1.5), d["name"].lower()))
+
+
+_ID = re.compile(r"^[A-Za-z0-9_]+$")
+_PLAIN = {"pair": ("", DEV, "requestPairing"), "unpair": ("", DEV, "unpair"),
+          "accept": ("", DEV, "acceptPairing"), "reject": ("", DEV, "rejectPairing"),
+          "cancel": ("", DEV, "cancelPairing"),
+          "ring": ("/findmyphone", DEV + ".findmyphone", "ring"),
+          "ping": ("/ping", DEV + ".ping", "sendPing")}
+
+
+def call_for(line):
+    """A command to (path, interface, method, signature, args), or None."""
+    parts = line.strip().split(" ", 2)
+    if len(parts) < 2 or not _ID.match(parts[1]):
+        return None
+    cmd, dev = parts[0], parts[1]
+    base = ROOT + "/devices/" + dev
+    if cmd in _PLAIN:
+        sub, iface, method = _PLAIN[cmd]
+        return (base + sub, iface, method, "", [])
+    if cmd == "share" and len(parts) == 3 and parts[2].strip():
+        what = parts[2].strip()
+        if what.startswith("/"):
+            what = "file://" + urllib.parse.quote(what)
+        return (base + "/share", DEV + ".share", "shareUrl", "s", [what])
+    return None
+
+
+def ufw_open(rules):
+    def ok(proto):
+        return re.search(r"^-A ufw-user-input -p %s\b.*--dports 1714:1764 -j ACCEPT" % proto, rules, re.M)
+    return bool(ok("tcp") and ok("udp"))
+
+
+# ── the daemon ──
+
+def busctl(path, iface, method, sig="", args=()):
+    cmd = ["busctl", "--user", "--json=short", "--timeout=5", "call", BUS, path, iface, method]
+    if sig:
+        cmd += [sig, *args]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+    except (OSError, subprocess.TimeoutExpired):
+        return None, "timeout"
+    if r.returncode != 0:
+        return None, r.stderr.strip()
+    try:
+        return json.loads(r.stdout), ""
+    except ValueError:
+        return None, "bad reply"
+
+
+def get_all(path, iface):
+    out, _ = busctl(path, "org.freedesktop.DBus.Properties", "GetAll", "s", [iface])
+    return reply(out)
+
+
+def firewall():
+    def active(unit):
+        return subprocess.run(["systemctl", "is-active", "--quiet", unit]).returncode == 0
+    if active("ufw"):
+        try:
+            with open(UFW_RULES) as f:
+                return "open" if ufw_open(f.read()) else "closed", "ufw"
+        except OSError:
+            return "unknown", "ufw"
+    if active("firewalld"):
+        r = subprocess.run(["firewall-cmd", "--query-service=kdeconnect"], capture_output=True)
+        return "open" if r.returncode == 0 else "closed", "firewalld"
+    return "none", ""
+
+
+def snapshot():
+    ids = reply(busctl(ROOT, "org.kde.kdeconnect.daemon", "devices", "bb", ["false", "false"])[0])
+    if ids is None:
+        return None
+    out = []
+    for i in ids:
+        if not _ID.match(i):
+            continue
+        base = ROOT + "/devices/" + i
+        p = get_all(base, DEV)
+        if p is None:
+            continue
+        bat = get_all(base + "/battery", DEV + ".battery") if "kdeconnect_battery" in (p.get("supportedPlugins") or []) else None
+        out.append(device(i, p, bat))
+    return ordered(out)
+
+
+def main():
+    last_status = last_devices = None
+    last_fw = 0.0
+    fw, wall = "unknown", ""
+
+    def refresh():
+        nonlocal last_status, last_devices, last_fw, fw, wall
+        if time.time() - last_fw > 60:
+            (fw, wall), last_fw = firewall(), time.time()
+        devs = snapshot()
+        name = reply(busctl(ROOT, "org.kde.kdeconnect.daemon", "announcedName")[0]) if devs is not None else ""
+        st = {"type": "status", "state": "ready" if devs is not None else "off", "name": name or "", "firewall": fw, "wall": wall}
+        if st != last_status:
+            emit(st)
+            last_status = st
+        d = {"type": "devices", "devices": devs or []}
+        if d != last_devices:
+            emit(d)
+            last_devices = d
+
+    def watch():
+        return subprocess.Popen(["gdbus", "monitor", "--session", "--dest", BUS],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+    mon = watch()
+    mon_at = time.time()
+    refresh()
+    last_at = time.time()
+    due = None
+    while True:
+        wait = 30 if due is None else max(0, due - time.time())
+        if mon is None and time.time() - mon_at > 10:   # the daemon went away: look again
+            mon, mon_at = watch(), time.time()
+        ready, _, _ = select.select([sys.stdin] + ([mon.stdout] if mon else []), [], [], min(wait, 10))
+        if sys.stdin in ready:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            if line.strip() == "refresh":
+                last_fw = 0
+                due = time.time()
+                continue
+            c = call_for(line)
+            if c:
+                busctl(*c)
+                due = time.time() + 0.3
+        if mon and mon.stdout in ready:
+            if not mon.stdout.readline():
+                mon.wait()
+                mon = None
+            if due is None:
+                due = time.time() + 0.4   # a burst of signals: once, after it
+        if due is None and time.time() - last_at >= 30:
+            due = time.time()
+        if due is not None and time.time() >= due:
+            refresh()
+            last_at, due = time.time(), None
+    if mon:
+        mon.kill()
+
+
+if __name__ == "__main__":
+    main()

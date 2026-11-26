@@ -871,14 +871,16 @@ Scope {
                                 onWheel: e => Audio.setVolume(Audio.volume + (e.angleDelta.y > 0 ? 0.05 : -0.05))
                             }
                         }
-                        // wireless devices' batteries: the lowest one's level (click for all)
+                        // wireless devices' batteries: the lowest one's level, else your
+                        // phone's (click for all)
                         BarButton {
                             id: batteryBtn
                             readonly property var d: Osd.lowest
-                            readonly property int level: d ? Osd.pct(d) : 100
-                            readonly property bool charging: !!d && Osd.charging(d)
+                            readonly property int phone: Phone.near && Phone.phone.battery !== null && Phone.phone.battery !== undefined ? Phone.phone.battery : -1
+                            readonly property int level: d ? Osd.pct(d) : phone >= 0 ? phone : 100
+                            readonly property bool charging: d ? Osd.charging(d) : phone >= 0 && !!Phone.phone.charging
                             lookKey: "barBattery"
-                            shown: Look.v.barBattery && !!d
+                            shown: Look.v.barBattery && (!!d || phone >= 0)
                             lit: win.panel === "battery"
                             icon: Osd.batteryGlyph(level, charging)
                             iconRef: "battery_full"
